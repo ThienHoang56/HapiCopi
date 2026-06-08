@@ -80,6 +80,7 @@ namespace HapiCopi
             // 4. Đăng ký Hook bàn phím bắt sự kiện dán chủ động
             _keyboardHook = new KeyboardHook();
             _keyboardHook.PastePressed += OnPastePressed;
+            _keyboardHook.AutoFormatPressed += OnAutoFormatPressed;
 
             // 5. Thực hiện xử lý clipboard đang có sẵn ngay khi khởi động
             ProcessClipboard(isStartup: true);
@@ -302,6 +303,41 @@ namespace HapiCopi
             catch (Exception ex)
             {
                 Program.Log($"Lỗi trong OnPastePressed: {ex.Message}");
+            }
+        }
+
+        private void OnAutoFormatPressed()
+        {
+            if (_isPaused) return;
+
+            try
+            {
+                // Kiểm tra ứng dụng active tại tiền cảnh
+                ActiveAppInfo appInfo = ActiveWindowHelper.GetActiveAppInfo();
+                Program.Log($"Phát hiện phím tắt Ctrl+M tại ứng dụng: Process={appInfo.ProcessName}, Class={appInfo.ClassName}");
+
+                if (appInfo.IsMicrosoftWord)
+                {
+                    Program.Log("Kích hoạt tự động định dạng thông minh trong MS Word...");
+                    
+                    // Thực hiện stream định dạng
+                    bool success = WordInterop.FormatActiveSelectionStreaming(AutoFormatter.FormatTextSmart);
+                    
+                    if (success)
+                    {
+                        // Hiển thị thông báo thành công nhanh bằng BalloonTip
+                        _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Đã định dạng xong văn bản được chọn!", ToolTipIcon.Info);
+                    }
+                }
+                else
+                {
+                    Program.Log("Bỏ qua: Không hỗ trợ phím tắt Ctrl+M cho ứng dụng này.");
+                    _notifyIcon.ShowBalloonTip(2000, "HapiCopi", "Tính năng này chỉ hỗ trợ định dạng trực tiếp trong Microsoft Word.", ToolTipIcon.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"Lỗi trong OnAutoFormatPressed: {ex.Message}");
             }
         }
  

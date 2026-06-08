@@ -14,6 +14,7 @@ namespace HapiCopi
         private const int VK_SHIFT = 0x10;
         private const int VK_V = 0x56;
         private const int VK_INSERT = 0x2D;
+        private const int VK_M = 0x4D;
 
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
@@ -37,6 +38,7 @@ namespace HapiCopi
         private IntPtr _hookId = IntPtr.Zero;
 
         public event Action? PastePressed;
+        public event Action? AutoFormatPressed;
 
         public KeyboardHook()
         {
@@ -87,6 +89,15 @@ namespace HapiCopi
                     if (shiftPressed)
                     {
                         System.Threading.Tasks.Task.Run(() => PastePressed?.Invoke());
+                    }
+                }
+                // 3. Kiểm tra tổ hợp Ctrl + M
+                else if (vkCode == VK_M)
+                {
+                    bool ctrlPressed = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+                    if (ctrlPressed)
+                    {
+                        System.Threading.Tasks.Task.Run(() => AutoFormatPressed?.Invoke());
                     }
                 }
             }

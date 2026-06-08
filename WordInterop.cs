@@ -204,6 +204,109 @@ namespace HapiCopi
             return info;
         }
 
+        public static bool FormatActiveSelectionStreaming(Func<string, string> formatter)
+        {
+            bool success = false;
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    // Lấy instance Word đang hoạt động
+                    object wordAppObj = null;
+                    try
+                    {
+                        Guid clsid = WordClsid;
+                        GetActiveObject(ref clsid, IntPtr.Zero, out wordAppObj);
+                    }
+                    catch
+                    {
+                        Program.Log("Không kết nối được với MS Word (Word chưa mở hoặc lỗi COM).");
+                        return;
+                    }
+
+                    if (wordAppObj == null) return;
+
+                    dynamic wordApp = wordAppObj;
+                    if (wordApp.Windows == null || wordApp.Windows.Count == 0) return;
+
+                    dynamic activeWindow = wordApp.ActiveWindow;
+                    if (activeWindow == null) return;
+
+                    dynamic selection = activeWindow.Selection;
+                    if (selection == null) return;
+
+                    string selectedText = selection.Text;
+                    if (string.IsNullOrEmpty(selectedText) || selectedText.Trim().Length == 0)
+                    {
+                        Program.Log("Không có văn bản nào được chọn để định dạng.");
+                        return;
+                    }
+
+                    // Thực hiện định dạng văn bản
+                    string formattedText = formatter(selectedText);
+                    if (formattedText == selectedText)
+                    {
+                        Program.Log("Văn bản chọn đã chuẩn sạch, không cần định dạng lại.");
+                        return;
+                    }
+
+                    // Xóa phần bôi đen hiện tại (để con trỏ tại vị trí bắt đầu)
+                    selection.Delete();
+
+                    // Chia thành các đoạn văn
+                    var paragraphs = formattedText.Split(new[] { "\r\n", "\r" }, StringSplitOptions.None);
+
+                    // Thiết lập tốc độ stream động dựa trên độ dài văn bản để tránh chậm trễ với văn bản siêu dài
+                    int wordCount = formattedText.Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
+                    int sleepPerWord = 10;
+                    if (wordCount > 500) sleepPerWord = 0;
+                    else if (wordCount > 300) sleepPerWord = 1;
+                    else if (wordCount > 100) sleepPerWord = 4;
+
+                    Program.Log($"Bắt đầu stream {wordCount} từ vào Word (sleep = {sleepPerWord}ms/từ)...");
+
+                    for (int i = 0; i < paragraphs.Length; i++)
+                    {
+                        string paragraph = paragraphs[i];
+                        var words = paragraph.Split(' ');
+
+                        for (int j = 0; j < words.Length; j++)
+                        {
+                            string word = words[j];
+                            if (j > 0) selection.TypeText(" ");
+                            selection.TypeText(word);
+
+                            if (sleepPerWord > 0)
+                            {
+                                System.Threading.Thread.Sleep(sleepPerWord);
+                            }
+                        }
+
+                        // Nếu không phải là đoạn cuối cùng, chèn ngắt đoạn
+                        if (i < paragraphs.Length - 1)
+                        {
+                            selection.TypeParagraph();
+                            if (sleepPerWord > 0)
+                            {
+                                System.Threading.Thread.Sleep(sleepPerWord * 2);
+                            }
+                        }
+                    }
+
+                    Program.Log("Stream định dạng văn bản hoàn tất.");
+                    success = true;
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"Lỗi trong FormatActiveSelectionStreaming: {ex.Message}\n{ex.StackTrace}");
+                }
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+            return success;
+        }
+
         private static int ExtractHeadingLevel(string styleName)
         {
             // Bắt khớp "Heading 1", "Tiêu đề 1", "Heading 2"...
