@@ -10,10 +10,21 @@ namespace HapiCopi
         private const string MarkerFormat = "HapiCopiProcessed";
 
         /// <summary>
-        /// Kiểm tra xem dữ liệu trong Clipboard đã được HapiCopi xử lý chưa
+        /// Kiểm tra xem dữ liệu trong Clipboard đã được HapiCopi xử lý chưa.
+        /// Tự động chạy trên luồng STA nếu luồng gọi hiện tại là MTA.
         /// </summary>
         public static bool IsAlreadyProcessed()
         {
+            if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+            {
+                bool result = false;
+                var thread = new Thread(() => result = IsAlreadyProcessed());
+                thread.SetApartmentState(ApartmentState.STA);
+                thread.Start();
+                thread.Join();
+                return result;
+            }
+
             try
             {
                 IDataObject? dataObj = Clipboard.GetDataObject();
@@ -24,16 +35,27 @@ namespace HapiCopi
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Lỗi kiểm tra Marker Clipboard: {ex.Message}");
+                Program.Log($"Lỗi kiểm tra Marker Clipboard: {ex.Message}");
             }
             return false;
         }
 
         /// <summary>
-        /// Kiểm tra xem dữ liệu có nguồn gốc từ trình soạn thảo VS Code Editor hay không
+        /// Kiểm tra xem dữ liệu có nguồn gốc từ trình soạn thảo VS Code Editor hay không.
+        /// Tự động chạy trên luồng STA nếu luồng gọi hiện tại là MTA.
         /// </summary>
         public static bool IsVscodeEditorCopy()
         {
+            if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+            {
+                bool result = false;
+                var thread = new Thread(() => result = IsVscodeEditorCopy());
+                thread.SetApartmentState(ApartmentState.STA);
+                thread.Start();
+                thread.Join();
+                return result;
+            }
+
             try
             {
                 IDataObject? dataObj = Clipboard.GetDataObject();
@@ -47,10 +69,21 @@ namespace HapiCopi
         }
 
         /// <summary>
-        /// Đọc văn bản thô từ Clipboard một cách an toàn
+        /// Đọc văn bản thô từ Clipboard một cách an toàn.
+        /// Tự động chạy trên luồng STA nếu luồng gọi hiện tại là MTA.
         /// </summary>
         public static string GetPlainText()
         {
+            if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+            {
+                string result = string.Empty;
+                var thread = new Thread(() => result = GetPlainText());
+                thread.SetApartmentState(ApartmentState.STA);
+                thread.Start();
+                thread.Join();
+                return result;
+            }
+
             // Thực hiện thử lại (retry loop) vì Clipboard có thể đang bị ứng dụng khác khóa tạm thời
             for (int i = 0; i < 5; i++)
             {
@@ -68,7 +101,7 @@ namespace HapiCopi
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Lỗi đọc Clipboard: {ex.Message}");
+                    Program.Log($"Lỗi đọc Clipboard: {ex.Message}");
                     break;
                 }
             }
@@ -76,10 +109,21 @@ namespace HapiCopi
         }
 
         /// <summary>
-        /// Đẩy đồng thời văn bản thô (giữ nguyên) và HTML (định dạng Office) vào Clipboard cùng Marker chống đệ quy
+        /// Đẩy đồng thời văn bản thô (giữ nguyên) và HTML (định dạng Office) vào Clipboard cùng Marker chống đệ quy.
+        /// Tự động chạy trên luồng STA nếu luồng gọi hiện tại là MTA.
         /// </summary>
         public static bool SetOfficeClipboard(string plainText, string officeHtml)
         {
+            if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+            {
+                bool result = false;
+                var thread = new Thread(() => result = SetOfficeClipboard(plainText, officeHtml));
+                thread.SetApartmentState(ApartmentState.STA);
+                thread.Start();
+                thread.Join();
+                return result;
+            }
+
             for (int i = 0; i < 5; i++)
             {
                 try
@@ -87,17 +131,15 @@ namespace HapiCopi
                     var dataObject = new DataObject();
                     
                     // 1. Đưa định dạng HTML chuẩn Office vào Clipboard
-                    // Sử dụng định dạng text HTML (CF_HTML)
                     dataObject.SetText(officeHtml, TextDataFormat.Html);
                     
-                    // 2. Đưa định dạng Unicode Text (Text thuần sạch) để Notepad/Editor khác có thể paste
+                    // 2. Đưa định dạng Unicode Text
                     dataObject.SetText(plainText, TextDataFormat.UnicodeText);
                     
-                    // 3. Đánh dấu Marker để ClipboardListener của HapiCopi bỏ qua, tránh đệ quy vô hạn
+                    // 3. Đánh dấu Marker để tránh đệ quy vô hạn
                     dataObject.SetData(MarkerFormat, true);
                     
                     // Thực hiện ghi đè Clipboard
-                    // Tham số true giúp dữ liệu vẫn tồn tại trong Clipboard sau khi app thoát
                     Clipboard.SetDataObject(dataObject, true);
                     return true;
                 }
@@ -107,7 +149,7 @@ namespace HapiCopi
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Lỗi ghi Clipboard: {ex.Message}");
+                    Program.Log($"Lỗi ghi Clipboard: {ex.Message}");
                     break;
                 }
             }
