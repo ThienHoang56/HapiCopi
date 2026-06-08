@@ -204,8 +204,52 @@ namespace HapiCopi
             return info;
         }
 
-        public static bool FormatActiveSelectionStreaming(Func<string, string> formatter)
+        public static string GetSelectedText()
         {
+            string selectedText = "";
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    object wordAppObj = null;
+                    try
+                    {
+                        Guid clsid = WordClsid;
+                        GetActiveObject(ref clsid, IntPtr.Zero, out wordAppObj);
+                    }
+                    catch
+                    {
+                        return;
+                    }
+
+                    if (wordAppObj == null) return;
+
+                    dynamic wordApp = wordAppObj;
+                    if (wordApp.Windows == null || wordApp.Windows.Count == 0) return;
+
+                    dynamic activeWindow = wordApp.ActiveWindow;
+                    if (activeWindow == null) return;
+
+                    dynamic selection = activeWindow.Selection;
+                    if (selection == null) return;
+
+                    selectedText = selection.Text;
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"Lỗi trong WordInterop.GetSelectedText: {ex.Message}");
+                }
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+            return selectedText;
+        }
+
+        public static bool WriteTextStreaming(string formattedText)
+        {
+            if (string.IsNullOrEmpty(formattedText)) return false;
+
             bool success = false;
             var thread = new System.Threading.Thread(() =>
             {
@@ -234,21 +278,6 @@ namespace HapiCopi
 
                     dynamic selection = activeWindow.Selection;
                     if (selection == null) return;
-
-                    string selectedText = selection.Text;
-                    if (string.IsNullOrEmpty(selectedText) || selectedText.Trim().Length == 0)
-                    {
-                        Program.Log("Không có văn bản nào được chọn để định dạng.");
-                        return;
-                    }
-
-                    // Thực hiện định dạng văn bản
-                    string formattedText = formatter(selectedText);
-                    if (formattedText == selectedText)
-                    {
-                        Program.Log("Văn bản chọn đã chuẩn sạch, không cần định dạng lại.");
-                        return;
-                    }
 
                     // Xóa phần bôi đen hiện tại (để con trỏ tại vị trí bắt đầu)
                     selection.Delete();
@@ -298,7 +327,7 @@ namespace HapiCopi
                 }
                 catch (Exception ex)
                 {
-                    Program.Log($"Lỗi trong FormatActiveSelectionStreaming: {ex.Message}\n{ex.StackTrace}");
+                    Program.Log($"Lỗi trong WriteTextStreaming: {ex.Message}\n{ex.StackTrace}");
                 }
             });
             thread.SetApartmentState(System.Threading.ApartmentState.STA);

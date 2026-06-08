@@ -306,7 +306,7 @@ namespace HapiCopi
             }
         }
 
-        private void OnAutoFormatPressed()
+        private async void OnAutoFormatPressed()
         {
             if (_isPaused) return;
 
@@ -319,14 +319,48 @@ namespace HapiCopi
                 if (appInfo.IsMicrosoftWord)
                 {
                     Program.Log("Kích hoạt tự động định dạng thông minh trong MS Word...");
-                    
-                    // Thực hiện stream định dạng
-                    bool success = WordInterop.FormatActiveSelectionStreaming(AutoFormatter.FormatTextSmart);
+
+                    string rawText = WordInterop.GetSelectedText();
+                    if (string.IsNullOrEmpty(rawText) || rawText.Trim().Length == 0)
+                    {
+                        Program.Log("Không có văn bản nào được chọn để định dạng.");
+                        _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Vui lòng chọn (bôi đen) văn bản cần định dạng trong Word.", ToolTipIcon.Warning);
+                        return;
+                    }
+
+                    _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Đang phân tích và định dạng bằng AI...", ToolTipIcon.Info);
+
+                    string formattedText = "";
+                    bool isAiSuccess = false;
+
+                    try
+                    {
+                        formattedText = await GeminiClient.ReformatWithGeminiAsync(rawText);
+                        isAiSuccess = true;
+                        Program.Log("Định dạng bằng Gemini AI thành công.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Program.Log($"Lỗi khi gọi Gemini API (Sẽ chuyển sang bộ định dạng cục bộ): {ex.Message}");
+                        _notifyIcon.ShowBalloonTip(2000, "HapiCopi", "Lỗi kết nối AI hoặc thiếu API Key. Đang dùng định dạng cục bộ offline...", ToolTipIcon.Warning);
+                        
+                        // Fallback sang định dạng cục bộ
+                        formattedText = AutoFormatter.FormatTextSmart(rawText);
+                    }
+
+                    if (formattedText == rawText)
+                    {
+                        Program.Log("Văn bản chọn đã chuẩn sạch, không cần định dạng lại.");
+                        return;
+                    }
+
+                    // Thực hiện stream gõ lại văn bản
+                    bool success = WordInterop.WriteTextStreaming(formattedText);
                     
                     if (success)
                     {
-                        // Hiển thị thông báo thành công nhanh bằng BalloonTip
-                        _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Đã định dạng xong văn bản được chọn!", ToolTipIcon.Info);
+                        string source = isAiSuccess ? "Gemini AI" : "Offline";
+                        _notifyIcon.ShowBalloonTip(1500, "HapiCopi", $"Đã định dạng xong văn bản được chọn! ({source})", ToolTipIcon.Info);
                     }
                 }
                 else
