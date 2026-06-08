@@ -37,6 +37,7 @@ namespace HapiCopi
         private readonly ToolStripMenuItem _pauseMenuItem;
         private bool _isPaused = false;
         private bool _hasShownWelcome = false;
+        private bool _isSimulatingClipboard = false;
 
         // Cache lưu trữ nội dung copy thô để xử lý dán động
         private string _lastRawText = "";
@@ -105,6 +106,11 @@ namespace HapiCopi
 
         private void OnClipboardChanged(object? sender, EventArgs e)
         {
+            if (_isSimulatingClipboard)
+            {
+                Program.Log("Bỏ qua sự kiện thay đổi Clipboard do đang giả lập định dạng.");
+                return;
+            }
             Program.Log("Sự kiện thay đổi Clipboard kích hoạt.");
             ProcessClipboard(isStartup: false);
         }
@@ -324,6 +330,12 @@ namespace HapiCopi
                     string appName = isWord ? "Microsoft Word" : (appInfo.IsGoogleDocs ? "Google Docs" : (appInfo.IsWordOnline ? "Word Online" : appInfo.ProcessName));
                     Program.Log($"Kích hoạt tự động định dạng thông minh trong {appName}...");
 
+                    // Đánh dấu bắt đầu giả lập clipboard để ngăn sự kiện OnClipboardChanged can thiệp
+                    if (!isWord)
+                    {
+                        _isSimulatingClipboard = true;
+                    }
+
                     string rawText = "";
                     if (isWord)
                     {
@@ -341,14 +353,15 @@ namespace HapiCopi
                         if (!isWord)
                         {
                             ClipboardSimulator.RestoreClipboard();
+                            _isSimulatingClipboard = false;
                         }
                         return;
                     }
 
-                    _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Đang phân tích và định dạng bằng AI...", ToolTipIcon.Info);
-
+                    // Không hiển thị balloon tip trước khi dán để tránh cướp focus của cửa sổ đang hoạt động
                     string formattedText = "";
                     bool isAiSuccess = false;
+                    string warningMessage = "";
 
                     try
                     {
@@ -359,7 +372,7 @@ namespace HapiCopi
                     catch (Exception ex)
                     {
                         Program.Log($"Lỗi khi gọi Gemini API (Sẽ chuyển sang bộ định dạng cục bộ): {ex.Message}");
-                        _notifyIcon.ShowBalloonTip(2000, "HapiCopi", "Lỗi kết nối AI hoặc thiếu API Key. Đang dùng định dạng cục bộ offline...", ToolTipIcon.Warning);
+                        warningMessage = "Lỗi kết nối AI hoặc chưa cấu hình API Key. Đang dùng định dạng cục bộ offline...";
                         
                         // Fallback sang định dạng cục bộ
                         formattedText = AutoFormatter.FormatTextSmart(rawText);
@@ -371,7 +384,11 @@ namespace HapiCopi
                         if (!isWord)
                         {
                             ClipboardSimulator.RestoreClipboard();
+                            _isSimulatingClipboard = false;
                         }
+                        
+                        // Thông báo kết quả ngay cả khi không đổi để người dùng biết app đã phản hồi
+                        _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Văn bản chọn đã chuẩn sạch, không có thay đổi.", ToolTipIcon.Info);
                         return;
                     }
 
@@ -386,10 +403,24 @@ namespace HapiCopi
                         success = ClipboardSimulator.WriteTextViaClipboard(formattedText);
                     }
                     
+                    // Giải phóng cờ giả lập sau khi thao tác clipboard kết thúc hoàn toàn
+                    if (!isWord)
+                    {
+                        _isSimulatingClipboard = false;
+                    }
+
+                    // Hiển thị thông báo kết quả SAU KHI đã dán xong (tránh cướp focus khi đang dán)
                     if (success)
                     {
-                        string source = isAiSuccess ? "Gemini AI" : "Offline";
-                        _notifyIcon.ShowBalloonTip(1500, "HapiCopi", $"Đã định dạng xong văn bản! ({source})", ToolTipIcon.Info);
+                        if (!string.IsNullOrEmpty(warningMessage))
+                        {
+                            _notifyIcon.ShowBalloonTip(2000, "HapiCopi", "Đã định dạng xong (Offline Fallback do lỗi AI/Thiếu Key).", ToolTipIcon.Warning);
+                        }
+                        else
+                        {
+                            string source = isAiSuccess ? "Gemini AI" : "Offline";
+                            _notifyIcon.ShowBalloonTip(1500, "HapiCopi", $"Đã định dạng xong văn bản! ({source})", ToolTipIcon.Info);
+                        }
                     }
                 }
                 else
@@ -400,6 +431,8 @@ namespace HapiCopi
             }
             catch (Exception ex)
             {
+                // Bảo đảm cờ giả lập được giải phóng nếu có lỗi nghiêm trọng xảy ra
+                _isSimulatingClipboard = false;
                 Program.Log($"Lỗi trong OnAutoFormatPressed: {ex.Message}");
             }
         }

@@ -33,9 +33,9 @@ namespace HapiCopi
                 }
             }
 
-            if (string.IsNullOrEmpty(apiKey))
+            if (string.IsNullOrEmpty(apiKey) || apiKey.Trim() == "YOUR_GEMINI_API_KEY_HERE")
             {
-                throw new InvalidOperationException("API Key chưa được cấu hình. Vui lòng thiết lập biến môi trường GEMINI_API_KEY hoặc tạo file gemini_key.txt.");
+                throw new InvalidOperationException("API Key chưa được cấu hình hoặc đang để mặc định. Vui lòng thiết lập biến môi trường GEMINI_API_KEY hoặc điền vào tệp .env.");
             }
 
             // 2. Thiết lập yêu cầu API
