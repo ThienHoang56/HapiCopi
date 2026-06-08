@@ -18,8 +18,12 @@ namespace HapiCopi
         {
             if (string.IsNullOrWhiteSpace(text)) return text;
 
-            // 1. Lấy API Key từ biến môi trường hoặc file cục bộ
+            // 1. Lấy API Key từ biến môi trường, file .env hoặc file cục bộ
             string? apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                apiKey = LoadApiKeyFromDotEnv();
+            }
             if (string.IsNullOrEmpty(apiKey))
             {
                 string configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "gemini_key.txt");
@@ -95,6 +99,51 @@ namespace HapiCopi
             }
 
             throw new Exception("Không thể phân tích dữ liệu trả về từ Gemini API.");
+        }
+
+        private static string? LoadApiKeyFromDotEnv()
+        {
+            // Danh sách các đường dẫn có thể chứa file .env
+            var pathsToSearch = new System.Collections.Generic.List<string>
+            {
+                AppDomain.CurrentDomain.BaseDirectory,
+                Environment.CurrentDirectory,
+                // Lên 3 cấp thư mục (từ bin/Debug/net10.0-windows/ lên thư mục gốc dự án)
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."),
+                Path.Combine(Environment.CurrentDirectory, "..", "..", "..")
+            };
+
+            foreach (var basePath in pathsToSearch)
+            {
+                try
+                {
+                    string fullPath = Path.GetFullPath(Path.Combine(basePath, ".env"));
+                    if (File.Exists(fullPath))
+                    {
+                        var lines = File.ReadAllLines(fullPath);
+                        foreach (var line in lines)
+                        {
+                            string trimmed = line.Trim();
+                            if (trimmed.StartsWith("GEMINI_API_KEY="))
+                            {
+                                string keyVal = trimmed.Substring("GEMINI_API_KEY=".Length).Trim();
+                                if ((keyVal.StartsWith("\"") && keyVal.EndsWith("\"")) ||
+                                    (keyVal.StartsWith("'") && keyVal.EndsWith("'")))
+                                {
+                                    keyVal = keyVal.Substring(1, keyVal.Length - 2);
+                                }
+                                if (!string.IsNullOrEmpty(keyVal))
+                                {
+                                    return keyVal;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch {}
+            }
+
+            return null;
         }
     }
 }

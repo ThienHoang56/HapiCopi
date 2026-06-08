@@ -18,3 +18,7 @@ x86/
 # Rider / Resharper
 .idea/
 *.userprefs
+
+# Secrets / API keys
+.env
+gemini_key.txt
