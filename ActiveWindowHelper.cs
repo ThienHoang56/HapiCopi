@@ -127,6 +127,8 @@ namespace HapiCopi
                             Program.Log($"[UIA] Giá trị của edit: \"{val}\"");
                             if (val.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                                 val.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+                                val.Contains("docs.google.com") ||
+                                val.Contains("google.com/document") ||
                                 val.Contains("sharepoint.com") ||
                                 val.Contains("office.com") ||
                                 val.Contains("office365.com"))

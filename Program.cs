@@ -314,17 +314,34 @@ namespace HapiCopi
             {
                 // Kiểm tra ứng dụng active tại tiền cảnh
                 ActiveAppInfo appInfo = ActiveWindowHelper.GetActiveAppInfo();
-                Program.Log($"Phát hiện phím tắt Ctrl+M tại ứng dụng: Process={appInfo.ProcessName}, Class={appInfo.ClassName}");
+                Program.Log($"Phát hiện phím tắt Ctrl+M tại ứng dụng: Process={appInfo.ProcessName}, Class={appInfo.ClassName}, Title={appInfo.WindowTitle}");
 
-                if (appInfo.IsMicrosoftWord)
+                bool isWord = appInfo.IsMicrosoftWord;
+                bool isOtherEditor = appInfo.IsGoogleDocs || appInfo.IsWordOnline || appInfo.IsVSCode || appInfo.IsNotepadOrEditor || appInfo.IsLaTeXEditor;
+
+                if (isWord || isOtherEditor)
                 {
-                    Program.Log("Kích hoạt tự động định dạng thông minh trong MS Word...");
+                    string appName = isWord ? "Microsoft Word" : (appInfo.IsGoogleDocs ? "Google Docs" : (appInfo.IsWordOnline ? "Word Online" : appInfo.ProcessName));
+                    Program.Log($"Kích hoạt tự động định dạng thông minh trong {appName}...");
 
-                    string rawText = WordInterop.GetSelectedText();
+                    string rawText = "";
+                    if (isWord)
+                    {
+                        rawText = WordInterop.GetSelectedText();
+                    }
+                    else
+                    {
+                        rawText = ClipboardSimulator.GetSelectedTextViaClipboard();
+                    }
+
                     if (string.IsNullOrEmpty(rawText) || rawText.Trim().Length == 0)
                     {
                         Program.Log("Không có văn bản nào được chọn để định dạng.");
-                        _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Vui lòng chọn (bôi đen) văn bản cần định dạng trong Word.", ToolTipIcon.Warning);
+                        _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Vui lòng chọn (bôi đen) văn bản cần định dạng.", ToolTipIcon.Warning);
+                        if (!isWord)
+                        {
+                            ClipboardSimulator.RestoreClipboard();
+                        }
                         return;
                     }
 
@@ -351,22 +368,34 @@ namespace HapiCopi
                     if (formattedText == rawText)
                     {
                         Program.Log("Văn bản chọn đã chuẩn sạch, không cần định dạng lại.");
+                        if (!isWord)
+                        {
+                            ClipboardSimulator.RestoreClipboard();
+                        }
                         return;
                     }
 
-                    // Thực hiện stream gõ lại văn bản
-                    bool success = WordInterop.WriteTextStreaming(formattedText);
+                    // Thực hiện ghi đè ngược lại ứng dụng
+                    bool success = false;
+                    if (isWord)
+                    {
+                        success = WordInterop.WriteTextStreaming(formattedText);
+                    }
+                    else
+                    {
+                        success = ClipboardSimulator.WriteTextViaClipboard(formattedText);
+                    }
                     
                     if (success)
                     {
                         string source = isAiSuccess ? "Gemini AI" : "Offline";
-                        _notifyIcon.ShowBalloonTip(1500, "HapiCopi", $"Đã định dạng xong văn bản được chọn! ({source})", ToolTipIcon.Info);
+                        _notifyIcon.ShowBalloonTip(1500, "HapiCopi", $"Đã định dạng xong văn bản! ({source})", ToolTipIcon.Info);
                     }
                 }
                 else
                 {
                     Program.Log("Bỏ qua: Không hỗ trợ phím tắt Ctrl+M cho ứng dụng này.");
-                    _notifyIcon.ShowBalloonTip(2000, "HapiCopi", "Tính năng này chỉ hỗ trợ định dạng trực tiếp trong Microsoft Word.", ToolTipIcon.Warning);
+                    _notifyIcon.ShowBalloonTip(2000, "HapiCopi", "Tính năng này hỗ trợ định dạng trực tiếp trong Microsoft Word và Google Docs.", ToolTipIcon.Warning);
                 }
             }
             catch (Exception ex)
