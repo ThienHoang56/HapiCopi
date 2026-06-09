@@ -49,6 +49,9 @@ graph TD
 7. **[ClipboardHelper.cs](file:///c:/Users/ThienNLH3/Desktop/HapiCopi/ClipboardHelper.cs)**:
    - Thư viện đọc ghi dữ liệu Clipboard an toàn cho cả định dạng Text thuần và HTML chuẩn Windows (`CF_HTML`).
    - Đảm nhận cơ chế chống đệ quy (Anti-recursive loop).
+8. **[MermaidRenderer.cs](file:///c:/Users/ThienNLH3/Desktop/HapiCopi/MermaidRenderer.cs)**:
+   - Module kết xuất sơ đồ Mermaid ngầm sang Base64 Data URI thông qua API.
+   - Sửa lỗi cú pháp và chuẩn hóa định dạng mã nguồn Mermaid.
 
 ---
 
@@ -74,6 +77,13 @@ HapiCopi nhận biết ứng dụng đích thời gian thực tại tích tắc 
 - **Dịch Unicode sạch**: Chuyển các công thức toán học LaTeX thành dạng văn bản Unicode dễ đọc khi dán vào các ứng dụng không hỗ trợ MathML (như Google Docs hay Notepad), tránh hiện tượng hiện thị mã LaTeX thô như `\sin^2\alpha`.
 - **Sửa lỗi ký hiệu nhân**: Nhận diện các lỗi sao chép ký hiệu từ web AI (như dấu `∈` hoặc `€` bị dịch sai từ dấu nhân) và tự động chuẩn hóa thành dấu chấm nhân trung học `·` (ví dụ: `3 · sin α`).
 
+### 3.5. Tự động hóa vẽ sơ đồ Mermaid trực tiếp vào tài liệu
+- **Vấn đề**: Bản vẽ sơ đồ Mermaid (`mermaid` code blocks) sinh ra từ AI chỉ là các dòng code chữ thô. Để lấy ảnh chèn vào Word/Docs, người dùng bắt buộc phải mở các web trung gian, paste code, tải ảnh về máy rồi chèn thủ công.
+- **Giải pháp**: 
+  - Thiết lập tiến trình lắng nghe Clipboard bất đồng bộ ngầm. Khi phát hiện mã ````mermaid````, HapiCopi tự động mã hóa Base64 và gửi yêu cầu HTTPS đến máy chủ Mermaid để tải về tệp ảnh PNG ở background.
+  - Ảnh PNG được chuyển đổi thành định dạng Base64 Data URI (`data:image/png;base64,...`) và bọc trực tiếp vào thẻ `<img>` trong tài liệu HTML của clipboard. Khi dán vào Word/Google Docs, phần mềm tự giải mã và hiển thị sơ đồ trực quan hoàn chỉnh.
+  - **Tự động sửa lỗi cú pháp**: Module tự động lọc sạch các nhãn chứa ngoặc đơn lỗi của AI (ví dụ: `A[Bắt đầu (AI)]` $\rightarrow$ `A["Bắt đầu (AI)"]`), thay thế các dấu nháy cong tiếng Việt (`“`, `”`) thành nháy thẳng, và sửa chữa các mũi tên vẽ sai cấu trúc (`==>>` $\rightarrow$ `==>`), đảm bảo biểu đồ luôn hiển thị thành công.
+
 ---
 
 ## 4. Hướng dẫn sử dụng & Kiểm thử (Verification & Test Cases)
@@ -92,6 +102,7 @@ HapiCopi nhận biết ứng dụng đích thời gian thực tại tích tắc 
 | **3. Word Online (Bảng biểu)** | Bảng biểu Markdown hoặc HTML từ ChatGPT/Gemini | Word Online trên Chrome/Edge | Bảng hiển thị cân đối, viền mỏng xám mờ `#cccccc`, tự động giãn cột theo chiều rộng trang (không bị vỡ chữ/co cụm cột). |
 | **4. Word Online (Toán học)** | Biểu thức: `\sin ^{2}\alpha +\cos ^{2}\alpha =1` hoặc `\frac{a}{b}` | Word Online trên Chrome/Edge | Tự động chuyển đổi thành đối tượng Equation gốc của Word với phân số thẳng đứng đồ họa. |
 | **5. VS Code / Notepad** | Đoạn văn bản Markdown | VS Code / Notepad | Khôi phục và dán ra văn bản Markdown thô ban đầu (không bị dịch mất các ký hiệu Markdown hay công thức). |
+| **6. Sơ đồ Mermaid (Tự sửa lỗi & Chèn ảnh)** | Khối mã ````mermaid\nflowchart TD\n  A[Bắt đầu (AI)] --> B(Kết quả (Thành công))\n```` | MS Word (Desktop & Online) hoặc Google Docs | Tự động cân bằng ngoặc của nhãn thành `A["Bắt đầu (AI)"]` và `B("Kết quả (Thành công)")`, kết xuất ngầm sang ảnh PNG và dán trực tiếp biểu đồ dưới dạng hình ảnh vào tài liệu. |
 
 ---
 

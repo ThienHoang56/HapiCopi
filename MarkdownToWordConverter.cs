@@ -55,6 +55,34 @@ namespace HapiCopi
             htmlFragment = preRegex.Replace(htmlFragment, match =>
             {
                 string codeContent = match.Groups[1].Value;
+                string decodedCode = System.Net.WebUtility.HtmlDecode(codeContent).Trim();
+                
+                // Kiểm tra xem đây có phải là biểu đồ Mermaid đã được cache ảnh không
+                if (decodedCode.StartsWith("graph ", StringComparison.OrdinalIgnoreCase) ||
+                    decodedCode.StartsWith("flowchart ", StringComparison.OrdinalIgnoreCase) ||
+                    decodedCode.StartsWith("sequenceDiagram", StringComparison.OrdinalIgnoreCase) ||
+                    decodedCode.StartsWith("classDiagram", StringComparison.OrdinalIgnoreCase) ||
+                    decodedCode.StartsWith("stateDiagram", StringComparison.OrdinalIgnoreCase) ||
+                    decodedCode.StartsWith("erDiagram", StringComparison.OrdinalIgnoreCase) ||
+                    decodedCode.StartsWith("gantt", StringComparison.OrdinalIgnoreCase) ||
+                    decodedCode.StartsWith("pie", StringComparison.OrdinalIgnoreCase) ||
+                    decodedCode.StartsWith("gitGraph", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (formatInfo.MermaidImageCache != null)
+                    {
+                        foreach (var kv in formatInfo.MermaidImageCache)
+                        {
+                            if (kv.Key.Contains(decodedCode) || decodedCode.Contains(kv.Key))
+                            {
+                                if (!string.IsNullOrEmpty(kv.Value))
+                                {
+                                    return $"<p><img src=\"{kv.Value}\" alt=\"Mermaid Diagram\" style=\"max-width: 100%; height: auto;\" /></p>";
+                                }
+                            }
+                        }
+                    }
+                }
+                
                 return $"<div class=\"MsoNormal\" style=\"font-family: 'Consolas', 'Courier New', monospace; font-size: 10pt; background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 8pt; margin: 6pt 0; white-space: pre; line-height: 1.2; color: #212529;\">{codeContent}</div>";
             });
 
@@ -366,7 +394,7 @@ namespace HapiCopi
             }
 
             return false;
-        }
+}
 
         private class TagState
         {
@@ -377,12 +405,34 @@ namespace HapiCopi
             public string PreservedTagOutput { get; set; } = "";
         }
 
-        /// <summary>
-        /// Dọn dẹp HTML rác từ trình duyệt khi bôi đen thủ công trên web AI, đồng hóa kiểu chữ theo Word
-        /// </summary>
         public static string CleanWebHtmlToOffice(string htmlFragment, WordFormatInfo formatInfo)
         {
             if (string.IsNullOrEmpty(htmlFragment)) return "";
+
+            // Tiền xử lý thay thế biểu đồ Mermaid bằng ảnh
+            if (formatInfo.MermaidImageCache != null && formatInfo.MermaidImageCache.Count > 0)
+            {
+                // 1. Khớp các khối <pre><code> chuẩn
+                var preCodeRegex = new Regex(@"<pre[^>]*>(?:<code[^>]*>)?(.*?)(?:</code>)?</pre>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                htmlFragment = preCodeRegex.Replace(htmlFragment, match =>
+                {
+                    string inner = match.Groups[1].Value;
+                    string decoded = System.Net.WebUtility.HtmlDecode(inner).Trim();
+                    string plainCode = Regex.Replace(decoded, "<[^>]*>", "").Trim();
+                    return ReplaceWithMermaidImage(plainCode, match.Value, formatInfo.MermaidImageCache);
+                });
+
+                // 2. Khớp các khối code dạng div (từ Monaco Editor / Antigravity IDE)
+                var divMermaidRegex = new Regex(@"(?:<div>|<p[^>]*>)\s*```mermaid\s*(?:</div>|</p>)(.*?)(?:<div>|<p[^>]*>)\s*```\s*(?:</div>|</p>)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                htmlFragment = divMermaidRegex.Replace(htmlFragment, match =>
+                {
+                    string inner = match.Groups[1].Value;
+                    string normalizedText = Regex.Replace(inner, @"<(?:div|p|br)[^>]*>", "\n");
+                    string plainCode = Regex.Replace(normalizedText, "<[^>]*>", "").Trim();
+                    plainCode = System.Net.WebUtility.HtmlDecode(plainCode).Trim();
+                    return ReplaceWithMermaidImage(plainCode, match.Value, formatInfo.MermaidImageCache);
+                });
+            }
 
             var tokens = Tokenize(htmlFragment);
             var sb = new StringBuilder();
@@ -640,10 +690,13 @@ namespace HapiCopi
                             activeItalicLayers++;
                         }
 
+                        sb.Append("<div>");
+
                         stack.Push(new TagState
                         {
                             OriginalName = "div",
-                            IsPreserved = false,
+                            IsPreserved = true,
+                            PreservedTagOutput = "div",
                             IntroducedBold = isBold,
                             IntroducedItalic = isItalic
                         });
@@ -868,6 +921,37 @@ namespace HapiCopi
             }
 
             return sb.ToString();
+        }
+
+        private static string ReplaceWithMermaidImage(string plainCode, string fallback, System.Collections.Generic.Dictionary<string, string> cache)
+        {
+            if (plainCode.StartsWith("graph ", StringComparison.OrdinalIgnoreCase) ||
+                plainCode.StartsWith("flowchart ", StringComparison.OrdinalIgnoreCase) ||
+                plainCode.StartsWith("sequenceDiagram", StringComparison.OrdinalIgnoreCase) ||
+                plainCode.StartsWith("classDiagram", StringComparison.OrdinalIgnoreCase) ||
+                plainCode.StartsWith("stateDiagram", StringComparison.OrdinalIgnoreCase) ||
+                plainCode.StartsWith("erDiagram", StringComparison.OrdinalIgnoreCase) ||
+                plainCode.StartsWith("gantt", StringComparison.OrdinalIgnoreCase) ||
+                plainCode.StartsWith("pie", StringComparison.OrdinalIgnoreCase) ||
+                plainCode.StartsWith("gitGraph", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var kv in cache)
+                {
+                    string cachedClean = MermaidRenderer.SanitizeMermaidCode(kv.Key).Replace("\r", "").Trim();
+                    string currentClean = MermaidRenderer.SanitizeMermaidCode(plainCode).Replace("\r", "").Trim();
+
+                    if (cachedClean.Contains(currentClean) || currentClean.Contains(cachedClean) ||
+                        kv.Key.Replace("\r", "").Trim().Contains(plainCode.Replace("\r", "").Trim()) ||
+                        plainCode.Replace("\r", "").Trim().Contains(kv.Key.Replace("\r", "").Trim()))
+                    {
+                        if (!string.IsNullOrEmpty(kv.Value))
+                        {
+                            return $"<p><img src=\"{kv.Value}\" alt=\"Mermaid Diagram\" style=\"max-width: 100%; height: auto;\" /></p>";
+                        }
+                    }
+                }
+            }
+            return fallback;
         }
 
         /// <summary>

@@ -10,6 +10,9 @@ namespace HapiCopi
         private static bool _hasOriginalText = false;
         private static bool _hasOriginalHtml = false;
 
+        public static string OriginalText => _originalText;
+        public static string OriginalHtml => _originalHtml;
+
         /// <summary>
         /// Giả lập sao chép văn bản đang bôi đen bằng Ctrl+C và đọc văn bản từ clipboard.
         /// </summary>

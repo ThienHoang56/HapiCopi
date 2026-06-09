@@ -38,6 +38,7 @@ namespace HapiCopi
         private bool _isPaused = false;
         private bool _hasShownWelcome = false;
         private bool _isSimulatingClipboard = false;
+        private readonly System.Collections.Generic.Dictionary<string, string> _mermaidCache = new System.Collections.Generic.Dictionary<string, string>();
 
         // Cache lưu trữ nội dung copy thô để xử lý dán động
         private string _lastRawText = "";
@@ -115,6 +116,63 @@ namespace HapiCopi
             ProcessClipboard(isStartup: false);
         }
 
+        private void SetClipboardOnStaThread(string text, string html)
+        {
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    _isSimulatingClipboard = true;
+                    ClipboardHelper.SetOfficeClipboard(text, html);
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"Lỗi ghi clipboard từ STA Thread: {ex.Message}");
+                }
+                finally
+                {
+                    _isSimulatingClipboard = false;
+                }
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+        }
+
+        private async System.Threading.Tasks.Task PreCacheMermaidDiagramsAsync(string text)
+        {
+            try
+            {
+                var mermaidRegex = new Regex(@"```mermaid\s*\r?\n(.*?)\r?\n```", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                var matches = mermaidRegex.Matches(text);
+                Program.Log($"[DEBUG] PreCacheMermaidDiagramsAsync found {matches.Count} matches");
+                
+                foreach (Match match in matches)
+                {
+                    string innerCode = match.Groups[1].Value.Trim();
+                    Program.Log($"[DEBUG] Match innerCode (first 50 chars): '{innerCode.Substring(0, Math.Min(50, innerCode.Length)).Replace("\r", "\\r").Replace("\n", "\\n")}'");
+                    if (!_mermaidCache.ContainsKey(innerCode))
+                    {
+                        Program.Log($"[Mermaid] Tìm thấy biểu đồ, đang kết xuất ngầm...");
+                        string dataUri = await MermaidRenderer.GetMermaidDataUriAsync(innerCode);
+                        if (!string.IsNullOrEmpty(dataUri))
+                        {
+                            _mermaidCache[innerCode] = dataUri;
+                            Program.Log($"[Mermaid] Kết xuất ngầm thành công. Kích thước base64: {dataUri.Length} ký tự.");
+                        }
+                        else
+                        {
+                            Program.Log($"[Mermaid] Kết xuất ngầm THẤT BẠI.");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[Mermaid Cache LỖI] {ex.Message}");
+            }
+        }
+
         private void ProcessClipboard(bool isStartup)
         {
             if (_isPaused)
@@ -123,7 +181,6 @@ namespace HapiCopi
                 return;
             }
 
-            // Bỏ qua nếu clipboard do chính HapiCopi xử lý và ghi đè
             if (ClipboardHelper.IsAlreadyProcessed())
             {
                 Program.Log("Bỏ qua: Dữ liệu này đã được HapiCopi xử lý.");
@@ -133,23 +190,12 @@ namespace HapiCopi
             try
             {
                 string text = ClipboardHelper.GetPlainText();
-                Program.Log($"{(isStartup ? "[Startup] " : "")}Đọc văn bản thô từ Clipboard (độ dài: {text.Length} ký tự).");
-
-                // Đọc HTML từ Clipboard nếu có để phục vụ phân tích cấu trúc
                 string webHtml = "";
                 bool hasHtml = false;
-                try
+                if (Clipboard.ContainsText(TextDataFormat.Html))
                 {
-                    if (Clipboard.ContainsText(TextDataFormat.Html))
-                    {
-                        webHtml = Clipboard.GetText(TextDataFormat.Html);
-                        hasHtml = !string.IsNullOrEmpty(webHtml);
-                        Program.Log($"{(isStartup ? "[Startup] " : "")}Đọc HTML từ Clipboard (độ dài: {webHtml.Length} ký tự).");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Program.Log("Lỗi đọc HTML từ Clipboard: " + ex.Message);
+                    webHtml = Clipboard.GetText(TextDataFormat.Html);
+                    hasHtml = !string.IsNullOrEmpty(webHtml);
                 }
                 
                 if (string.IsNullOrEmpty(text) && !hasHtml)
@@ -159,51 +205,67 @@ namespace HapiCopi
                 }
 
                 bool shouldProcess = IsMarkdownOrAiHtml(text, webHtml);
-                Program.Log($"Kết quả kiểm tra điều kiện xử lý (IsMarkdownOrAiHtml): {shouldProcess}");
-
-                if (shouldProcess)
-                {
-                    // 1. Lưu lại cache gốc để xào nấu lúc paste
-                    _lastRawText = text;
-                    _lastRawHtml = webHtml;
-                    _lastWasProcessed = true;
-                    Program.Log("Đã cache dữ liệu Copy thô để chuẩn bị dán động.");
-
-                    // 2. Chuyển đổi định dạng Office mặc định (Fallback lúc trượt Hook phím)
-                    WordFormatInfo formatInfo = WordInterop.GetCurrentFormatWithTimeout(80);
-                    string officeHtml = "";
-                    if (hasHtml)
-                    {
-                        string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(webHtml);
-                        string cleanFragment = MarkdownToWordConverter.CleanWebHtmlToOffice(htmlFragment, formatInfo);
-                        officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(cleanFragment);
-                    }
-                    else
-                    {
-                        officeHtml = MarkdownToWordConverter.ConvertToOfficeHtml(text, formatInfo);
-                    }
-
-                    string cleanText = MarkdownToWordConverter.ProcessLatexInPlainText(text);
-                    ClipboardHelper.SetOfficeClipboard(cleanText, officeHtml);
-
-                    if (!_hasShownWelcome)
-                    {
-                        string tipText = isStartup 
-                            ? "Đã tự động tối ưu hóa dữ liệu clipboard có sẵn!" 
-                            : "Bắt đầu tự động tối ưu hóa clipboard!";
-                        _notifyIcon.ShowBalloonTip(2000, "HapiCopi kích hoạt!", 
-                            tipText, 
-                            ToolTipIcon.None);
-                        _hasShownWelcome = true;
-                    }
-                }
-                else
+                if (!shouldProcess)
                 {
                     if (!isStartup)
                     {
                         _lastWasProcessed = false;
                     }
+                    return;
                 }
+
+                _lastRawText = text;
+                _lastRawHtml = webHtml;
+                _lastWasProcessed = true;
+                Program.Log("Đã cache dữ liệu Copy thô.");
+
+                System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        Program.Log($"[DEBUG] text length: {text?.Length ?? 0}, hasHtml: {hasHtml}");
+                        if (text != null && text.Contains("```mermaid"))
+                        {
+                            Program.Log("[DEBUG] text contains ```mermaid");
+                            await PreCacheMermaidDiagramsAsync(text);
+                        }
+                        else
+                        {
+                            Program.Log("[DEBUG] text does NOT contain ```mermaid");
+                        }
+
+                        WordFormatInfo formatInfo = WordInterop.GetCurrentFormatWithTimeout(80);
+                        formatInfo.MermaidImageCache = _mermaidCache;
+
+                        string officeHtml = "";
+                        if (hasHtml)
+                        {
+                            string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(webHtml);
+                            string cleanFragment = MarkdownToWordConverter.CleanWebHtmlToOffice(htmlFragment, formatInfo);
+                            officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(cleanFragment);
+                        }
+                        else
+                        {
+                            officeHtml = MarkdownToWordConverter.ConvertToOfficeHtml(text, formatInfo);
+                        }
+
+                        string cleanText = MarkdownToWordConverter.ProcessLatexInPlainText(text);
+                        SetClipboardOnStaThread(cleanText, officeHtml);
+
+                        if (!_hasShownWelcome)
+                        {
+                            string tipText = isStartup 
+                                ? "Đã tự động tối ưu hóa dữ liệu clipboard có sẵn!" 
+                                : "Bắt đầu tự động tối ưu hóa clipboard!";
+                            _notifyIcon.ShowBalloonTip(2000, "HapiCopi kích hoạt!", tipText, ToolTipIcon.None);
+                            _hasShownWelcome = true;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Program.Log($"Lỗi xử lý clipboard ngầm: {ex.Message}");
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -225,7 +287,7 @@ namespace HapiCopi
                 {
                     // Tối ưu hóa cho Google Docs: Xóa sạch font-family và font-size
                     Program.Log("Xào nấu Clipboard cho Google Docs (Tự thừa kế style con trỏ)...");
-                    var docsFormat = new WordFormatInfo { IsFromActiveWord = false };
+                    var docsFormat = new WordFormatInfo { IsFromActiveWord = false, MermaidImageCache = _mermaidCache };
                     
                     string docsHtml = "";
                     if (!string.IsNullOrEmpty(_lastRawHtml))
@@ -251,7 +313,7 @@ namespace HapiCopi
                     if (!string.IsNullOrEmpty(_lastRawHtml))
                     {
                         string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(_lastRawHtml);
-                        tempHtml = MarkdownToWordConverter.CleanWebHtmlToOffice(htmlFragment, new WordFormatInfo { IsFromActiveWord = false });
+                        tempHtml = MarkdownToWordConverter.CleanWebHtmlToOffice(htmlFragment, new WordFormatInfo { IsFromActiveWord = false, MermaidImageCache = _mermaidCache });
                     }
                     else
                     {
@@ -289,6 +351,7 @@ namespace HapiCopi
                         formatInfo = new WordFormatInfo { IsFromActiveWord = false };
                     }
                     formatInfo.IsWordTarget = true;
+                    formatInfo.MermaidImageCache = _mermaidCache;
                     
                     string officeHtml = "";
                     if (!string.IsNullOrEmpty(_lastRawHtml))
@@ -346,16 +409,32 @@ namespace HapiCopi
                         rawText = ClipboardSimulator.GetSelectedTextViaClipboard();
                     }
 
+                    bool fromClipboard = false;
                     if (string.IsNullOrEmpty(rawText) || rawText.Trim().Length == 0)
                     {
-                        Program.Log("Không có văn bản nào được chọn để định dạng.");
-                        _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Vui lòng chọn (bôi đen) văn bản cần định dạng.", ToolTipIcon.Warning);
-                        if (!isWord)
+                        if (isWord)
                         {
-                            ClipboardSimulator.RestoreClipboard();
-                            _isSimulatingClipboard = false;
+                            rawText = ClipboardHelper.GetPlainText();
                         }
-                        return;
+                        else
+                        {
+                            rawText = ClipboardSimulator.OriginalText;
+                        }
+
+                        if (string.IsNullOrEmpty(rawText) || rawText.Trim().Length == 0)
+                        {
+                            Program.Log("Không có văn bản nào được bôi đen và Clipboard trống.");
+                            _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Vui lòng bôi đen văn bản hoặc sao chép văn bản vào Clipboard trước khi định dạng.", ToolTipIcon.Warning);
+                            if (!isWord)
+                            {
+                                ClipboardSimulator.RestoreClipboard();
+                                _isSimulatingClipboard = false;
+                            }
+                            return;
+                        }
+
+                        fromClipboard = true;
+                        Program.Log("Không phát hiện văn bản bôi đen. Lấy văn bản từ Clipboard để định dạng.");
                     }
 
                     // Không hiển thị balloon tip trước khi dán để tránh cướp focus của cửa sổ đang hoạt động
@@ -378,7 +457,7 @@ namespace HapiCopi
                         formattedText = AutoFormatter.FormatTextSmart(rawText);
                     }
 
-                    if (formattedText == rawText)
+                    if (!fromClipboard && formattedText == rawText)
                     {
                         Program.Log("Văn bản chọn đã chuẩn sạch, không cần định dạng lại.");
                         if (!isWord)
@@ -448,22 +527,44 @@ namespace HapiCopi
                 return false;
             }
  
-            // 2. Nhận diện qua cấu trúc HTML trước (để bắt được các thẻ math/katex/mathjax/prose/markdown)
+            // 2. Nhận diện qua cấu trúc HTML trước (để bắt được các thẻ math/katex/mathjax/prose/markdown/webpage)
             if (!string.IsNullOrEmpty(html))
             {
                 string htmlLower = html.ToLowerInvariant();
-                if (htmlLower.Contains("class=\"markdown") || 
-                    htmlLower.Contains("class=\"prose") || 
-                    htmlLower.Contains("<pre") || 
-                    htmlLower.Contains("<code") ||
-                    htmlLower.Contains("<table") ||
-                    htmlLower.Contains("<blockquote") ||
-                    (htmlLower.Contains("<li") && htmlLower.Contains("<ul")) ||
-                    htmlLower.Contains("<h1") || htmlLower.Contains("<h2") || htmlLower.Contains("<h3") ||
-                    htmlLower.Contains("katex") || htmlLower.Contains("mathjax") || htmlLower.Contains("mjx-") || htmlLower.Contains("<math"))
+
+                // Bỏ qua nếu là HTML gốc sinh ra bởi chính Microsoft Word/Excel/Office Desktop để giữ nguyên định dạng của Office
+                bool isOfficeCopy = htmlLower.Contains("microsoft word") || 
+                                    htmlLower.Contains("xmlns:o=\"urn:schemas-microsoft-com:office:office\"");
+
+                if (!isOfficeCopy)
                 {
-                    Program.Log("Nhận diện qua cấu trúc HTML: Tìm thấy dấu hiệu AI/Markdown/Table/Blockquote/Math.");
-                    return true;
+                    bool isBrowserCopy = htmlLower.Contains("sourceurl:");
+
+                    if (htmlLower.Contains("class=\"markdown") || 
+                        htmlLower.Contains("class=\"prose") || 
+                        htmlLower.Contains("class=\"message") ||
+                        htmlLower.Contains("class=\"chat") ||
+                        htmlLower.Contains("class=\"response") ||
+                        htmlLower.Contains("assistant-message") ||
+                        htmlLower.Contains("chat-message") ||
+                        htmlLower.Contains("<pre") || 
+                        htmlLower.Contains("<code") ||
+                        htmlLower.Contains("<table") ||
+                        htmlLower.Contains("<blockquote") ||
+                        htmlLower.Contains("<li") ||
+                        htmlLower.Contains("<ul") ||
+                        htmlLower.Contains("<ol") ||
+                        htmlLower.Contains("<h1") || htmlLower.Contains("<h2") || htmlLower.Contains("<h3") ||
+                        htmlLower.Contains("<h4") || htmlLower.Contains("<h5") || htmlLower.Contains("<h6") ||
+                        htmlLower.Contains("<strong") || htmlLower.Contains("<b>") || htmlLower.Contains("<b ") ||
+                        htmlLower.Contains("<em") || htmlLower.Contains("<i>") || htmlLower.Contains("<i ") ||
+                        htmlLower.Contains("<a href") ||
+                        htmlLower.Contains("katex") || htmlLower.Contains("mathjax") || htmlLower.Contains("mjx-") || htmlLower.Contains("<math") ||
+                        (isBrowserCopy && (htmlLower.Contains("<p") || htmlLower.Contains("<br") || htmlLower.Contains("<div") || htmlLower.Contains("<span"))))
+                    {
+                        Program.Log("Nhận diện qua cấu trúc HTML: Tìm thấy dấu hiệu AI/Markdown/Table/Blockquote/Math/WebPage.");
+                        return true;
+                    }
                 }
             }
  

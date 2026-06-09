@@ -14,6 +14,7 @@ namespace HapiCopi
         public float LineSpacing { get; set; } = 1.5f;
         public bool IsFromActiveWord { get; set; } = false;
         public bool IsWordTarget { get; set; } = false;
+        public System.Collections.Generic.Dictionary<string, string> MermaidImageCache { get; set; } = new System.Collections.Generic.Dictionary<string, string>();
     }
 
     public static class WordInterop

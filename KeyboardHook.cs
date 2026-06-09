@@ -94,7 +94,9 @@ namespace HapiCopi
                 // 3. Kiểm tra tổ hợp Ctrl + M
                 else if (vkCode == VK_M)
                 {
+                    Program.Log("KeyboardHook: Phát hiện phím M được nhấn.");
                     bool ctrlPressed = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+                    Program.Log($"KeyboardHook: Trạng thái Ctrl: {ctrlPressed}");
                     if (ctrlPressed)
                     {
                         System.Threading.Tasks.Task.Run(() => AutoFormatPressed?.Invoke());
