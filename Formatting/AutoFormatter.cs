@@ -31,90 +31,89 @@ namespace HapiCopi
 
             // 2. Chia thành các dòng/đoạn thô dựa trên ký tự xuống dòng
             var rawLines = cleanText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-            var resultParagraphs = new List<string>();
+            var finalParagraphs = new List<string>();
+            var currentParagraph = new List<string>();
 
             foreach (var line in rawLines)
             {
                 string trimmedLine = line.Trim();
                 if (string.IsNullOrEmpty(trimmedLine))
                 {
-                    resultParagraphs.Add("");
+                    // Nếu gặp dòng trống, đẩy đoạn văn hiện tại ra và bắt đầu đoạn mới
+                    if (currentParagraph.Count > 0)
+                    {
+                        finalParagraphs.Add(string.Join(" ", currentParagraph));
+                        currentParagraph.Clear();
+                    }
+                    finalParagraphs.Add(""); // Giữ dòng trống để ngăn cách đoạn
                     continue;
                 }
 
-                // 3. Nếu là tiêu đề, danh sách hoặc dòng quá ngắn, giữ nguyên cấu trúc
-                if (IsHeading(trimmedLine) || IsListItem(trimmedLine) || IsShortLine(trimmedLine))
+                // Nếu là tiêu đề hoặc danh sách, đẩy đoạn cũ ra, giữ nguyên dòng này thành đoạn riêng
+                if (IsHeading(trimmedLine) || IsListItem(trimmedLine))
                 {
-                    resultParagraphs.Add(trimmedLine);
+                    if (currentParagraph.Count > 0)
+                    {
+                        finalParagraphs.Add(string.Join(" ", currentParagraph));
+                        currentParagraph.Clear();
+                    }
+                    finalParagraphs.Add(trimmedLine);
                     continue;
                 }
 
-                // 4. Xử lý đoạn văn bản thường dài: Tách câu và nhóm đoạn động
-                var sentences = SplitIntoSentences(trimmedLine);
-                var currentGroup = new List<string>();
-                int currentLength = 0;
-
-                for (int i = 0; i < sentences.Count; i++)
+                // Kiểm tra xem dòng hiện tại có nên nối tiếp với dòng trước đó không
+                // Thường nối tiếp nếu dòng trước không kết thúc bằng dấu chấm câu (. ! ?)
+                if (currentParagraph.Count > 0)
                 {
-                    string sentence = sentences[i];
-                    currentGroup.Add(sentence);
-                    currentLength += sentence.Length;
-
-                    // Kiểm tra câu tiếp theo xem có phải là điểm ngắt lý tưởng không
-                    bool shouldSplit = false;
-                    if (i < sentences.Count - 1)
+                    string lastLine = currentParagraph[currentParagraph.Count - 1];
+                    bool endsWithPunctuation = lastLine.EndsWith(".") || lastLine.EndsWith("!") || lastLine.EndsWith("?") || lastLine.EndsWith(":") || lastLine.EndsWith("`") || lastLine.EndsWith("\"");
+                    
+                    if (endsWithPunctuation)
                     {
-                        string nextSentence = sentences[i + 1];
-                        bool startsWithTransition = StartsWithTransitionWord(nextSentence);
-
-                        // Quy tắc 1: Nếu đoạn hiện tại đã đủ dài (>= 2 câu và >= 200 ký tự) và câu tiếp theo bắt đầu bằng từ nối chuyển ý
-                        if (currentGroup.Count >= 2 && currentLength >= 200 && startsWithTransition)
-                        {
-                            shouldSplit = true;
-                        }
-                        // Quy tắc 2: Nếu đoạn đã quá dài (>= 3 câu hoặc >= 350 ký tự)
-                        else if (currentGroup.Count >= 3 || currentLength >= 350)
-                        {
-                            shouldSplit = true;
-                        }
+                        // Đoạn trước đã kết thúc trọn vẹn bằng dấu câu, nhưng không có dòng trống ngăn cách,
+                        // Ta vẫn giữ nguyên như một câu độc lập trong cùng đoạn
+                        currentParagraph.Add(trimmedLine);
                     }
-
-                    if (shouldSplit)
+                    else
                     {
-                        resultParagraphs.Add(string.Join(" ", currentGroup));
-                        currentGroup.Clear();
-                        currentLength = 0;
+                        // Dòng trước bị ngắt nửa chừng (ví dụ khi copy từ PDF hoặc AI trả về ngắt dòng lung tung)
+                        // Ta tiến hành nối liền hai dòng lại với nhau
+                        currentParagraph[currentParagraph.Count - 1] = lastLine + " " + trimmedLine;
                     }
                 }
-
-                if (currentGroup.Count > 0)
+                else
                 {
-                    resultParagraphs.Add(string.Join(" ", currentGroup));
+                    currentParagraph.Add(trimmedLine);
                 }
             }
 
+            if (currentParagraph.Count > 0)
+            {
+                finalParagraphs.Add(string.Join(" ", currentParagraph));
+            }
+
             // Loại bỏ các dòng trống liền nhau không cần thiết để văn bản cân đối
-            var finalParagraphs = new List<string>();
+            var result = new List<string>();
             bool lastWasEmpty = false;
-            foreach (var para in resultParagraphs)
+            foreach (var para in finalParagraphs)
             {
                 if (string.IsNullOrEmpty(para))
                 {
                     if (!lastWasEmpty)
                     {
-                        finalParagraphs.Add("");
+                        result.Add("");
                         lastWasEmpty = true;
                     }
                 }
                 else
                 {
-                    finalParagraphs.Add(para);
+                    result.Add(para);
                     lastWasEmpty = false;
                 }
             }
 
             // MS Word sử dụng \r\n hoặc \r làm ký tự kết thúc đoạn paragraph
-            return string.Join("\r\n", finalParagraphs);
+            return string.Join("\r\n", result);
         }
 
         /// <summary>

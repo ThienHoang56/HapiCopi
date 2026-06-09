@@ -9,7 +9,7 @@ namespace HapiCopi
 {
     public static class GeminiClient
     {
-        private static readonly HttpClient HttpClient = new HttpClient();
+        private static readonly HttpClient HttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
 
         /// <summary>
         /// Gọi Gemini API để định dạng lại văn bản thông minh theo ngữ nghĩa.
@@ -70,9 +70,6 @@ namespace HapiCopi
             var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
 
             Program.Log("Đang gửi yêu cầu định dạng tới Gemini API...");
-            
-            // Thiết lập timeout hợp lý (ví dụ: 10 giây) để tránh treo ứng dụng
-            HttpClient.Timeout = TimeSpan.FromSeconds(10);
             
             var response = await HttpClient.PostAsync(url, content);
             response.EnsureSuccessStatusCode();
