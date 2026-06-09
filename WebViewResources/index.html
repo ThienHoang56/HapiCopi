@@ -17,8 +17,9 @@
     </script>
 </head>
 <body>
-    <!-- Container ẩn để render sơ đồ Mermaid -->
-    <div id="mermaid-container" style="display: none; visibility: hidden; position: absolute; left: -9999px;"></div>
+    <!-- Container ẩn để render sơ đồ Mermaid (Phải hiển thị để trình duyệt đo đạc text chính xác, nhưng đưa ra ngoài màn hình) -->
+    <div id="mermaid-container" style="position: absolute; top: -9999px; left: -9999px; width: 1200px; height: 1200px; overflow: hidden;"></div>
+
 
     <script>
         // Khởi tạo Mermaid
@@ -52,9 +53,11 @@
         // Helper dịch các số phân số LaTeX đơn giản
         function parseFractions(latex) {
             if (!latex) return "";
-            let index;
-            while ((index = latex.indexOf("\\frac{")) !== -1) {
-                let numStart = index + 6;
+            let fracRegex = /\\(d|t)?frac\s*\{/;
+            let match;
+            while ((match = fracRegex.exec(latex)) !== null) {
+                let index = match.index;
+                let numStart = index + match[0].length;
                 let numEnd = findMatchingBrace(latex, numStart);
                 if (numEnd === -1) break;
 
@@ -94,6 +97,27 @@
             return -1;
         }
 
+        function parseSqrt(latex) {
+            if (!latex) return "";
+            // Matches \sqrt with optional [anything] and optional spaces, followed by {
+            let sqrtRegex = /\\sqrt\s*(?:\[[^\]]*\])?\s*\{/;
+            let match;
+            while ((match = sqrtRegex.exec(latex)) !== null) {
+                let index = match.index;
+                let start = index + match[0].length;
+                let end = findMatchingBrace(latex, start);
+                if (end === -1) break;
+
+                let content = latex.substring(start, end);
+                // Đệ quy xử lý bên trong căn
+                content = parseSqrt(content);
+
+                let replacement = "√(" + content + ")";
+                latex = latex.substring(0, index) + replacement + latex.substring(end + 1);
+            }
+            return latex;
+        }
+
         // 2. Hàm dịch LaTeX sang Unicode sạch (Cho Google Docs/PlainText)
         function translateLatexToHtml(latex) {
             if (!latex) return "";
@@ -112,6 +136,10 @@
             result = result.replace(/\\frac\s*([a-zA-Z])\s*([a-zA-Z])/g, "($1) / ($2)");
             result = result.replace(/\\frac\s*\\([a-zA-Z]+)\s*\\([a-zA-Z]+)/g, "($1) / ($2)");
 
+            // Dịch căn bậc hai
+            result = parseSqrt(result);
+            result = result.replace(/\\sqrt\s*([a-zA-Z0-9])/g, "√($1)");
+
             result = result.replace(/\\E/g, "·");
             result = result.replace(/(\d)\s*(?:\\in|∈|€)\s*([a-zA-Z])/g, "$1 · $2");
 
@@ -120,6 +148,11 @@
             result = result.replace(/\\mathbf\{([^}]+)\}/g, "<b>$1</b>");
             result = result.replace(/\\mathit\{([^}]+)\}/g, "<i>$1</i>");
             result = result.replace(/\\underline\{([^}]+)\}/g, "<u>$1</u>");
+            
+            result = result.replace(/\\textbf\{([^}]+)\}/g, "<b>$1</b>");
+            result = result.replace(/\\textit\{([^}]+)\}/g, "<i>$1</i>");
+            result = result.replace(/\\textsf\{([^}]+)\}/g, "$1");
+            result = result.replace(/\\texttt\{([^}]+)\}/g, "<code>$1</code>");
 
             // Ký tự Hy Lạp
             const greekLower = {
@@ -153,7 +186,13 @@
                 "partial": "∂", "nabla": "∇", "forall": "∀", "exists": "∃",
                 "emptyset": "∅", "in": "∈", "notin": "∉", "ni": "∋",
                 "prod": "∏", "sum": "∑", "minus": "−", "plus": "+",
-                "geq": "≥", "leq": "≤", "ge": "≥", "le": "≤", "neq": "≠"
+                "geq": "≥", "leq": "≤", "ge": "≥", "le": "≤", "neq": "≠",
+                "sim": "~", "equiv": "≡", "parallel": "∥", "perp": "⊥",
+                "angle": "∠", "triangle": "△", "degree": "°", "cap": "∩",
+                "cup": "∪", "subset": "⊂", "supset": "⊃", "subseteq": "⊆",
+                "supseteq": "⊇", "Leftrightarrow": "⇔", "leftrightarrow": "↔",
+                "Rightarrow": "⇒", "rightarrow": "→", "Leftarrow": "⇐",
+                "leftarrow": "←", "implies": "⇒", "impliedby": "⇐"
             };
             for (let key in mathSymbols) {
                 let r = new RegExp("\\\\" + key + "(?![a-zA-Z])", "g");
@@ -170,9 +209,14 @@
                            .replace(/\\quad/g, "  ").replace(/\\qquad/g, "    ").replace(/\\\\/g, "<br />");
 
             result = result.replace(/_\{([^}]+)\}/g, "<sub>$1</sub>")
-                           .replace(/_([0-9a-zA-Z])/g, "<sub>$1</sub>")
+                           .replace(/_([a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF])/g, "<sub>$1</sub>")
                            .replace(/\^\{([^}]+)\}/g, "<sup>$1</sup>")
-                           .replace(/\^([0-9a-zA-Z])/g, "<sup>$1</sup>")
+                           .replace(/\^([a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF])/g, "<sup>$1</sup>")
+                           .replace(/\\vec\{([^}]+)\}/g, "vec($1)")
+                           .replace(/\\bar\{([^}]+)\}/g, "bar($1)")
+                           .replace(/\\hat\{([^}]+)\}/g, "hat($1)")
+                           .replace(/\\tilde\{([^}]+)\}/g, "tilde($1)")
+                           .replace(/\\overline\{([^}]+)\}/g, "overline($1)")
                            .replace(/\{/g, "").replace(/\}/g, "");
 
             return result;
@@ -223,17 +267,236 @@
             }
         }
 
-        // 4. Hàm làm sạch HTML rác bằng DOM Parser của trình duyệt
-        function cleanHtml(html, fontName, fontSize) {
+        // Helper to check if an element is part of MathML or KaTeX/MathJax structure
+        function isMathOrKaTeXElement(el) {
+            let current = el;
+            while (current && current.tagName) {
+                let name = current.tagName.toLowerCase();
+                if (name === 'p' || name === 'li' || name === 'td' || name === 'th' || name === 'tr' || name === 'table' || name === 'body' || name === 'html') {
+                    return false;
+                }
+                if (name === 'math' || name === 'annotation' || name === 'semantics' || name === 'mjx-container') {
+                    return true;
+                }
+                let cls = current.className;
+                if (typeof cls === 'string') {
+                    cls = cls.toLowerCase();
+                    if (cls.includes('katex') || cls.includes('mathjax') || cls.startsWith('mjx-') || cls.includes('mjx-') || cls.includes('latex')) {
+                        return true;
+                    }
+                }
+                current = current.parentNode;
+            }
+            return false;
+        }
+
+        // Parse LaTeX formulas inside raw HTML content
+        function processLatexInHtml(html, isWordTarget) {
             if (!html) return "";
             try {
+                let text = html;
+
+                // Sửa lỗi nhân dấu ngầm
+                text = text.replace(/(\d)\s*(?:\\in|∈|€)\s*([a-zA-Z])/g, '$1 \\cdot $2');
+
+                const replaceMath = (regex) => {
+                    text = text.replace(regex, (match, latex) => {
+                        if (isWordTarget) {
+                            let mml = convertLatexToMathML(match);
+                            if (mml) return mml;
+                        }
+                        return translateLatexToHtml(match);
+                    });
+                };
+
+                // Dịch các khối Display và Inline
+                replaceMath(/\$\$([\s\S]*?)\$\$/g);
+                replaceMath(/\\\[([\s\S]*?)\\\]/g);
+                replaceMath(/\\\(([\s\S]*?)\\\)/g);
+
+                // Dán inline $...$
+                text = text.replace(/\$([^$\n]+)\$/g, (match, inner) => {
+                    if (inner.includes('\\') || inner.includes('_') || inner.includes('^') || inner.includes('{') || inner.includes('}') || inner.includes('+') || inner.includes('=') || inner.includes('-') || inner.includes('*') || inner.includes('/')) {
+                        if (isWordTarget) {
+                            let mml = convertLatexToMathML(match);
+                            if (mml) return mml;
+                        }
+                        return translateLatexToHtml(match);
+                    }
+                    return match;
+                });
+
+                return text;
+            } catch (err) {
+                console.error("Lỗi parse LaTeX trong HTML: ", err);
+                return html;
+            }
+        }
+
+        function convertMathContainers(doc, isWordTarget) {
+            // Find all KaTeX containers
+            let katexContainers = doc.querySelectorAll('.katex');
+            for (let container of katexContainers) {
+                if (!container.parentNode) continue;
+                let latex = "";
+                let annotation = container.querySelector('annotation');
+                if (annotation) {
+                    latex = annotation.textContent;
+                } else {
+                    latex = container.getAttribute('aria-label') || container.textContent || "";
+                }
+                
+                if (latex) {
+                    let replacementHtml = "";
+                    if (isWordTarget) {
+                        replacementHtml = convertLatexToMathML(latex);
+                    } else {
+                        replacementHtml = translateLatexToHtml(latex);
+                    }
+                    
+                    if (replacementHtml) {
+                        let tempSpan = doc.createElement('span');
+                        tempSpan.innerHTML = replacementHtml;
+                        container.parentNode.replaceChild(tempSpan, container);
+                    }
+                }
+            }
+
+            // Find all MathJax containers
+            let mathjaxContainers = doc.querySelectorAll('mjx-container, .mathjax, [class*="MathJax"]');
+            for (let container of mathjaxContainers) {
+                if (!container.parentNode) continue;
+                let latex = "";
+                let annotation = container.querySelector('annotation');
+                if (annotation) {
+                    latex = annotation.textContent;
+                } else {
+                    latex = container.getAttribute('data-tex') || container.textContent || "";
+                }
+                
+                if (latex) {
+                    let replacementHtml = "";
+                    if (isWordTarget) {
+                        replacementHtml = convertLatexToMathML(latex);
+                    } else {
+                        replacementHtml = translateLatexToHtml(latex);
+                    }
+                    
+                    if (replacementHtml) {
+                        let tempSpan = doc.createElement('span');
+                        tempSpan.innerHTML = replacementHtml;
+                        container.parentNode.replaceChild(tempSpan, container);
+                    }
+                }
+            }
+
+            // Find all general math containers (e.g. Gemini classes)
+            let generalMathContainers = doc.querySelectorAll('.math-inline, .math-display, .latex-math');
+            for (let container of generalMathContainers) {
+                if (!container.parentNode) continue;
+                let latex = container.getAttribute('data-latex') || container.textContent || "";
+                if (latex) {
+                    let replacementHtml = "";
+                    if (isWordTarget) {
+                        replacementHtml = convertLatexToMathML(latex);
+                    } else {
+                        replacementHtml = translateLatexToHtml(latex);
+                    }
+                    
+                    if (replacementHtml) {
+                        let tempSpan = doc.createElement('span');
+                        tempSpan.innerHTML = replacementHtml;
+                        container.parentNode.replaceChild(tempSpan, container);
+                    }
+                }
+            }
+        }
+
+        function normalizeCode(code) {
+            return code.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+        }
+        
+        function lookupMermaidCache(code, cache) {
+            let normCode = normalizeCode(code);
+            for (let key in cache) {
+                if (normalizeCode(key) === normCode) {
+                    return cache[key];
+                }
+            }
+            return null;
+        }
+
+        function decodeHtmlEntities(text) {
+            let textArea = document.createElement('textarea');
+            textArea.innerHTML = text;
+            return textArea.value;
+        }
+
+        // 4. Hàm làm sạch HTML rác bằng DOM Parser của trình duyệt và tịnh tiến Heading
+        function cleanHtml(html, fontName, fontSize, lineSpacing, parentHeadingLevel, isWordTarget, mermaidCacheJson) {
+            if (!html) return "";
+            try {
+                function hasHeadingAncestor(el) {
+                    let current = el.parentNode;
+                    while (current && current.tagName) {
+                        let name = current.tagName.toLowerCase();
+                        if (/^h[1-9]$/.test(name)) {
+                            return true;
+                        }
+                        current = current.parentNode;
+                    }
+                    return false;
+                }
+
+                const targetTextTags = ['p', 'li', 'td', 'th', 'span', 'strong', 'b', 'em', 'i', 'u', 'ins', 'del', 's', 'strike', 'a', 'div', 'font', 'mark', 'cite', 'q', 'dfn', 'abbr', 'small', 'blockquote'];
+
+                // Phân giải các ký tự LaTeX delimiters còn sót lại trong HTML trước khi dọn dẹp
+                let parsedHtml = processLatexInHtml(html, isWordTarget);
+
                 let parser = new DOMParser();
-                let doc = parser.parseFromString(html, 'text/html');
+                let doc = parser.parseFromString(parsedHtml, 'text/html');
+                
+                // Thay thế tất cả các container KaTeX/MathJax bằng MathML hoặc Unicode tương ứng để hiển thị mượt mà trên Word/Docs
+                convertMathContainers(doc, isWordTarget);
+                
+                // Giải mã và thay thế sơ đồ Mermaid từ cache
+                let mermaidCache = {};
+                if (mermaidCacheJson) {
+                    try {
+                        mermaidCache = JSON.parse(mermaidCacheJson);
+                    } catch (e) {
+                        console.error("Lỗi parse mermaidCache:", e);
+                    }
+                }
+
+                let mermaidContainers = doc.body.querySelectorAll('pre code.language-mermaid, div.mermaid, pre.mermaid');
+                for (let container of mermaidContainers) {
+                    let code = container.textContent.trim();
+                    let decodedCode = decodeHtmlEntities(code);
+                    let base64Data = lookupMermaidCache(decodedCode, mermaidCache);
+                    if (base64Data) {
+                        let img = doc.createElement('img');
+                        img.src = base64Data;
+                        img.style.maxWidth = '100%';
+                        img.style.display = 'block';
+                        img.style.margin = '10px 0';
+                        
+                        let targetToReplace = container;
+                        if (container.tagName.toLowerCase() === 'code' && container.parentNode && container.parentNode.tagName.toLowerCase() === 'pre') {
+                            targetToReplace = container.parentNode;
+                        }
+                        if (targetToReplace.parentNode) {
+                            targetToReplace.parentNode.replaceChild(img, targetToReplace);
+                        }
+                    }
+                }
+
+                let parentLevel = parentHeadingLevel || 0;
                 
                 let allElements = doc.body.querySelectorAll('*');
                 for (let el of allElements) {
-                    // Nếu là phần tử nằm trong MathML, bỏ qua không chạm vào
-                    if (el.closest('math')) {
+                    // Nếu là phần tử MathML hoặc KaTeX/MathJax, giữ nguyên không dọn dẹp để bảo toàn cấu trúc render
+                    if (isMathOrKaTeXElement(el)) {
                         continue;
                     }
 
@@ -255,6 +518,15 @@
                                    el.style.fontStyle === 'italic' || 
                                    name === 'i' || name === 'em';
 
+                    let textDec = computedStyle.textDecoration || '';
+                    let isUnderline = textDec.includes('underline') ||
+                                      (el.style.textDecoration && el.style.textDecoration.includes('underline')) ||
+                                      name === 'u';
+
+                    let isStrike = textDec.includes('line-through') ||
+                                   (el.style.textDecoration && el.style.textDecoration.includes('line-through')) ||
+                                   name === 's' || name === 'del' || name === 'strike';
+
                     let align = el.style.textAlign || el.getAttribute('align') || '';
                     let width = el.style.width || el.getAttribute('width') || '';
                     let colspan = el.getAttribute('colspan') || '';
@@ -267,17 +539,49 @@
                     let cleanStyles = [];
                     if (isBold) cleanStyles.push('font-weight: bold;');
                     if (isItalic) cleanStyles.push('font-style: italic;');
+                    
+                    let deco = [];
+                    if (isUnderline) deco.push('underline');
+                    if (isStrike) deco.push('line-through');
+                    if (deco.length > 0) cleanStyles.push('text-decoration: ' + deco.join(' ') + ';');
+
                     if (align) cleanStyles.push('text-align: ' + align + ';');
                     if (width) {
                         if (/^\d+$/.test(width)) width += 'px';
                         cleanStyles.push('width: ' + width + ';');
                     }
 
-                    // Đồng hóa font và cỡ chữ
-                    if (fontName && (name === 'p' || name === 'li' || name === 'td' || name === 'th')) {
-                        cleanStyles.push("font-family: '" + fontName + "';");
-                        if (fontSize && (name === 'p' || name === 'li')) {
-                            cleanStyles.push("font-size: " + fontSize + "pt;");
+                    // Áp dụng structural styles cho các thẻ đặc biệt
+                    if (name === 'table') {
+                        cleanStyles.push('border-collapse: collapse; width: 100%; border: 1px solid #cccccc; margin: 6pt 0;');
+                    } else if (name === 'th') {
+                        cleanStyles.push('border: 1px solid #cccccc; padding: 6px; background-color: #f2f2f2; text-align: left;');
+                    } else if (name === 'td') {
+                        cleanStyles.push('border: 1px solid #cccccc; padding: 6px; text-align: left;');
+                    } else if (name === 'pre') {
+                        cleanStyles = ["font-family: 'Consolas', 'Courier New', monospace;", "font-size: 10pt;", "background-color: #f8f9fa;", "border: 1px solid #e9ecef;", "padding: 8pt;", "margin: 6pt 0;", "white-space: pre;", "line-height: 1.2;", "color: #212529;"];
+                    } else if (name === 'code') {
+                        cleanStyles = ["font-family: 'Consolas', 'Courier New', monospace;", "font-size: 10pt;", "background-color: #f8f9fa;", "border: 1px solid #e9ecef;", "padding: 2px 4px;", "border-radius: 3px;", "color: #e83e8c;"];
+                    } else if (name === 'blockquote') {
+                        cleanStyles.push("border-left: 3px solid #cccccc; padding-left: 10pt; margin: 6pt 0 6pt 12pt; color: #555555; font-style: italic;");
+                    } else if (name === 'a') {
+                        cleanStyles.push("color: #0563c1; text-decoration: underline;");
+                    }
+
+                    // Đồng hóa font-family và font-size cho các thẻ văn bản thường (không áp dụng cho pre, code, table)
+                    if (fontName && name !== 'pre' && name !== 'code' && name !== 'table') {
+                        if (targetTextTags.includes(name)) {
+                            cleanStyles.push("font-family: '" + fontName + "';");
+                            // Chỉ áp dụng font-size nếu không nằm trong Heading (tránh ghi đè font-size của Heading)
+                            if (fontSize && !hasHeadingAncestor(el)) {
+                                cleanStyles.push("font-size: " + fontSize + "pt;");
+                            }
+                            if (lineSpacing && (name === 'p' || name === 'li')) {
+                                cleanStyles.push("line-height: " + lineSpacing + ";");
+                            }
+                        } else if (name === 'sub' || name === 'sup') {
+                            cleanStyles.push("font-family: '" + fontName + "';");
+                            cleanStyles.push("font-size: 75%;");
                         }
                     }
 
@@ -293,23 +597,39 @@
                         el.classList.add('MsoNormal');
                     } else if (name === 'table') {
                         el.classList.add('MsoNormalTable');
-                        el.setAttribute('style', 'border-collapse: collapse; width: 100%; border: 1px solid #cccccc; margin: 6pt 0;');
-                    } else if (name === 'th') {
-                        let base = 'border: 1px solid #cccccc; padding: 6px; background-color: #f2f2f2; font-weight: bold; text-align: left;';
-                        if (el.getAttribute('style')) base += ' ' + el.getAttribute('style');
-                        el.setAttribute('style', base);
-                    } else if (name === 'td') {
-                        let base = 'border: 1px solid #cccccc; padding: 6px; text-align: left;';
-                        if (el.getAttribute('style')) base += ' ' + el.getAttribute('style');
-                        el.setAttribute('style', base);
-                    } else if (name === 'pre') {
-                        el.setAttribute('style', "font-family: 'Consolas', 'Courier New', monospace; font-size: 10pt; background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 8pt; margin: 6pt 0; white-space: pre; line-height: 1.2; color: #212529;");
-                    } else if (name === 'code') {
-                        el.setAttribute('style', "font-family: 'Consolas', 'Courier New', monospace; font-size: 10pt; background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 2px 4px; border-radius: 3px; color: #e83e8c;");
-                    } else if (name === 'blockquote') {
-                        el.setAttribute('style', "border-left: 3px solid #cccccc; padding-left: 10pt; margin: 6pt 0 6pt 12pt; color: #555555; font-style: italic;");
-                    } else if (name === 'a') {
-                        el.setAttribute('style', "color: #0563c1; text-decoration: underline;");
+                    } else if (name === 'h1' || name === 'h2' || name === 'h3' || name === 'h4' || name === 'h5' || name === 'h6') {
+                        // Tịnh tiến cấp độ Heading
+                        let hLevel = parseInt(name.substring(1));
+                        let targetLevel = Math.min(9, parentLevel + hLevel);
+                        let msoClass = 'MsoHeading' + targetLevel;
+
+                        // Tạo thẻ Heading mới và thay thế thẻ cũ
+                        let newHeading = doc.createElement('h' + targetLevel);
+                        newHeading.className = msoClass;
+                        
+                        // Di chuyển tất cả các nút con sang newHeading để không bị clone/mất tham chiếu
+                        while (el.firstChild) {
+                            newHeading.appendChild(el.firstChild);
+                        }
+                        
+                        let headingStyle = [];
+                        if (fontName) {
+                            headingStyle.push("font-family: '" + fontName + "';");
+                        }
+                        if (fontSize) {
+                            let hSize = fontSize;
+                            if (targetLevel === 1) hSize = fontSize + 3;
+                            else if (targetLevel === 2) hSize = fontSize + 1;
+                            else if (targetLevel === 3) hSize = fontSize;
+                            else hSize = Math.max(10, fontSize - 1);
+                            
+                            headingStyle.push("font-size: " + hSize + "pt;");
+                        }
+                        newHeading.setAttribute('style', headingStyle.join(' '));
+                        
+                        if (el.parentNode) {
+                            el.parentNode.replaceChild(newHeading, el);
+                        }
                     }
                 }
                 return doc.body.innerHTML;
@@ -319,7 +639,46 @@
             }
         }
 
-        // 5. Hàm vẽ sơ đồ Mermaid offline ra Base64 PNG ẩn
+        // 5. Hàm dịch LaTeX thô trong Plain Text
+        function processLatexInPlainText(text) {
+            try {
+                let html = translateLatexToHtml(text);
+                return stripHtmlForPlainText(html);
+            } catch (err) {
+                return text;
+            }
+        }
+
+        function stripHtmlForPlainText(html) {
+            let result = html;
+            result = result.replace(/<sub>0<\/sub>/g, "₀").replace(/<sub>1<\/sub>/g, "₁").replace(/<sub>2<\/sub>/g, "₂")
+                           .replace(/<sub>3<\/sub>/g, "₃").replace(/<sub>4<\/sub>/g, "₄").replace(/<sub>5<\/sub>/g, "₅")
+                           .replace(/<sub>6<\/sub>/g, "₆").replace(/<sub>7<\/sub>/g, "₇").replace(/<sub>8<\/sub>/g, "₈")
+                           .replace(/<sub>9<\/sub>/g, "₉");
+            result = result.replace(/<sup>0<\/sup>/g, "⁰").replace(/<sup>1<\/sup>/g, "¹").replace(/<sup>2<\/sup>/g, "²")
+                           .replace(/<sup>3<\/sup>/g, "³").replace(/<sup>4<\/sup>/g, "⁴").replace(/<sup>5<\/sup>/g, "⁵")
+                           .replace(/<sup>6<\/sup>/g, "⁶").replace(/<sup>7<\/sup>/g, "⁷").replace(/<sup>8<\/sup>/g, "⁸")
+                           .replace(/<sup>9<\/sup>/g, "⁹");
+
+            let temp = document.createElement("div");
+            temp.innerHTML = result;
+            return temp.textContent || temp.innerText || "";
+        }
+
+        // 6. Đối tượng toàn cục lưu kết quả render Mermaid để C# poll kết quả
+        window.mermaidResults = window.mermaidResults || {};
+
+        function startRenderMermaid(code, id) {
+            window.mermaidResults[id] = { status: 'pending', result: null };
+            renderMermaidToPng(code, id).then(res => {
+                window.mermaidResults[id] = { status: 'success', result: res };
+            }).catch(err => {
+                window.mermaidResults[id] = { status: 'error', result: 'ERROR: ' + err.toString() };
+            });
+            return 'started';
+        }
+
+        // Hàm vẽ sơ đồ Mermaid offline ra Base64 PNG ẩn
         async function renderMermaidToPng(code, id) {
             return new Promise(async (resolve) => {
                 try {
@@ -327,7 +686,7 @@
                     container.innerHTML = '';
                     
                     // Render SVG offline từ mã nguồn
-                    const { svg } = await mermaid.render('mermaid-svg-' + id, code);
+                    const { svg } = await mermaid.render('mermaid-svg-' + id, code, container);
                     container.innerHTML = svg;
                     
                     const svgElement = container.querySelector('svg');
@@ -336,35 +695,36 @@
 
                     // Convert SVG sang Canvas sang PNG Base64
                     const svgString = new XMLSerializer().serializeToString(svgElement);
-                    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-                    const URL = window.URL || window.webkitURL || window;
-                    const blobURL = URL.createObjectURL(svgBlob);
+                    const base64Svg = btoa(unescape(encodeURIComponent(svgString)));
+                    const dataURL = 'data:image/svg+xml;base64,' + base64Svg;
                     
                     const image = new Image();
                     image.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = width;
-                        canvas.height = height;
-                        
-                        const context = canvas.getContext('2d');
-                        // Tạo nền trắng cho ảnh sơ đồ
-                        context.fillStyle = '#ffffff';
-                        context.fillRect(0, 0, width, height);
-                        context.drawImage(image, 0, 0, width, height);
-                        
-                        const pngData = canvas.toDataURL('image/png');
-                        URL.revokeObjectURL(blobURL);
-                        container.innerHTML = ''; // dọn dẹp
-                        resolve(pngData);
+                        try {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = width;
+                            canvas.height = height;
+                            
+                            const context = canvas.getContext('2d');
+                            // Tạo nền trắng cho ảnh sơ đồ
+                            context.fillStyle = '#ffffff';
+                            context.fillRect(0, 0, width, height);
+                            context.drawImage(image, 0, 0, width, height);
+                            
+                            const pngData = canvas.toDataURL('image/png');
+                            container.innerHTML = ''; // dọn dẹp
+                            resolve(pngData);
+                        } catch (canvasErr) {
+                            resolve("ERROR: Canvas drawing failed: " + canvasErr.toString());
+                        }
                     };
                     image.onerror = (e) => {
-                        URL.revokeObjectURL(blobURL);
-                        resolve("");
+                        resolve("ERROR: SVG Image loading failed");
                     };
-                    image.src = blobURL;
+                    image.src = dataURL;
                 } catch (err) {
                     console.error("Lỗi render Mermaid: ", err);
-                    resolve("");
+                    resolve("ERROR: " + err.toString());
                 }
             });
         }

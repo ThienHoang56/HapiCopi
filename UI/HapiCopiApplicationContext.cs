@@ -118,41 +118,56 @@ namespace HapiCopi
             thread.Join();
         }
 
+        private async System.Threading.Tasks.Task RenderAndCacheMermaidAsync(string innerCode)
+        {
+            if (!_mermaidCache.ContainsKey(innerCode))
+            {
+                string dataUri = "";
+                if (WebViewManager.IsInitialized)
+                {
+                    Program.Log($"[Mermaid] WebView2 đã sẵn sàng. Tiến hành render OFFLINE...");
+                    dataUri = await WebViewManager.RenderMermaidToPngAsync(innerCode, _mermaidCache.Count);
+                }
+                else
+                {
+                    Program.Log($"[Mermaid] WebView2 chưa sẵn sàng. Tiến hành render ONLINE qua API...");
+                    dataUri = await MermaidRenderer.GetMermaidDataUriAsync(innerCode);
+                }
+
+                if (!string.IsNullOrEmpty(dataUri) && !dataUri.StartsWith("ERROR"))
+                {
+                    _mermaidCache[innerCode] = dataUri;
+                    Program.Log($"[Mermaid] Kết xuất sơ đồ thành công. Kích thước base64: {dataUri.Length} ký tự.");
+                }
+                else
+                {
+                    Program.Log($"[Mermaid] Kết xuất sơ đồ THẤT BẠI. Chi tiết: {dataUri}");
+                }
+            }
+        }
+
         private async System.Threading.Tasks.Task PreCacheMermaidDiagramsAsync(string text)
         {
             try
             {
-                var mermaidRegex = new Regex(@"```mermaid\s*\r?\n(.*?)\r?\n```", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                var mermaidRegex = new Regex(@"```mermaid\s*[\r\n]+([\s\S]*?)\s*```", RegexOptions.IgnoreCase);
                 var matches = mermaidRegex.Matches(text);
                 Program.Log($"[DEBUG] PreCacheMermaidDiagramsAsync found {matches.Count} matches");
                 
-                foreach (Match match in matches)
+                if (matches.Count > 0)
                 {
-                    string innerCode = match.Groups[1].Value.Trim();
-                    Program.Log($"[DEBUG] Match innerCode (first 50 chars): '{innerCode.Substring(0, Math.Min(50, innerCode.Length)).Replace("\r", "\\r").Replace("\n", "\\n")}'");
-                    if (!_mermaidCache.ContainsKey(innerCode))
+                    foreach (Match match in matches)
                     {
-                        string dataUri = "";
-                        if (WebViewManager.IsInitialized)
-                        {
-                            Program.Log($"[Mermaid] WebView2 đã sẵn sàng. Tiến hành render OFFLINE...");
-                            dataUri = await WebViewManager.RenderMermaidToPngAsync(innerCode, _mermaidCache.Count);
-                        }
-                        else
-                        {
-                            Program.Log($"[Mermaid] WebView2 chưa sẵn sàng. Tiến hành render ONLINE qua API...");
-                            dataUri = await MermaidRenderer.GetMermaidDataUriAsync(innerCode);
-                        }
-
-                        if (!string.IsNullOrEmpty(dataUri))
-                        {
-                            _mermaidCache[innerCode] = dataUri;
-                            Program.Log($"[Mermaid] Kết xuất sơ đồ thành công. Kích thước base64: {dataUri.Length} ký tự.");
-                        }
-                        else
-                        {
-                            Program.Log($"[Mermaid] Kết xuất sơ đồ THẤT BẠI.");
-                        }
+                        string innerCode = match.Groups[1].Value.Trim();
+                        await RenderAndCacheMermaidAsync(innerCode);
+                    }
+                }
+                else
+                {
+                    string trimmed = text.Trim();
+                    if (MermaidRenderer.IsRawMermaidCode(trimmed))
+                    {
+                        await RenderAndCacheMermaidAsync(trimmed);
                     }
                 }
             }
@@ -213,21 +228,23 @@ namespace HapiCopi
                     try
                     {
                         Program.Log($"[DEBUG] text length: {text?.Length ?? 0}, hasHtml: {hasHtml}");
-                        if (text != null && text.Contains("```mermaid"))
+                        if (text != null && (text.Contains("```mermaid") || MermaidRenderer.IsRawMermaidCode(text)))
                         {
-                            Program.Log("[DEBUG] text contains ```mermaid");
+                            Program.Log("[DEBUG] text contains mermaid diagram");
                             await PreCacheMermaidDiagramsAsync(text);
                         }
                         else
                         {
-                            Program.Log("[DEBUG] text does NOT contain ```mermaid");
+                            Program.Log("[DEBUG] text does NOT contain mermaid diagram");
                         }
 
                         WordFormatInfo formatInfo = WordInterop.GetCurrentFormatWithTimeout(80);
+                        formatInfo.IsWordTarget = formatInfo.IsFromActiveWord; // Set Word target dynamically if Word is running
                         formatInfo.MermaidImageCache = _mermaidCache;
 
                         string officeHtml = "";
-                        if (hasHtml)
+                        bool hasMermaid = text != null && (text.Contains("```mermaid") || MermaidRenderer.IsRawMermaidCode(text));
+                        if (hasHtml && !hasMermaid)
                         {
                             string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(webHtml);
                             string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, formatInfo);
@@ -238,7 +255,7 @@ namespace HapiCopi
                             officeHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(text ?? "", formatInfo);
                         }
 
-                        string cleanText = MarkdownToWordConverter.ProcessLatexInPlainText(text ?? "");
+                        string cleanText = await MarkdownToWordConverter.ProcessLatexInPlainTextAsync(text ?? "");
                         SetClipboardOnStaThread(cleanText, officeHtml);
 
                         if (!_hasShownWelcome)
@@ -279,7 +296,8 @@ namespace HapiCopi
                     var docsFormat = new WordFormatInfo { IsFromActiveWord = false, MermaidImageCache = _mermaidCache };
                     
                     string docsHtml = "";
-                    if (!string.IsNullOrEmpty(_lastRawHtml))
+                    bool hasMermaid = _lastRawText != null && (_lastRawText.Contains("```mermaid") || MermaidRenderer.IsRawMermaidCode(_lastRawText));
+                    if (!string.IsNullOrEmpty(_lastRawHtml) && !hasMermaid)
                     {
                         string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(_lastRawHtml);
                         string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, docsFormat);
@@ -290,7 +308,7 @@ namespace HapiCopi
                         docsHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(_lastRawText, docsFormat);
                     }
                     
-                    string cleanPlainText = MarkdownToWordConverter.ProcessLatexInPlainText(_lastRawText);
+                    string cleanPlainText = await MarkdownToWordConverter.ProcessLatexInPlainTextAsync(_lastRawText);
                     ClipboardHelper.SetOfficeClipboard(cleanPlainText, docsHtml);
                 }
                 else if (appInfo.IsLaTeXEditor)
@@ -350,7 +368,8 @@ namespace HapiCopi
                     formatInfo.MermaidImageCache = _mermaidCache;
                     
                     string officeHtml = "";
-                    if (!string.IsNullOrEmpty(_lastRawHtml))
+                    bool hasMermaid = _lastRawText != null && (_lastRawText.Contains("```mermaid") || MermaidRenderer.IsRawMermaidCode(_lastRawText));
+                    if (!string.IsNullOrEmpty(_lastRawHtml) && !hasMermaid)
                     {
                         string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(_lastRawHtml);
                         string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, formatInfo);
@@ -361,7 +380,7 @@ namespace HapiCopi
                         officeHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(_lastRawText, formatInfo);
                     }
                     
-                    string cleanPlainText = MarkdownToWordConverter.ProcessLatexInPlainText(_lastRawText);
+                    string cleanPlainText = await MarkdownToWordConverter.ProcessLatexInPlainTextAsync(_lastRawText);
                     ClipboardHelper.SetOfficeClipboard(cleanPlainText, officeHtml);
                 }
             }
@@ -592,6 +611,12 @@ namespace HapiCopi
                 text.Contains("\\tan") || text.Contains("\\alpha") || text.Contains("\\beta") || 
                 text.Contains("\\gamma") || text.Contains("\\theta") || text.Contains("\\epsilon") ||
                 text.Contains("\\E"))
+            {
+                return true;
+            }
+
+            // 7. Kiểm tra mã nguồn sơ đồ Mermaid thô
+            if (MermaidRenderer.IsRawMermaidCode(text))
             {
                 return true;
             }

@@ -7,8 +7,8 @@ namespace HapiCopi
 {
     public class WordFormatInfo
     {
-        public string FontName { get; set; } = "Times New Roman";
-        public float FontSize { get; set; } = 13.0f;
+        public string FontName { get; set; } = null;
+        public float FontSize { get; set; } = 0f;
         public int ParentHeadingLevel { get; set; } = 0;
         public string StyleName { get; set; } = "Normal";
         public float LineSpacing { get; set; } = 1.5f;
@@ -163,36 +163,7 @@ namespace HapiCopi
                 }
                 catch {}
 
-                // 5. Tự động phát hiện tài liệu trống hoặc dùng font mặc định của MS Word mới tạo (Calibri/Aptos size <= 11)
-                // Chúng ta sẽ tự động áp chuẩn học thuật của Việt Nam (Nghị định 30): Times New Roman 13pt, line spacing 1.5
-                bool isDefaultWordFont = info.FontName == "Calibri" || 
-                                         info.FontName == "Aptos" || 
-                                         info.FontName == "Aptos Display" || 
-                                         info.FontName == "Aptos Body";
-                                         
-                bool isDocEmpty = true;
-                try
-                {
-                    dynamic activeDoc = wordApp.ActiveDocument;
-                    if (activeDoc != null)
-                    {
-                        int charCount = activeDoc.Characters.Count;
-                        // Một tài liệu trống hoàn toàn trong Word vẫn chứa khoảng 1-2 ký tự điều khiển dòng ẩn
-                        isDocEmpty = charCount <= 2;
-                    }
-                }
-                catch 
-                {
-                    isDocEmpty = false; // Nếu lỗi đọc thì giả định không trống để giữ an toàn
-                }
 
-                if (isDocEmpty || (isDefaultWordFont && info.FontSize <= 11.5f))
-                {
-                    Program.Log("Phát hiện tài liệu trống hoặc đang dùng font mặc định của Word. Áp dụng chuẩn học thuật: Times New Roman 13pt.");
-                    info.FontName = "Times New Roman";
-                    info.FontSize = 13.0f;
-                    info.LineSpacing = 1.5f;
-                }
                 
                 // 6. Ghi log kiểm tra thành công
                 Program.Log($"Quét Word hoàn tất: Font={info.FontName}, Size={info.FontSize}, Spacing={info.LineSpacing}, ParentHeadingLevel={info.ParentHeadingLevel}");

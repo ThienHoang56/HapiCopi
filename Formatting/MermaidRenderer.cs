@@ -47,7 +47,7 @@ namespace HapiCopi
                        .Replace("-->>", "-->");
 
             // 3. Phân tích cú pháp để tìm và sửa nhãn của Node bằng thuật toán cân bằng ngoặc
-            var nodeStartRegex = new Regex(@"\b([a-zA-Z0-9_-]+)(?=\s*(\(|\[|\{|>))", RegexOptions.Multiline);
+            var nodeStartRegex = new Regex(@"\b([a-zA-Z0-9_-]+)(?=[ \t]*(\(|\[|\{|>))", RegexOptions.Multiline);
             
             var matches = nodeStartRegex.Matches(code);
             for (int mIdx = matches.Count - 1; mIdx >= 0; mIdx--)
@@ -67,16 +67,16 @@ namespace HapiCopi
                     continue;
                 }
 
-                // Tìm khoảng trắng trước dấu mở ngoặc
+                // Tìm khoảng trắng trước dấu mở ngoặc (chỉ cho phép khoảng trắng ngang, không vượt dòng)
                 int scanStart = nodeIdEndIndex;
-                while (scanStart < code.Length && char.IsWhiteSpace(code[scanStart]))
+                while (scanStart < code.Length && (code[scanStart] == ' ' || code[scanStart] == '\t'))
                 {
                     scanStart++;
                 }
 
                 if (scanStart >= code.Length) continue;
 
-                BracketPair foundBracket = default;
+                BracketPair foundBracket = new BracketPair("", "");
                 bool hasBracket = false;
 
                 foreach (var bp in Brackets)
@@ -202,6 +202,24 @@ namespace HapiCopi
                 Program.Log($"[MermaidRenderer LỖI] Không thể kết xuất Mermaid: {ex.Message}");
             }
             return "";
+        }
+        public static bool IsRawMermaidCode(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            string trimmed = text.TrimStart();
+            return trimmed.StartsWith("graph ", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("graph\r", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("graph\n", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("flowchart ", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("flowchart\r", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("flowchart\n", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("sequenceDiagram", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("classDiagram", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("stateDiagram", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("erDiagram", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("gantt", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("pie", StringComparison.OrdinalIgnoreCase) ||
+                   trimmed.StartsWith("gitGraph", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

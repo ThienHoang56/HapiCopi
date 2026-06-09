@@ -13,6 +13,7 @@ namespace HapiCopi
         private static Microsoft.Web.WebView2.WinForms.WebView2? _webView;
         private static bool _isInitialized = false;
         private static readonly TaskCompletionSource<bool> _initTcs = new TaskCompletionSource<bool>();
+        private static System.Threading.SynchronizationContext? _syncContext;
 
         public static bool IsInitialized => _isInitialized;
         public static Task<bool> InitializationTask => _initTcs.Task;
@@ -23,6 +24,12 @@ namespace HapiCopi
             try
             {
                 Program.Log("[WebViewManager] Bắt đầu khởi tạo ngầm...");
+                
+                if (System.Threading.SynchronizationContext.Current == null)
+                {
+                    System.Threading.SynchronizationContext.SetSynchronizationContext(new System.Windows.Forms.WindowsFormsSynchronizationContext());
+                }
+                _syncContext = System.Threading.SynchronizationContext.Current;
                 
                 _hiddenForm = new Form
                 {
@@ -39,7 +46,10 @@ namespace HapiCopi
                 };
 
                 _hiddenForm.Controls.Add(_webView);
-                _hiddenForm.CreateControl(); // Ép tạo Handle cho WinForms Control
+                
+                // Ép buộc tạo Window Handle ngay lập tức cho cả Form và WebView2
+                var formHandle = _hiddenForm.Handle;
+                var webViewHandle = _webView.Handle;
 
                 // Chạy tác vụ khởi tạo bất đồng bộ
                 InitializeWebViewAsync();
@@ -131,20 +141,38 @@ namespace HapiCopi
                 return tcs.Task;
             }
 
-            // Đồng bộ cuộc gọi về STA UI Thread của Form ẩn
-            _hiddenForm.BeginInvoke(new Action(async () =>
+            if (_syncContext != null)
             {
-                try
+                _syncContext.Post(async _ =>
                 {
-                    string resultJson = await _webView.ExecuteScriptAsync(jsScript);
-                    tcs.SetResult(ParseJsonString(resultJson));
-                }
-                catch (Exception ex)
+                    try
+                    {
+                        string resultJson = await _webView.ExecuteScriptAsync(jsScript);
+                        tcs.SetResult(ParseJsonString(resultJson));
+                    }
+                    catch (Exception ex)
+                    {
+                        Program.Log($"[WebViewManager LỖI] Lỗi chạy JS: {ex.Message}");
+                        tcs.SetResult("");
+                    }
+                }, null);
+            }
+            else
+            {
+                _hiddenForm.BeginInvoke(new Action(async () =>
                 {
-                    Program.Log($"[WebViewManager LỖI] Lỗi chạy JS: {ex.Message}");
-                    tcs.SetResult("");
-                }
-            }));
+                    try
+                    {
+                        string resultJson = await _webView.ExecuteScriptAsync(jsScript);
+                        tcs.SetResult(ParseJsonString(resultJson));
+                    }
+                    catch (Exception ex)
+                    {
+                        Program.Log($"[WebViewManager LỖI] Lỗi chạy JS: {ex.Message}");
+                        tcs.SetResult("");
+                    }
+                }));
+            }
 
             return tcs.Task;
         }
@@ -200,18 +228,76 @@ namespace HapiCopi
             return await ExecuteScriptAsync($"convertMarkdownToHtml('{escaped}', {wordTargetParam})");
         }
 
-        public static async Task<string> CleanHtmlAsync(string html, string fontName, double fontSize)
+        public static async Task<string> CleanHtmlAsync(string html, string fontName, double fontSize, double lineSpacing, int parentHeadingLevel, bool isWordTarget, string mermaidCacheJson)
         {
             if (!_isInitialized) return "";
-            string escaped = EscapeJsString(html);
-            return await ExecuteScriptAsync($"cleanHtml('{escaped}', '{fontName}', {fontSize})");
+            string escapedHtml = EscapeJsString(html);
+            string escapedCache = EscapeJsString(mermaidCacheJson);
+            string wordTargetParam = isWordTarget ? "true" : "false";
+            return await ExecuteScriptAsync($"cleanHtml('{escapedHtml}', '{fontName}', {fontSize}, {lineSpacing}, {parentHeadingLevel}, {wordTargetParam}, '{escapedCache}')");
+        }
+
+        public static async Task<string> ProcessLatexInPlainTextAsync(string text)
+        {
+            if (!_isInitialized) return text;
+            string escaped = EscapeJsString(text);
+            return await ExecuteScriptAsync($"processLatexInPlainText('{escaped}')");
         }
 
         public static async Task<string> RenderMermaidToPngAsync(string code, int id)
         {
             if (!_isInitialized) return "";
             string escaped = EscapeJsString(code);
-            return await ExecuteScriptAsync($"renderMermaidToPng('{escaped}', {id})");
+            
+            // 1. Khởi chạy tác vụ render trong WebView2
+            await ExecuteScriptAsync($"startRenderMermaid('{escaped}', {id})");
+            
+            // 2. Vòng lặp chờ kết quả (polling)
+            int timeoutMs = 6000;
+            int elapsedMs = 0;
+            while (elapsedMs < timeoutMs)
+            {
+                await Task.Delay(50);
+                elapsedMs += 50;
+                
+                string statusJson = await ExecuteScriptAsync($"JSON.stringify(window.mermaidResults[{id}])");
+                if (!string.IsNullOrEmpty(statusJson) && statusJson != "null" && statusJson != "{}")
+                {
+                    try
+                    {
+                        using (var doc = JsonDocument.Parse(statusJson))
+                        {
+                            var root = doc.RootElement;
+                            if (root.TryGetProperty("status", out var statusProp))
+                            {
+                                string status = statusProp.GetString() ?? "";
+                                if (status == "success")
+                                {
+                                    if (root.TryGetProperty("result", out var resultProp))
+                                    {
+                                        return resultProp.GetString() ?? "";
+                                    }
+                                    return "";
+                                }
+                                else if (status == "error")
+                                {
+                                    if (root.TryGetProperty("result", out var resultProp))
+                                    {
+                                        return resultProp.GetString() ?? "";
+                                    }
+                                    return "ERROR: Unknown JavaScript error";
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Program.Log($"[WebViewManager LỖI] Lỗi phân tích JSON kết quả Mermaid: {ex.Message}");
+                    }
+                }
+            }
+            
+            return "ERROR: Render timeout";
         }
     }
 }
