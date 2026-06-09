@@ -15,6 +15,7 @@ namespace HapiCopi
         private bool _hasShownWelcome = false;
         private bool _isSimulatingClipboard = false;
         private readonly System.Collections.Generic.Dictionary<string, string> _mermaidCache = new System.Collections.Generic.Dictionary<string, string>();
+        private readonly System.Threading.SynchronizationContext _syncContext;
 
         // Cache lưu trữ nội dung copy thô để xử lý dán động
         private string _lastRawText = "";
@@ -23,6 +24,7 @@ namespace HapiCopi
 
         public HapiCopiApplicationContext()
         {
+            _syncContext = System.Threading.SynchronizationContext.Current ?? new System.Windows.Forms.WindowsFormsSynchronizationContext();
             // 0. Khởi tạo trình duyệt WebView2 ngầm
             WebViewManager.Initialize();
 
@@ -453,24 +455,63 @@ namespace HapiCopi
                     }
 
                     // Không hiển thị balloon tip trước khi dán để tránh cướp focus của cửa sổ đang hoạt động
-                    string formattedText = "";
-                    bool isAiSuccess = false;
-                    string warningMessage = "";
-
+                    GeminiResult aiResult;
                     try
                     {
-                        formattedText = await GeminiClient.ReformatWithGeminiAsync(rawText);
-                        isAiSuccess = true;
-                        Program.Log("Định dạng bằng Gemini AI thành công.");
+                        aiResult = await GeminiClient.ReformatWithGeminiAsync(rawText);
                     }
                     catch (Exception ex)
                     {
-                        Program.Log($"Lỗi khi gọi Gemini API (Sẽ chuyển sang bộ định dạng cục bộ): {ex.Message}");
-                        warningMessage = "Lỗi kết nối AI hoặc chưa cấu hình API Key. Đang dùng định dạng cục bộ offline...";
+                        Program.Log($"Lỗi khi gọi Gemini API: {ex.Message}");
+                        _notifyIcon.ShowBalloonTip(3000, "HapiCopi - Lỗi AI", $"Không thể kết nối Gemini AI: {ex.Message}. Định dạng tự động đã bị hủy.", ToolTipIcon.Warning);
                         
-                        // Fallback sang định dạng cục bộ
-                        formattedText = AutoFormatter.FormatTextSmart(rawText);
+                        if (!isWord)
+                        {
+                            ClipboardSimulator.RestoreClipboard();
+                            _isSimulatingClipboard = false;
+                        }
+                        return;
                     }
+
+                    string formattedText = aiResult.SuggestedText;
+                    string evaluation = aiResult.Evaluation;
+
+                    // Mở Form xác nhận trực tiếp (Popup Floating UI) trên luồng UI chính
+                    bool isApplied = false;
+                    var tcs = new System.Threading.Tasks.TaskCompletionSource<bool>();
+
+                    _syncContext.Post(_ =>
+                    {
+                        try
+                        {
+                            using (var confirmForm = new ConfirmFormatForm(rawText, formattedText, evaluation))
+                            {
+                                confirmForm.TopMost = true;
+                                confirmForm.ShowDialog();
+                                tcs.SetResult(confirmForm.IsApplied);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Program.Log($"[UI LỖI] Không thể hiển thị ConfirmFormatForm: {ex.Message}");
+                            tcs.SetResult(false);
+                        }
+                    }, null);
+
+                    isApplied = await tcs.Task;
+
+                    if (!isApplied)
+                    {
+                        Program.Log("Người dùng chọn HỦY bỏ định dạng AI.");
+                        if (!isWord)
+                        {
+                            ClipboardSimulator.RestoreClipboard();
+                            _isSimulatingClipboard = false;
+                        }
+                        return;
+                    }
+
+                    Program.Log("Người dùng chọn ÁP DỤNG định dạng AI. Tiến hành ghi đè...");
 
                     if (!fromClipboard && formattedText == rawText)
                     {
@@ -480,9 +521,6 @@ namespace HapiCopi
                             ClipboardSimulator.RestoreClipboard();
                             _isSimulatingClipboard = false;
                         }
-                        
-                        // Thông báo kết quả ngay cả khi không đổi để người dùng biết app đã phản hồi
-                        _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Văn bản chọn đã chuẩn sạch, không có thay đổi.", ToolTipIcon.Info);
                         return;
                     }
 
@@ -503,18 +541,10 @@ namespace HapiCopi
                         _isSimulatingClipboard = false;
                     }
 
-                    // Hiển thị thông báo kết quả SAU KHI đã dán xong (tránh cướp focus khi đang dán)
+                    // Hiển thị thông báo kết quả SAU KHI đã dán xong
                     if (success)
                     {
-                        if (!string.IsNullOrEmpty(warningMessage))
-                        {
-                            _notifyIcon.ShowBalloonTip(2000, "HapiCopi", "Đã định dạng xong (Offline Fallback do lỗi AI/Thiếu Key).", ToolTipIcon.Warning);
-                        }
-                        else
-                        {
-                            string source = isAiSuccess ? "Gemini AI" : "Offline";
-                            _notifyIcon.ShowBalloonTip(1500, "HapiCopi", $"Đã định dạng xong văn bản! ({source})", ToolTipIcon.Info);
-                        }
+                        _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Đã định dạng và áp dụng thay đổi thành công!", ToolTipIcon.Info);
                     }
                 }
                 else
