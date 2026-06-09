@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Markdig;
 
 namespace HapiCopi
@@ -13,29 +14,53 @@ namespace HapiCopi
             .Build();
 
         /// <summary>
-        /// Chuyển đổi Markdown thô sang HTML có định dạng cấu trúc chuẩn cho MS Word/Google Docs
+        /// Chuyển đổi Markdown thô sang HTML có định dạng cấu trúc chuẩn cho MS Word/Google Docs (Hỗ trợ Async & WebView2)
         /// </summary>
-        public static string ConvertToOfficeHtml(string markdownText, WordFormatInfo formatInfo)
+        public static async Task<string> ConvertToOfficeHtmlAsync(string markdownText, WordFormatInfo formatInfo)
         {
-            // 1. Dịch chuyển các công thức LaTeX toán học sang HTML trước khi truyền vào Markdig
+            if (WebViewManager.IsInitialized)
+            {
+                try
+                {
+                    Program.Log("[Converter] Sử dụng WebView2 (Chromium ngầm) để chuyển đổi Markdown...");
+                    
+                    // 1. Gọi JS để chuyển đổi Markdown + LaTeX sang HTML hoàn chỉnh
+                    string htmlFragment = await WebViewManager.ConvertMarkdownToHtmlAsync(markdownText, formatInfo.IsWordTarget);
+                    
+                    // 2. Gọi JS làm sạch HTML đồng thời đồng hóa Font/Size
+                    string cleanFragment = await WebViewManager.CleanHtmlAsync(htmlFragment, formatInfo.FontName, formatInfo.FontSize);
+                    
+                    // 3. Đóng gói chuẩn CF_HTML của Windows
+                    return PackageAsClipboardHtml(cleanFragment);
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"[Converter LỖI] Lỗi WebView2 (Sẽ lùi về Fallback C#): {ex.Message}");
+                }
+            }
+
+            // --- BỘ PHẦN CỨNG FALLBACK C# THUẦN (OFFLINE DỰ PHÒNG) ---
+            Program.Log("[Converter Fallback] Sử dụng bộ parser C# offline nội bộ...");
+
+            // 1. Dịch chuyển các công thức LaTeX toán học sang HTML bằng C#
             string textWithMath = LatexParser.ProcessLatexInHtml(markdownText, formatInfo);
 
             // 2. Sử dụng Markdig để parse Markdown sang HTML chuẩn
-            string htmlFragment = Markdown.ToHtml(textWithMath, MarkdownPipeline);
+            string fallbackHtml = Markdown.ToHtml(textWithMath, MarkdownPipeline);
 
-            // 2. Đồng hóa Font và Size cho văn bản thường (Paragraphs)
+            // 3. Đồng hóa Font và Size cho văn bản thường (Paragraphs)
             string pStyle = "";
             if (formatInfo.IsFromActiveWord)
             {
                 pStyle = $" style=\"font-family: '{formatInfo.FontName}'; font-size: {formatInfo.FontSize}pt;\"";
             }
             string pReplacement = $"<p class=\"MsoNormal\"{pStyle}>";
-            htmlFragment = htmlFragment.Replace("<p>", pReplacement);
+            fallbackHtml = fallbackHtml.Replace("<p>", pReplacement);
 
-            // 3. Tịnh tiến cấp độ Heading dựa trên Heading cha trong tài liệu Word
-            htmlFragment = AdjustHeadings(htmlFragment, formatInfo);
+            // 4. Tịnh tiến cấp độ Heading dựa trên Heading cha trong tài liệu Word
+            fallbackHtml = AdjustHeadings(fallbackHtml, formatInfo);
 
-            // 4. Đồng hóa kiểu chữ cho Lists (ul, ol, li)
+            // 5. Đồng hóa kiểu chữ cho Lists (ul, ol, li)
             string listStyle = "";
             string liStyle = "";
             if (formatInfo.IsFromActiveWord)
@@ -44,18 +69,17 @@ namespace HapiCopi
                 liStyle = $" style=\"font-family: '{formatInfo.FontName}'; font-size: {formatInfo.FontSize}pt;\"";
             }
             
-            htmlFragment = htmlFragment.Replace("<ul>", $"<ul{listStyle}>");
-            htmlFragment = htmlFragment.Replace("<ol>", $"<ol{listStyle}>");
-            htmlFragment = htmlFragment.Replace("<li>", $"<li{liStyle}>");
+            fallbackHtml = fallbackHtml.Replace("<ul>", $"<ul{listStyle}>");
+            fallbackHtml = fallbackHtml.Replace("<ol>", $"<ol{listStyle}>");
+            fallbackHtml = fallbackHtml.Replace("<li>", $"<li{liStyle}>");
 
-            // 5. Xử lý Code Blocks và Inline Code
+            // 6. Xử lý Code Blocks và Inline Code
             var preRegex = new Regex(@"<pre><code(?:[^>]*)>(.*?)</code></pre>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-            htmlFragment = preRegex.Replace(htmlFragment, match =>
+            fallbackHtml = preRegex.Replace(fallbackHtml, match =>
             {
                 string codeContent = match.Groups[1].Value;
                 string decodedCode = System.Net.WebUtility.HtmlDecode(codeContent).Trim();
                 
-                // Kiểm tra xem đây có phải là biểu đồ Mermaid đã được cache ảnh không
                 if (decodedCode.StartsWith("graph ", StringComparison.OrdinalIgnoreCase) ||
                     decodedCode.StartsWith("flowchart ", StringComparison.OrdinalIgnoreCase) ||
                     decodedCode.StartsWith("sequenceDiagram", StringComparison.OrdinalIgnoreCase) ||
@@ -84,33 +108,48 @@ namespace HapiCopi
                 return $"<div class=\"MsoNormal\" style=\"font-family: 'Consolas', 'Courier New', monospace; font-size: 10pt; background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 8pt; margin: 6pt 0; white-space: pre; line-height: 1.2; color: #212529;\">{codeContent}</div>";
             });
 
-            // 5.2. Định dạng mã nguồn nội dòng (Inline Code)
-            htmlFragment = htmlFragment.Replace("<code>", "<code style=\"font-family: 'Consolas', 'Courier New', monospace; font-size: 10pt; background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 2px 4px; border-radius: 3px; color: #e83e8c;\">");
+            fallbackHtml = fallbackHtml.Replace("<code>", "<code style=\"font-family: 'Consolas', 'Courier New', monospace; font-size: 10pt; background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 2px 4px; border-radius: 3px; color: #e83e8c;\">");
             
-            // 6. Định dạng Bảng biểu (Table Formatting)
-            htmlFragment = htmlFragment.Replace("<table>", "<table class=\"MsoNormalTable\" style=\"border-collapse: collapse; width: 100%; border: 1px solid #cccccc; margin: 6pt 0;\">");
+            // 7. Định dạng Bảng biểu
+            fallbackHtml = fallbackHtml.Replace("<table>", "<table class=\"MsoNormalTable\" style=\"border-collapse: collapse; width: 100%; border: 1px solid #cccccc; margin: 6pt 0;\">");
             
             var thRegex = new Regex(@"<th([^>]*)>", RegexOptions.IgnoreCase);
-            htmlFragment = thRegex.Replace(htmlFragment, m => HtmlCleaner.FormatTableCell("th", m.Groups[1].Value, "border: 1px solid #cccccc; padding: 6px; background-color: #f2f2f2; font-weight: bold; text-align: left;"));
+            fallbackHtml = thRegex.Replace(fallbackHtml, m => HtmlCleaner.FormatTableCell("th", m.Groups[1].Value, "border: 1px solid #cccccc; padding: 6px; background-color: #f2f2f2; font-weight: bold; text-align: left;"));
             
             var tdRegex = new Regex(@"<td([^>]*)>", RegexOptions.IgnoreCase);
-            htmlFragment = tdRegex.Replace(htmlFragment, m => HtmlCleaner.FormatTableCell("td", m.Groups[1].Value, "border: 1px solid #cccccc; padding: 6px; text-align: left;"));
+            fallbackHtml = tdRegex.Replace(fallbackHtml, m => HtmlCleaner.FormatTableCell("td", m.Groups[1].Value, "border: 1px solid #cccccc; padding: 6px; text-align: left;"));
 
-            // 7. Định dạng Blockquotes (Trích dẫn)
-            htmlFragment = htmlFragment.Replace("<blockquote>", "<blockquote style=\"border-left: 3px solid #cccccc; padding-left: 10pt; margin: 6pt 0 6pt 12pt; color: #555555; font-style: italic;\">");
+            fallbackHtml = fallbackHtml.Replace("<blockquote>", "<blockquote style=\"border-left: 3px solid #cccccc; padding-left: 10pt; margin: 6pt 0 6pt 12pt; color: #555555; font-style: italic;\">");
+            fallbackHtml = Regex.Replace(fallbackHtml, @"<a\s+([^>]*href=""([^""]*)""[^>]*)>(.*?)</a>", @"<a $1 style=""color: #0563c1; text-decoration: underline;"">$3</a>");
 
-            // 8. Định dạng Hyperlinks
-            htmlFragment = Regex.Replace(htmlFragment, @"<a\s+([^>]*href=""([^""]*)""[^>]*)>(.*?)</a>", @"<a $1 style=""color: #0563c1; text-decoration: underline;"">$3</a>");
+            return PackageAsClipboardHtml(fallbackHtml);
+        }
 
-            // 9. Bọc toàn bộ HTML vào định dạng CF_HTML của Windows
-            return PackageAsClipboardHtml(htmlFragment);
+        /// <summary>
+        /// Làm sạch HTML thô từ trình duyệt web AI (Hỗ trợ Async & WebView2)
+        /// </summary>
+        public static async Task<string> CleanWebHtmlToOfficeAsync(string htmlFragment, WordFormatInfo formatInfo)
+        {
+            if (WebViewManager.IsInitialized)
+            {
+                try
+                {
+                    Program.Log("[Converter] Sử dụng WebView2 (DOM Parser) để làm sạch HTML web...");
+                    return await WebViewManager.CleanHtmlAsync(htmlFragment, formatInfo.FontName, formatInfo.FontSize);
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"[Converter LỖI] Lỗi dọn rác WebView2 (Sẽ lùi về Fallback C#): {ex.Message}");
+                }
+            }
+
+            // Fallback C#
+            return HtmlCleaner.CleanWebHtmlToOffice(htmlFragment, formatInfo);
         }
 
         private static string AdjustHeadings(string html, WordFormatInfo formatInfo)
         {
             int parentLevel = formatInfo.ParentHeadingLevel;
-
-            // Tìm và thay thế các thẻ Heading từ <h1> đến <h6>
             var headingRegex = new Regex(@"<h([1-6])([^>]*)>(.*?)</h\1>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
 
             return headingRegex.Replace(html, match =>
@@ -118,12 +157,8 @@ namespace HapiCopi
                 int markdownLevel = int.Parse(match.Groups[1].Value);
                 string content = match.Groups[3].Value;
 
-                // Cấp độ Heading mới sau khi tịnh tiến
                 int targetLevel = Math.Min(9, parentLevel + markdownLevel);
-
-                // Áp dụng class MsoHeadingX đặc trưng của Word
                 string msoClass = $"MsoHeading{targetLevel}";
-
                 string headingStyle = "";
                 if (formatInfo.IsFromActiveWord)
                 {

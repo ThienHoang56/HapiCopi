@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>HapiCopi Chromium Core Parser</title>
+    <script src="marked.js"></script>
+    <script src="mathjax.js"></script>
+    <script src="mermaid.js"></script>
+    <script>
+        // Cấu hình MathJax v3
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            }
+        };
+    </script>
+</head>
+<body>
+    <!-- Container ẩn để render sơ đồ Mermaid -->
+    <div id="mermaid-container" style="display: none; visibility: hidden; position: absolute; left: -9999px;"></div>
+
+    <script>
+        // Khởi tạo Mermaid
+        mermaid.initialize({ 
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose'
+        });
+
+        // 1. Hàm dịch LaTeX sang MathML chuẩn (Cho MS Word)
+        function convertLatexToMathML(latex) {
+            try {
+                // Xóa các ký tự bọc phân cách
+                let clean = latex.trim();
+                if (clean.startsWith("\\[") && clean.endsWith("\\]")) clean = clean.substring(2, clean.length - 2);
+                else if (clean.startsWith("\\(") && clean.endsWith("\\)")) clean = clean.substring(2, clean.length - 2);
+                else if (clean.startsWith("$$") && clean.endsWith("$$")) clean = clean.substring(2, clean.length - 2);
+                else if (clean.startsWith("$") && clean.endsWith("$")) clean = clean.substring(1, clean.length - 1);
+                
+                clean = clean.trim();
+
+                // Dùng MathJax v3 dịch trực tiếp
+                let mml = MathJax.tex2mml(clean);
+                return mml;
+            } catch (err) {
+                console.error("Lỗi biên dịch MathML: ", err);
+                return "";
+            }
+        }
+
+        // Helper dịch các số phân số LaTeX đơn giản
+        function parseFractions(latex) {
+            if (!latex) return "";
+            let index;
+            while ((index = latex.indexOf("\\frac{")) !== -1) {
+                let numStart = index + 6;
+                let numEnd = findMatchingBrace(latex, numStart);
+                if (numEnd === -1) break;
+
+                let numerator = latex.substring(numStart, numEnd);
+
+                let denStart = numEnd + 1;
+                while (denStart < latex.length && /\s/.test(latex[denStart])) {
+                    denStart++;
+                }
+
+                if (denStart < latex.length && latex[denStart] === '{') {
+                    let denEnd = findMatchingBrace(latex, denStart + 1);
+                    if (denEnd === -1) break;
+
+                    let denominator = latex.substring(denStart + 1, denEnd);
+
+                    numerator = parseFractions(numerator);
+                    denominator = parseFractions(denominator);
+
+                    let replacement = "(" + numerator + ") / (" + denominator + ")";
+                    latex = latex.substring(0, index) + replacement + latex.substring(denEnd + 1);
+                } else {
+                    break;
+                }
+            }
+            return latex;
+        }
+
+        function findMatchingBrace(str, startIdx) {
+            let depth = 1;
+            for (let i = startIdx; i < str.length; i++) {
+                if (str[i] === '{') depth++;
+                else if (str[i] === '}') depth--;
+
+                if (depth === 0) return i;
+            }
+            return -1;
+        }
+
+        // 2. Hàm dịch LaTeX sang Unicode sạch (Cho Google Docs/PlainText)
+        function translateLatexToHtml(latex) {
+            if (!latex) return "";
+            let result = latex.trim();
+
+            if (result.startsWith("\\[") && result.endsWith("\\]")) result = result.substring(2, result.length - 2);
+            else if (result.startsWith("\\(") && result.endsWith("\\)")) result = result.substring(2, result.length - 2);
+            else if (result.startsWith("$$") && result.endsWith("$$")) result = result.substring(2, result.length - 2);
+            else if (result.startsWith("$") && result.endsWith("$")) result = result.substring(1, result.length - 1);
+
+            result = result.trim();
+
+            // Dịch phân số
+            result = parseFractions(result);
+            result = result.replace(/\\frac\s*(\d)\s*(\d)/g, "($1) / ($2)");
+            result = result.replace(/\\frac\s*([a-zA-Z])\s*([a-zA-Z])/g, "($1) / ($2)");
+            result = result.replace(/\\frac\s*\\([a-zA-Z]+)\s*\\([a-zA-Z]+)/g, "($1) / ($2)");
+
+            result = result.replace(/\\E/g, "·");
+            result = result.replace(/(\d)\s*(?:\\in|∈|€)\s*([a-zA-Z])/g, "$1 · $2");
+
+            result = result.replace(/\\text\{([^}]+)\}/g, "$1");
+            result = result.replace(/\\mathrm\{([^}]+)\}/g, "$1");
+            result = result.replace(/\\mathbf\{([^}]+)\}/g, "<b>$1</b>");
+            result = result.replace(/\\mathit\{([^}]+)\}/g, "<i>$1</i>");
+            result = result.replace(/\\underline\{([^}]+)\}/g, "<u>$1</u>");
+
+            // Ký tự Hy Lạp
+            const greekLower = {
+                "alpha": "α", "beta": "β", "gamma": "γ", "delta": "δ",
+                "epsilon": "ε", "zeta": "ζ", "eta": "η", "theta": "θ",
+                "iota": "ι", "kappa": "κ", "lambda": "λ", "mu": "μ",
+                "nu": "ν", "xi": "ξ", "pi": "π", "rho": "ρ",
+                "sigma": "σ", "tau": "τ", "upsilon": "υ", "phi": "φ",
+                "chi": "χ", "psi": "ψ", "omega": "ω"
+            };
+            for (let key in greekLower) {
+                let r = new RegExp("\\\\" + key + "(?![a-zA-Z])", "g");
+                result = result.replace(r, greekLower[key]);
+            }
+
+            const greekUpper = {
+                "Delta": "Δ", "Omega": "Ω", "Theta": "Θ", "Phi": "Φ",
+                "Pi": "Π", "Sigma": "Σ", "Gamma": "Γ", "Lambda": "Λ",
+                "Psi": "Ψ", "Xi": "Ξ"
+            };
+            for (let key in greekUpper) {
+                let r = new RegExp("\\\\" + key + "(?![a-zA-Z])", "g");
+                result = result.replace(r, greekUpper[key]);
+            }
+
+            // Ký hiệu toán học
+            const mathSymbols = {
+                "lvert": "|", "rvert": "|", "vert": "|", "Vert": "||",
+                "times": "×", "div": "÷", "pm": "±", "approx": "≈",
+                "infty": "∞", "cdot": "·", "to": "→", "gets": "←",
+                "partial": "∂", "nabla": "∇", "forall": "∀", "exists": "∃",
+                "emptyset": "∅", "in": "∈", "notin": "∉", "ni": "∋",
+                "prod": "∏", "sum": "∑", "minus": "−", "plus": "+",
+                "geq": "≥", "leq": "≤", "ge": "≥", "le": "≤", "neq": "≠"
+            };
+            for (let key in mathSymbols) {
+                let r = new RegExp("\\\\" + key + "(?![a-zA-Z])", "g");
+                result = result.replace(r, mathSymbols[key]);
+            }
+
+            const mathFuncs = ["sin", "cos", "tan", "cot", "sec", "csc", "log", "ln", "lim", "exp", "arccos", "arcsin", "arctan"];
+            for (let func of mathFuncs) {
+                let r = new RegExp("\\\\" + func + "(?![a-zA-Z])", "g");
+                result = result.replace(r, func);
+            }
+
+            result = result.replace(/\\,/g, " ").replace(/\\;/g, " ").replace(/\\!/g, "")
+                           .replace(/\\quad/g, "  ").replace(/\\qquad/g, "    ").replace(/\\\\/g, "<br />");
+
+            result = result.replace(/_\{([^}]+)\}/g, "<sub>$1</sub>")
+                           .replace(/_([0-9a-zA-Z])/g, "<sub>$1</sub>")
+                           .replace(/\^\{([^}]+)\}/g, "<sup>$1</sup>")
+                           .replace(/\^([0-9a-zA-Z])/g, "<sup>$1</sup>")
+                           .replace(/\{/g, "").replace(/\}/g, "");
+
+            return result;
+        }
+
+        // 3. Hàm dịch Markdown thô sang HTML chuẩn kết hợp xử lý LaTeX
+        function convertMarkdownToHtml(markdown, isWordTarget) {
+            try {
+                let text = markdown;
+
+                // Sửa lỗi nhân dấu ngầm
+                text = text.replace(/(\d)\s*(?:\\in|∈|€)\s*([a-zA-Z])/g, '$1 \\cdot $2');
+
+                // Hàm thay thế toán học
+                const replaceMath = (regex) => {
+                    text = text.replace(regex, (match, latex) => {
+                        if (isWordTarget) {
+                            let mml = convertLatexToMathML(match);
+                            if (mml) return mml;
+                        }
+                        return translateLatexToHtml(match);
+                    });
+                };
+
+                // Dịch các khối Display và Inline
+                replaceMath(/\$\$([\s\S]*?)\$\$/g);
+                replaceMath(/\\\[([\s\S]*?)\\\]/g);
+                replaceMath(/\\\(([\s\S]*?)\\\)/g);
+
+                // Dán inline $...$
+                text = text.replace(/\$([^$\n]+)\$/g, (match, inner) => {
+                    if (inner.includes('\\') || inner.includes('_') || inner.includes('^') || inner.includes('{') || inner.includes('}') || inner.includes('+') || inner.includes('=') || inner.includes('-') || inner.includes('*') || inner.includes('/')) {
+                        if (isWordTarget) {
+                            let mml = convertLatexToMathML(match);
+                            if (mml) return mml;
+                        }
+                        return translateLatexToHtml(match);
+                    }
+                    return match;
+                });
+
+                // Dịch Markdown bằng marked.js
+                let html = marked.parse(text);
+                return html;
+            } catch (err) {
+                console.error("Lỗi parse Markdown: ", err);
+                return marked.parse(markdown);
+            }
+        }
+
+        // 4. Hàm làm sạch HTML rác bằng DOM Parser của trình duyệt
+        function cleanHtml(html, fontName, fontSize) {
+            if (!html) return "";
+            try {
+                let parser = new DOMParser();
+                let doc = parser.parseFromString(html, 'text/html');
+                
+                let allElements = doc.body.querySelectorAll('*');
+                for (let el of allElements) {
+                    // Nếu là phần tử nằm trong MathML, bỏ qua không chạm vào
+                    if (el.closest('math')) {
+                        continue;
+                    }
+
+                    let name = el.tagName.toLowerCase();
+                    if (name === 'col' || name === 'colgroup' || name === 'meta' || name === 'title' || name === 'link' || name === 'style' || name === 'script') {
+                        el.remove();
+                        continue;
+                    }
+
+                    // Đọc in đậm, in nghiêng, căn lề và độ rộng hiện hành trước khi xóa style
+                    let computedStyle = window.getComputedStyle(el);
+                    let isBold = computedStyle.fontWeight === 'bold' || 
+                                 parseInt(computedStyle.fontWeight) >= 600 || 
+                                 el.style.fontWeight === 'bold' ||
+                                 parseInt(el.style.fontWeight) >= 600 ||
+                                 name === 'b' || name === 'strong';
+
+                    let isItalic = computedStyle.fontStyle === 'italic' || 
+                                   el.style.fontStyle === 'italic' || 
+                                   name === 'i' || name === 'em';
+
+                    let align = el.style.textAlign || el.getAttribute('align') || '';
+                    let width = el.style.width || el.getAttribute('width') || '';
+                    let colspan = el.getAttribute('colspan') || '';
+                    let rowspan = el.getAttribute('rowspan') || '';
+
+                    // Lột style rác
+                    el.removeAttribute('style');
+
+                    // Dựng lại style sạch sẽ
+                    let cleanStyles = [];
+                    if (isBold) cleanStyles.push('font-weight: bold;');
+                    if (isItalic) cleanStyles.push('font-style: italic;');
+                    if (align) cleanStyles.push('text-align: ' + align + ';');
+                    if (width) {
+                        if (/^\d+$/.test(width)) width += 'px';
+                        cleanStyles.push('width: ' + width + ';');
+                    }
+
+                    // Đồng hóa font và cỡ chữ
+                    if (fontName && (name === 'p' || name === 'li' || name === 'td' || name === 'th')) {
+                        cleanStyles.push("font-family: '" + fontName + "';");
+                        if (fontSize && (name === 'p' || name === 'li')) {
+                            cleanStyles.push("font-size: " + fontSize + "pt;");
+                        }
+                    }
+
+                    if (cleanStyles.length > 0) {
+                        el.setAttribute('style', cleanStyles.join(' '));
+                    }
+
+                    if (colspan) el.setAttribute('colspan', colspan);
+                    if (rowspan) el.setAttribute('rowspan', rowspan);
+
+                    // Map class và style Office
+                    if (name === 'p') {
+                        el.classList.add('MsoNormal');
+                    } else if (name === 'table') {
+                        el.classList.add('MsoNormalTable');
+                        el.setAttribute('style', 'border-collapse: collapse; width: 100%; border: 1px solid #cccccc; margin: 6pt 0;');
+                    } else if (name === 'th') {
+                        let base = 'border: 1px solid #cccccc; padding: 6px; background-color: #f2f2f2; font-weight: bold; text-align: left;';
+                        if (el.getAttribute('style')) base += ' ' + el.getAttribute('style');
+                        el.setAttribute('style', base);
+                    } else if (name === 'td') {
+                        let base = 'border: 1px solid #cccccc; padding: 6px; text-align: left;';
+                        if (el.getAttribute('style')) base += ' ' + el.getAttribute('style');
+                        el.setAttribute('style', base);
+                    } else if (name === 'pre') {
+                        el.setAttribute('style', "font-family: 'Consolas', 'Courier New', monospace; font-size: 10pt; background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 8pt; margin: 6pt 0; white-space: pre; line-height: 1.2; color: #212529;");
+                    } else if (name === 'code') {
+                        el.setAttribute('style', "font-family: 'Consolas', 'Courier New', monospace; font-size: 10pt; background-color: #f8f9fa; border: 1px solid #e9ecef; padding: 2px 4px; border-radius: 3px; color: #e83e8c;");
+                    } else if (name === 'blockquote') {
+                        el.setAttribute('style', "border-left: 3px solid #cccccc; padding-left: 10pt; margin: 6pt 0 6pt 12pt; color: #555555; font-style: italic;");
+                    } else if (name === 'a') {
+                        el.setAttribute('style', "color: #0563c1; text-decoration: underline;");
+                    }
+                }
+                return doc.body.innerHTML;
+            } catch (err) {
+                console.error("Lỗi dọn rác HTML: ", err);
+                return html;
+            }
+        }
+
+        // 5. Hàm vẽ sơ đồ Mermaid offline ra Base64 PNG ẩn
+        async function renderMermaidToPng(code, id) {
+            return new Promise(async (resolve) => {
+                try {
+                    const container = document.getElementById('mermaid-container');
+                    container.innerHTML = '';
+                    
+                    // Render SVG offline từ mã nguồn
+                    const { svg } = await mermaid.render('mermaid-svg-' + id, code);
+                    container.innerHTML = svg;
+                    
+                    const svgElement = container.querySelector('svg');
+                    const width = svgElement.viewBox.baseVal.width || svgElement.width.baseVal.value || 800;
+                    const height = svgElement.viewBox.baseVal.height || svgElement.height.baseVal.value || 600;
+
+                    // Convert SVG sang Canvas sang PNG Base64
+                    const svgString = new XMLSerializer().serializeToString(svgElement);
+                    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+                    const URL = window.URL || window.webkitURL || window;
+                    const blobURL = URL.createObjectURL(svgBlob);
+                    
+                    const image = new Image();
+                    image.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        
+                        const context = canvas.getContext('2d');
+                        // Tạo nền trắng cho ảnh sơ đồ
+                        context.fillStyle = '#ffffff';
+                        context.fillRect(0, 0, width, height);
+                        context.drawImage(image, 0, 0, width, height);
+                        
+                        const pngData = canvas.toDataURL('image/png');
+                        URL.revokeObjectURL(blobURL);
+                        container.innerHTML = ''; // dọn dẹp
+                        resolve(pngData);
+                    };
+                    image.onerror = (e) => {
+                        URL.revokeObjectURL(blobURL);
+                        resolve("");
+                    };
+                    image.src = blobURL;
+                } catch (err) {
+                    console.error("Lỗi render Mermaid: ", err);
+                    resolve("");
+                }
+            });
+        }
+    </script>
+</body>
+</html>

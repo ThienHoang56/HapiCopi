@@ -11,6 +11,13 @@
 
   <ItemGroup>
     <PackageReference Include="Markdig" Version="1.2.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3967.48" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="WebViewResources\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

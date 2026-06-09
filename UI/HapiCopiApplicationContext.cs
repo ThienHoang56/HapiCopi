@@ -23,6 +23,9 @@ namespace HapiCopi
 
         public HapiCopiApplicationContext()
         {
+            // 0. Khởi tạo trình duyệt WebView2 ngầm
+            WebViewManager.Initialize();
+
             // 1. Thiết lập Menu chuột phải cho System Tray Icon
             var contextMenu = new ContextMenuStrip();
             
@@ -129,16 +132,26 @@ namespace HapiCopi
                     Program.Log($"[DEBUG] Match innerCode (first 50 chars): '{innerCode.Substring(0, Math.Min(50, innerCode.Length)).Replace("\r", "\\r").Replace("\n", "\\n")}'");
                     if (!_mermaidCache.ContainsKey(innerCode))
                     {
-                        Program.Log($"[Mermaid] Tìm thấy biểu đồ, đang kết xuất ngầm...");
-                        string dataUri = await MermaidRenderer.GetMermaidDataUriAsync(innerCode);
-                        if (!string.IsNullOrEmpty(dataUri))
+                        string dataUri = "";
+                        if (WebViewManager.IsInitialized)
                         {
-                            _mermaidCache[innerCode] = dataUri;
-                            Program.Log($"[Mermaid] Kết xuất ngầm thành công. Kích thước base64: {dataUri.Length} ký tự.");
+                            Program.Log($"[Mermaid] WebView2 đã sẵn sàng. Tiến hành render OFFLINE...");
+                            dataUri = await WebViewManager.RenderMermaidToPngAsync(innerCode, _mermaidCache.Count);
                         }
                         else
                         {
-                            Program.Log($"[Mermaid] Kết xuất ngầm THẤT BẠI.");
+                            Program.Log($"[Mermaid] WebView2 chưa sẵn sàng. Tiến hành render ONLINE qua API...");
+                            dataUri = await MermaidRenderer.GetMermaidDataUriAsync(innerCode);
+                        }
+
+                        if (!string.IsNullOrEmpty(dataUri))
+                        {
+                            _mermaidCache[innerCode] = dataUri;
+                            Program.Log($"[Mermaid] Kết xuất sơ đồ thành công. Kích thước base64: {dataUri.Length} ký tự.");
+                        }
+                        else
+                        {
+                            Program.Log($"[Mermaid] Kết xuất sơ đồ THẤT BẠI.");
                         }
                     }
                 }
@@ -217,15 +230,15 @@ namespace HapiCopi
                         if (hasHtml)
                         {
                             string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(webHtml);
-                            string cleanFragment = MarkdownToWordConverter.CleanWebHtmlToOffice(htmlFragment, formatInfo);
+                            string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, formatInfo);
                             officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(cleanFragment);
                         }
                         else
                         {
-                            officeHtml = MarkdownToWordConverter.ConvertToOfficeHtml(text, formatInfo);
+                            officeHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(text ?? "", formatInfo);
                         }
 
-                        string cleanText = MarkdownToWordConverter.ProcessLatexInPlainText(text);
+                        string cleanText = MarkdownToWordConverter.ProcessLatexInPlainText(text ?? "");
                         SetClipboardOnStaThread(cleanText, officeHtml);
 
                         if (!_hasShownWelcome)
@@ -249,7 +262,7 @@ namespace HapiCopi
             }
         }
 
-        private void OnPastePressed()
+        private async void OnPastePressed()
         {
             if (_isPaused || !_lastWasProcessed) return;
 
@@ -269,12 +282,12 @@ namespace HapiCopi
                     if (!string.IsNullOrEmpty(_lastRawHtml))
                     {
                         string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(_lastRawHtml);
-                        string cleanFragment = MarkdownToWordConverter.CleanWebHtmlToOffice(htmlFragment, docsFormat);
+                        string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, docsFormat);
                         docsHtml = MarkdownToWordConverter.PackageAsClipboardHtml(cleanFragment);
                     }
                     else
                     {
-                        docsHtml = MarkdownToWordConverter.ConvertToOfficeHtml(_lastRawText, docsFormat);
+                        docsHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(_lastRawText, docsFormat);
                     }
                     
                     string cleanPlainText = MarkdownToWordConverter.ProcessLatexInPlainText(_lastRawText);
@@ -289,11 +302,18 @@ namespace HapiCopi
                     if (!string.IsNullOrEmpty(_lastRawHtml))
                     {
                         string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(_lastRawHtml);
-                        tempHtml = MarkdownToWordConverter.CleanWebHtmlToOffice(htmlFragment, new WordFormatInfo { IsFromActiveWord = false, MermaidImageCache = _mermaidCache });
+                        tempHtml = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, new WordFormatInfo { IsFromActiveWord = false, MermaidImageCache = _mermaidCache });
                     }
                     else
                     {
-                        tempHtml = Markdig.Markdown.ToHtml(_lastRawText);
+                        if (WebViewManager.IsInitialized)
+                        {
+                            tempHtml = await WebViewManager.ConvertMarkdownToHtmlAsync(_lastRawText, false);
+                        }
+                        else
+                        {
+                            tempHtml = Markdig.Markdown.ToHtml(_lastRawText);
+                        }
                     }
 
                     if (tempHtml.Contains("<table"))
@@ -333,12 +353,12 @@ namespace HapiCopi
                     if (!string.IsNullOrEmpty(_lastRawHtml))
                     {
                         string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(_lastRawHtml);
-                        string cleanFragment = MarkdownToWordConverter.CleanWebHtmlToOffice(htmlFragment, formatInfo);
+                        string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, formatInfo);
                         officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(cleanFragment);
                     }
                     else
                     {
-                        officeHtml = MarkdownToWordConverter.ConvertToOfficeHtml(_lastRawText, formatInfo);
+                        officeHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(_lastRawText, formatInfo);
                     }
                     
                     string cleanPlainText = MarkdownToWordConverter.ProcessLatexInPlainText(_lastRawText);
