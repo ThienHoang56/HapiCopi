@@ -35,10 +35,12 @@ namespace HapiCopi
             titleItem.Font = new Font(titleItem.Font, FontStyle.Bold);
             
             _pauseMenuItem = new ToolStripMenuItem("Tạm dừng", null, OnPauseClicked);
+            var settingsMenuItem = new ToolStripMenuItem("Cài đặt...", null, OnSettingsClicked);
             var exitMenuItem = new ToolStripMenuItem("Thoát", null, OnExitClicked);
 
             contextMenu.Items.Add(titleItem);
             contextMenu.Items.Add(new ToolStripSeparator());
+            contextMenu.Items.Add(settingsMenuItem);
             contextMenu.Items.Add(_pauseMenuItem);
             contextMenu.Items.Add(exitMenuItem);
 
@@ -67,6 +69,32 @@ namespace HapiCopi
 
             // 5. Thực hiện xử lý clipboard đang có sẵn ngay khi khởi động
             ProcessClipboard(isStartup: true);
+        }
+
+        private SettingsForm? _settingsForm;
+
+        private void OnSettingsClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (_settingsForm != null && !_settingsForm.IsDisposed)
+                {
+                    _settingsForm.WindowState = FormWindowState.Normal;
+                    _settingsForm.BringToFront();
+                    _settingsForm.Activate();
+                    return;
+                }
+
+                _settingsForm = new SettingsForm();
+                _settingsForm.FormClosed += (s, args) => _settingsForm = null;
+                _settingsForm.Show();
+                _settingsForm.BringToFront();
+                _settingsForm.Activate();
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[UI] Lỗi mở cửa sổ Cài đặt: {ex.Message}");
+            }
         }
 
         private void OnPauseClicked(object? sender, EventArgs e)
@@ -455,15 +483,78 @@ namespace HapiCopi
                     }
 
                     // Không hiển thị balloon tip trước khi dán để tránh cướp focus của cửa sổ đang hoạt động
+                    var cts = new System.Threading.CancellationTokenSource();
+                    FormatProgressForm? progressForm = null;
+                    _syncContext.Send(_ =>
+                    {
+                        try
+                        {
+                            progressForm = new FormatProgressForm(cts);
+                            progressForm.Show();
+                            progressForm.Update();
+                        }
+                        catch (Exception ex)
+                        {
+                            Program.Log($"[UI] Lỗi hiển thị ProgressForm: {ex.Message}");
+                        }
+                    }, null);
+
                     GeminiResult aiResult;
                     try
                     {
-                        aiResult = await GeminiClient.ReformatWithGeminiAsync(rawText);
+                        string? provider = AppConfig.Get("AI_PROVIDER");
+                        if (string.IsNullOrEmpty(provider))
+                        {
+                            provider = "gemini";
+                        }
+
+                        if (provider.ToLower() == "openrouter")
+                        {
+                            try
+                            {
+                                aiResult = await OpenRouterClient.ReformatWithOpenRouterAsync(rawText, cts.Token);
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                throw;
+                            }
+                            catch (Exception ex)
+                            {
+                                Program.Log($"[OpenRouter] Lỗi khi gọi OpenRouter: {ex.Message}. Thử tự động chuyển sang fallback Gemini...");
+                                aiResult = await GeminiClient.ReformatWithGeminiAsync(rawText, cts.Token);
+                            }
+                        }
+                        else
+                        {
+                            try
+                            {
+                                aiResult = await GeminiClient.ReformatWithGeminiAsync(rawText, cts.Token);
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                throw;
+                            }
+                            catch (Exception ex)
+                            {
+                                Program.Log($"[Gemini] Lỗi khi gọi Gemini: {ex.Message}. Thử tự động chuyển sang fallback OpenRouter...");
+                                aiResult = await OpenRouterClient.ReformatWithOpenRouterAsync(rawText, cts.Token);
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        Program.Log("Yêu cầu định dạng đã bị người dùng hủy bỏ.");
+                        if (!isWord)
+                        {
+                            ClipboardSimulator.RestoreClipboard();
+                            _isSimulatingClipboard = false;
+                        }
+                        return;
                     }
                     catch (Exception ex)
                     {
-                        Program.Log($"Lỗi khi gọi Gemini API: {ex.Message}");
-                        _notifyIcon.ShowBalloonTip(3000, "HapiCopi - Lỗi AI", $"Không thể kết nối Gemini AI: {ex.Message}. Định dạng tự động đã bị hủy.", ToolTipIcon.Warning);
+                        Program.Log($"Lỗi khi gọi AI API: {ex.Message}");
+                        _notifyIcon.ShowBalloonTip(3000, "HapiCopi - Lỗi AI", $"Không thể kết nối AI: {ex.Message}. Định dạng tự động đã bị hủy.", ToolTipIcon.Warning);
                         
                         if (!isWord)
                         {
@@ -471,6 +562,25 @@ namespace HapiCopi
                             _isSimulatingClipboard = false;
                         }
                         return;
+                    }
+                    finally
+                    {
+                        if (progressForm != null)
+                        {
+                            _syncContext.Send(_ =>
+                            {
+                                try
+                                {
+                                    progressForm.Close();
+                                    progressForm.Dispose();
+                                }
+                                catch (Exception ex)
+                                {
+                                    Program.Log($"[UI] Lỗi đóng ProgressForm: {ex.Message}");
+                                }
+                            }, null);
+                        }
+                        cts.Dispose();
                     }
 
                     string formattedText = aiResult.SuggestedText;
@@ -484,10 +594,26 @@ namespace HapiCopi
                     {
                         try
                         {
+                            Program.Log("[UI] Attempting to display ConfirmFormatForm");
                             using (var confirmForm = new ConfirmFormatForm(rawText, formattedText, evaluation))
                             {
                                 confirmForm.TopMost = true;
-                                confirmForm.ShowDialog();
+                                confirmForm.ShowInTaskbar = true;
+                                confirmForm.WindowState = FormWindowState.Normal;
+                                confirmForm.StartPosition = FormStartPosition.CenterScreen;
+                                confirmForm.BringToFront();
+                                confirmForm.Focus();
+                                // Determine owner window if any
+                                var owner = Application.OpenForms.Count > 0 ? Application.OpenForms[0] : null;
+                                if (owner != null)
+                                {
+                                    confirmForm.ShowDialog(owner);
+                                }
+                                else
+                                {
+                                    confirmForm.ShowDialog();
+                                }
+                                Program.Log("[UI] ConfirmFormatForm closed, result: " + confirmForm.IsApplied);
                                 tcs.SetResult(confirmForm.IsApplied);
                             }
                         }
@@ -532,6 +658,12 @@ namespace HapiCopi
                     }
                     else
                     {
+                        if (appInfo.WindowHandle != IntPtr.Zero)
+                        {
+                            Program.Log($"[UI] Phục hồi focus cho cửa sổ đích trước khi dán: hwnd={appInfo.WindowHandle}");
+                            ActiveWindowHelper.SetForegroundWindow(appInfo.WindowHandle);
+                            System.Threading.Thread.Sleep(250); // Đợi cửa sổ đích nhận focus hoàn tất
+                        }
                         success = ClipboardSimulator.WriteTextViaClipboard(formattedText);
                     }
                     

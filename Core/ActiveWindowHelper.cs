@@ -7,6 +7,7 @@ namespace HapiCopi
 {
     public class ActiveAppInfo
     {
+        public IntPtr WindowHandle { get; set; } = IntPtr.Zero;
         public string ProcessName { get; set; } = "";
         public string ClassName { get; set; } = "";
         public string WindowTitle { get; set; } = "";
@@ -86,6 +87,10 @@ namespace HapiCopi
     {
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
@@ -171,6 +176,7 @@ namespace HapiCopi
             {
                 IntPtr hwnd = GetForegroundWindow();
                 if (hwnd == IntPtr.Zero) return info;
+                info.WindowHandle = hwnd;
 
                 // 1. Lấy Class Name
                 var classNameBuilder = new StringBuilder(256);

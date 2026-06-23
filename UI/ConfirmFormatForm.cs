@@ -26,6 +26,7 @@ namespace HapiCopi
             _originalText = originalText;
             _suggestedText = suggestedText;
             _evaluation = evaluation;
+            this.ResizeRedraw = true;
 
             InitializeComponent();
         }
@@ -36,6 +37,10 @@ namespace HapiCopi
             this.FormBorderStyle = FormBorderStyle.None;
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.FromArgb(30, 30, 30); // Dark theme base
+            this.Load += (s, e) =>
+            {
+                this.MaximizedBounds = Screen.FromHandle(this.Handle).WorkingArea;
+            };
 
             // Enable resizing border or drop shadow if needed, here we draw a subtle border
             this.Paint += (s, e) =>
@@ -65,6 +70,55 @@ namespace HapiCopi
             };
             titlePanel.Controls.Add(titleLabel);
 
+            var minButton = new Button
+            {
+                Text = "—",
+                ForeColor = Color.White,
+                BackColor = Color.Transparent,
+                FlatStyle = FlatStyle.Flat,
+                Width = 40,
+                Height = 40,
+                Location = new Point(this.Width - 120, 0),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Cursor = Cursors.Hand
+            };
+            minButton.FlatAppearance.BorderSize = 0;
+            minButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(60, 60, 60);
+            minButton.Click += (s, e) =>
+            {
+                this.WindowState = FormWindowState.Minimized;
+            };
+            titlePanel.Controls.Add(minButton);
+
+            var maxButton = new Button
+            {
+                Text = "🗖",
+                ForeColor = Color.White,
+                BackColor = Color.Transparent,
+                FlatStyle = FlatStyle.Flat,
+                Width = 40,
+                Height = 40,
+                Location = new Point(this.Width - 80, 0),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Cursor = Cursors.Hand
+            };
+            maxButton.FlatAppearance.BorderSize = 0;
+            maxButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(60, 60, 60);
+            maxButton.Click += (s, e) =>
+            {
+                if (this.WindowState == FormWindowState.Maximized)
+                {
+                    this.WindowState = FormWindowState.Normal;
+                    maxButton.Text = "🗖";
+                }
+                else
+                {
+                    this.WindowState = FormWindowState.Maximized;
+                    maxButton.Text = "🗗";
+                }
+            };
+            titlePanel.Controls.Add(maxButton);
+
             var closeButton = new Button
             {
                 Text = "✕",
@@ -74,6 +128,7 @@ namespace HapiCopi
                 Width = 40,
                 Height = 40,
                 Location = new Point(this.Width - 40, 0),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
                 Cursor = Cursors.Hand
             };
             closeButton.FlatAppearance.BorderSize = 0;
@@ -81,7 +136,7 @@ namespace HapiCopi
             closeButton.Click += (s, e) => this.Close();
             titlePanel.Controls.Add(closeButton);
 
-            this.Controls.Add(titlePanel);
+            // titlePanel will be added at the end of the method
 
             // 2. AI Comment Panel (gợi ý của AI)
             var commentPanel = new Panel
@@ -117,12 +172,26 @@ namespace HapiCopi
                 ForeColor = Color.FromArgb(200, 200, 200),
                 Font = new Font("Segoe UI", 9, FontStyle.Italic),
                 Location = new Point(16, 30),
-                Size = new Size(this.Width - 40, 45),
+                Size = new Size(this.Width - 60, 45),
                 UseCompatibleTextRendering = true
             };
             commentPanel.Controls.Add(commentText);
 
-            this.Controls.Add(commentPanel);
+            var hideCommentButton = new Button
+            {
+                Text = "✕",
+                ForeColor = Color.FromArgb(150, 150, 150),
+                BackColor = Color.Transparent,
+                FlatStyle = FlatStyle.Flat,
+                Width = 24,
+                Height = 24,
+                Location = new Point(this.Width - 36, 8),
+                Cursor = Cursors.Hand
+            };
+            hideCommentButton.FlatAppearance.BorderSize = 0;
+            hideCommentButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(60, 60, 60);
+            hideCommentButton.Click += (s, e) => commentPanel.Visible = false;
+            commentPanel.Controls.Add(hideCommentButton);
 
             // 3. Bottom Action Panel
             var actionPanel = new Panel
@@ -168,7 +237,7 @@ namespace HapiCopi
             cancelButton.Click += (s, e) => this.Close();
             actionPanel.Controls.Add(cancelButton);
 
-            this.Controls.Add(actionPanel);
+            // actionPanel will be added at the end of the method
 
             // 4. Middle Content Split Panel (Văn bản gốc vs Văn bản gợi ý)
             var contentPanel = new Panel
@@ -202,6 +271,7 @@ namespace HapiCopi
                 Text = _originalText,
                 Multiline = true,
                 ScrollBars = ScrollBars.Vertical,
+                WordWrap = true,
                 ReadOnly = true,
                 BackColor = Color.FromArgb(20, 20, 20),
                 ForeColor = Color.FromArgb(180, 180, 180),
@@ -228,6 +298,7 @@ namespace HapiCopi
                 Text = _suggestedText,
                 Multiline = true,
                 ScrollBars = ScrollBars.Vertical,
+                WordWrap = true,
                 ReadOnly = true,
                 BackColor = Color.FromArgb(20, 20, 20),
                 ForeColor = Color.White,
@@ -242,12 +313,12 @@ namespace HapiCopi
             tableLayout.Controls.Add(suggestedGroup, 1, 0);
 
             contentPanel.Controls.Add(tableLayout);
-            this.Controls.Add(contentPanel);
 
-            // Set Z-order of Title and Comment Panels to top
-            titlePanel.BringToFront();
-            commentPanel.BringToFront();
-            actionPanel.BringToFront();
+            // Add panels in reverse docking order to ensure proper layout and no overlapping!
+            this.Controls.Add(contentPanel);
+            this.Controls.Add(actionPanel);
+            this.Controls.Add(commentPanel);
+            this.Controls.Add(titlePanel);
         }
 
         private void TitlePanel_MouseDown(object? sender, MouseEventArgs e)

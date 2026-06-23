@@ -15,22 +15,37 @@ namespace HapiCopi
 
     public static class GeminiClient
     {
-        private static readonly HttpClient HttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        private static readonly HttpClient HttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+
+        public static readonly string SystemInstruction = 
+            "Bạn là một biên tập viên văn bản tiếng Việt chuyên nghiệp. Hãy phân tích văn bản gốc của người dùng và cải thiện định dạng, tính logic của nó:\n" +
+            "1. Đưa ra nhận xét ngắn gọn (1-2 câu) chỉ rõ các lỗi chính tả, hoặc các lập luận mâu thuẫn, nghịch lý, thiếu logic trong văn bản gốc.\n" +
+            "2. Định dạng, sửa lỗi và cải thiện tính logic:\n" +
+            "   - Xác định 1 ý chính trong nguyên đoạn văn mà người dùng thực sự muốn truyền tải, giữ lại ý chính đó và xây dựng luận điểm, luận cứ, lập luận logic xung quanh nó. Chấp nhận việc có thể không cần giữ lại chính xác toàn bộ câu từ gốc của người dùng nhằm đảm bảo tính logic, thông minh và nhất quán cao nhất.\n" +
+            "   - Đối với văn bản chứa các mệnh đề mâu thuẫn phi lý, lập luận nghịch lý hoặc nước đôi (ví dụ: 'Internet là kho tàng tri thức vô tận nên làm giới trẻ rỗng tuếch', 'đi du lịch để hiểu biết nên tốt nhất ở nhà', 'vận động nhiều để sống lâu nhưng làm rút ngắn tuổi thọ'), bạn BẮT BUỘC phải viết lại các câu này thành các lập luận mạch lạc, có logic rõ ràng và có chính kiến cụ thể (ví dụ: dùng quan hệ từ nhượng bộ, chỉ ra mặt tích cực và tiêu cực một cách khoa học, hợp lý).\n" +
+            "   - Ví dụ xử lý câu mâu thuẫn:\n" +
+            "     * Gốc: 'Internet là một kho tàng tri thức vô tận của nhân loại, vì vậy nó khiến tư duy của giới trẻ ngày càng trở nên rỗng tuếch và lười suy nghĩ.'\n" +
+            "     * Đề xuất sửa đổi: 'Mặc dù Internet là một kho tàng tri thức vô tận của nhân loại, việc lạm dụng nó quá mức đang khiến tư duy của giới trẻ có xu hướng lười suy nghĩ và trở nên rỗng tuếch.'\n" +
+            "     * Gốc: 'Để có một sức khỏe dẻo dai và sống lâu, chúng ta cần phải tập thể dục thể thao đều đặn mỗi ngày, tuy nhiên việc vận động quá nhiều sẽ làm cơ thể nhanh hao mòn và rút ngắn tuổi thọ một cách nghiêm trọng.'\n" +
+            "     * Đề xuất sửa đổi: 'Để có một sức khỏe dẻo dai và sống lâu, chúng ta cần tập thể dục thể thao đều đặn mỗi ngày, nhưng cần vận động với cường độ hợp lý để tránh làm cơ thể nhanh hao mòn.'\n" +
+            "   - Đối với văn bản không có lỗi logic hay mâu thuẫn lớn, hãy giữ nguyên đại ý và sửa lỗi chính tả/khoảng trắng/chuẩn hóa viết hoa.\n" +
+            "   - Tự động thêm dấu tiếng Việt đầy đủ nếu gốc là không dấu (unsigned).\n" +
+            "3. Trả về kết quả bắt buộc dưới dạng JSON có cấu trúc sau:\n" +
+            "{\n" +
+            "  \"evaluation\": \"Nhận xét ngắn gọn chỉ rõ điểm mâu thuẫn logic\",\n" +
+            "  \"suggested_text\": \"Văn bản sau khi đã sửa đổi và lập luận logic hoàn chỉnh\"\n" +
+            "}";
 
         /// <summary>
         /// Gọi Gemini API để định dạng lại văn bản thông minh và đưa ra đánh giá ngữ nghĩa.
         /// </summary>
-        public static async Task<GeminiResult> ReformatWithGeminiAsync(string text)
+        public static async Task<GeminiResult> ReformatWithGeminiAsync(string text, System.Threading.CancellationToken cancellationToken = default)
         {
             var result = new GeminiResult { SuggestedText = text, Evaluation = "" };
             if (string.IsNullOrWhiteSpace(text)) return result;
 
-            // 1. Lấy API Key từ biến môi trường, file .env hoặc file cục bộ
-            string? apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
-            if (string.IsNullOrEmpty(apiKey))
-            {
-                apiKey = LoadApiKeyFromDotEnv();
-            }
+            // 1. Lấy API Key từ cấu hình (ENV > config người dùng > .env), fallback file gemini_key.txt
+            string? apiKey = AppConfig.Get("GEMINI_API_KEY");
             if (string.IsNullOrEmpty(apiKey))
             {
                 string configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "gemini_key.txt");
@@ -42,21 +57,14 @@ namespace HapiCopi
 
             if (string.IsNullOrEmpty(apiKey) || apiKey.Trim() == "YOUR_GEMINI_API_KEY_HERE")
             {
-                throw new InvalidOperationException("API Key chưa được cấu hình hoặc đang để mặc định. Vui lòng thiết lập biến môi trường GEMINI_API_KEY hoặc điền vào tệp .env.");
+                throw new InvalidOperationException("API Key chưa được cấu hình. Vui lòng mở menu HapiCopi ở khay hệ thống > Cài đặt... để nhập Gemini API Key.");
             }
 
             // 2. Thiết lập yêu cầu API
-            string model = "gemini-1.5-flash";
+            string model = AppConfig.Get("GEMINI_MODEL") ?? "gemini-3.5-flash";
             string url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
 
-            var systemInstruction = "Bạn là một biên tập viên văn bản chuyên nghiệp. Hãy phân tích văn bản gốc của người dùng và định dạng lại nó:\n" +
-                                     "1. Nhận xét ngắn gọn (1-2 câu ngắn) về ngữ nghĩa, lỗi chính tả, hoặc phong cách hành văn của văn bản gốc.\n" +
-                                     "2. Định dạng lại văn bản: tự động ngắt đoạn hợp lý, sửa lại khoảng trắng và dấu câu đúng quy chuẩn tiếng Việt, giữ nguyên 100% từ ngữ gốc.\n" +
-                                     "3. Trả về kết quả bắt buộc dưới dạng JSON có cấu trúc sau:\n" +
-                                     "{\n" +
-                                     "  \"evaluation\": \"Nhận xét ngắn gọn của bạn\",\n" +
-                                     "  \"suggested_text\": \"Văn bản đã được định dạng và sửa lỗi hoàn chỉnh\"\n" +
-                                     "}";
+            var systemInstruction = SystemInstruction;
 
             var requestBody = new
             {
@@ -78,13 +86,57 @@ namespace HapiCopi
             };
 
             string jsonPayload = JsonSerializer.Serialize(requestBody);
-            var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-
-            Program.Log("Đang gửi yêu cầu định dạng tới Gemini API...");
             
-            var response = await HttpClient.PostAsync(url, content);
-            response.EnsureSuccessStatusCode();
+            HttpResponseMessage? response = null;
+            int maxRetries = 3;
+            int delayMs = 1000;
 
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            {
+                try
+                {
+                    var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                    Program.Log($"Đang gửi yêu cầu định dạng tới Gemini API (lần {attempt}/{maxRetries}, model={model})...");
+                    response = await HttpClient.PostAsync(url, content, cancellationToken);
+                    
+                    if (response.IsSuccessStatusCode)
+                    {
+                        break;
+                    }
+                    
+                    int statusCode = (int)response.StatusCode;
+                    if (statusCode == 503 || statusCode == 429 || (statusCode >= 500 && statusCode < 600))
+                    {
+                        if (attempt < maxRetries)
+                        {
+                            Program.Log($"Gemini API trả về mã lỗi transient {statusCode}. Thử lại sau {delayMs}ms...");
+                            await Task.Delay(delayMs, cancellationToken);
+                            delayMs *= 2;
+                        }
+                        else
+                        {
+                            Program.Log($"Gemini API trả về mã lỗi transient {statusCode} ở lần thử cuối cùng.");
+                        }
+                    }
+                    else
+                    {
+                        response.EnsureSuccessStatusCode(); // Ném lỗi ngay đối với các mã lỗi cố định (ví dụ: 400, 404)
+                    }
+                }
+                catch (Exception ex) when (attempt < maxRetries && (ex is HttpRequestException || ex is TaskCanceledException || ex is OperationCanceledException))
+                {
+                    Program.Log($"Lỗi kết nối Gemini API (lần {attempt}): {ex.Message}. Thử lại sau {delayMs}ms...");
+                    await Task.Delay(delayMs, cancellationToken);
+                    delayMs *= 2;
+                }
+            }
+
+            if (response == null)
+            {
+                throw new Exception("Không thể kết nối tới Gemini API sau nhiều lần thử.");
+            }
+            
+            response.EnsureSuccessStatusCode();
             string responseJson = await response.Content.ReadAsStringAsync();
 
             // 3. Phân tích JSON trả về
@@ -129,7 +181,7 @@ namespace HapiCopi
             throw new Exception("Không thể phân tích dữ liệu trả về từ Gemini API.");
         }
 
-        private static string? LoadApiKeyFromDotEnv()
+        public static string? LoadValueFromDotEnv(string keyName)
         {
             // Danh sách các đường dẫn có thể chứa file .env
             var pathsToSearch = new System.Collections.Generic.List<string>
@@ -152,17 +204,17 @@ namespace HapiCopi
                         foreach (var line in lines)
                         {
                             string trimmed = line.Trim();
-                            if (trimmed.StartsWith("GEMINI_API_KEY="))
+                            if (trimmed.StartsWith($"{keyName}="))
                             {
-                                string keyVal = trimmed.Substring("GEMINI_API_KEY=".Length).Trim();
-                                if ((keyVal.StartsWith("\"") && keyVal.EndsWith("\"")) ||
-                                    (keyVal.StartsWith("'") && keyVal.EndsWith("'")))
+                                string val = trimmed.Substring((keyName + "=").Length).Trim();
+                                if ((val.StartsWith("\"") && val.EndsWith("\"")) ||
+                                    (val.StartsWith("'") && val.EndsWith("'")))
                                 {
-                                    keyVal = keyVal.Substring(1, keyVal.Length - 2);
+                                    val = val.Substring(1, val.Length - 2);
                                 }
-                                if (!string.IsNullOrEmpty(keyVal))
+                                if (!string.IsNullOrEmpty(val))
                                 {
-                                    return keyVal;
+                                    return val;
                                 }
                             }
                         }

@@ -22,3 +22,10 @@ x86/
 # Secrets / API keys
 .env
 gemini_key.txt
+
+# Runtime logs & debug dumps
+debug.log
+diagnostic_clipboard.html
+
+# Local test scripts
+test_*.js

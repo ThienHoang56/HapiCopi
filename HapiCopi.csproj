@@ -7,6 +7,19 @@
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>Assets\hapicopi.ico</ApplicationIcon>
+
+    <!-- Thông tin phiên bản & metadata cho file .exe -->
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Product>HapiCopi</Product>
+    <AssemblyTitle>HapiCopi - Tự động định dạng Markdown sang Word</AssemblyTitle>
+    <Company>HapiCopi</Company>
+    <Description>Tiện ích khay hệ thống tự động chuyển nội dung AI/Markdown sang định dạng Office và định dạng lại văn bản bằng AI (Ctrl+M).</Description>
+    <Copyright>Copyright © 2026</Copyright>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
