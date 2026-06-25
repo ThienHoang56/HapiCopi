@@ -5,17 +5,16 @@ using System.Windows.Forms;
 namespace HapiCopi
 {
     /// <summary>
-    /// Cửa sổ Cài đặt cho phép người dùng nhập/lưu API key và lựa chọn nhà cung cấp AI.
-    /// Cấu hình được lưu vào %APPDATA%\HapiCopi\config.env để dùng được trên bản build phân phối.
+    /// Cửa sổ Cài đặt cho HapiCopi.
+    /// Cho phép người dùng cấu hình tính năng bảo mật clipboard (DLP).
+    /// Cấu hình được lưu vào %APPDATA%\HapiCopi\config.env.
     /// </summary>
     public class SettingsForm : Form
     {
-        private readonly ComboBox _providerCombo;
-        private readonly TextBox _geminiKeyBox;
-        private readonly TextBox _geminiModelBox;
-        private readonly TextBox _openRouterKeyBox;
-        private readonly TextBox _openRouterModelBox;
-        private readonly CheckBox _showKeysCheck;
+        private readonly CheckBox _piiScanCheck;
+        private readonly CheckBox _piiToastCheck;
+        private readonly CheckBox _piiMaskHistoryCheck;
+        private readonly TextBox _customKeywordsBox;
 
         public SettingsForm()
         {
@@ -24,7 +23,7 @@ namespace HapiCopi
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(520, 380);
+            ClientSize = new Size(520, 420);
             Font = new Font("Segoe UI", 9F);
             BackColor = Color.White;
 
@@ -33,88 +32,104 @@ namespace HapiCopi
             int inputWidth = 480;
             int y = 18;
 
+            // ============================
+            // HEADER: Bảo mật Clipboard
+            // ============================
             var header = new Label
             {
-                Text = "Cấu hình AI",
+                Text = "🛡️ Bảo mật Clipboard (DLP)",
                 Font = new Font("Segoe UI", 12F, FontStyle.Bold),
                 ForeColor = Color.FromArgb(46, 204, 113),
                 AutoSize = true,
                 Location = new Point(labelX, y)
             };
             Controls.Add(header);
-            y += 38;
-
-            Controls.Add(new Label { Text = "Nhà cung cấp AI", AutoSize = true, Location = new Point(labelX, y) });
-            y += 22;
-            _providerCombo = new ComboBox
-            {
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Location = new Point(inputX, y),
-                Width = inputWidth
-            };
-            _providerCombo.Items.AddRange(new object[] { "gemini", "openrouter" });
-            Controls.Add(_providerCombo);
             y += 36;
 
-            Controls.Add(new Label { Text = "Gemini API Key", AutoSize = true, Location = new Point(labelX, y) });
-            y += 22;
-            _geminiKeyBox = new TextBox
+            var descLabel = new Label
             {
-                Location = new Point(inputX, y),
-                Width = inputWidth,
-                UseSystemPasswordChar = true,
-                PlaceholderText = "AIza..."
+                Text = "HapiCopi tự động quét thông tin nhạy cảm (API Key, mật khẩu, số điện thoại, email, số thẻ tín dụng, CCCD) trong clipboard để bảo vệ bạn khỏi rò rỉ dữ liệu.",
+                ForeColor = Color.FromArgb(100, 100, 100),
+                Font = new Font("Segoe UI", 8.5f),
+                Location = new Point(labelX, y),
+                Size = new Size(inputWidth, 38)
             };
-            Controls.Add(_geminiKeyBox);
-            y += 32;
+            Controls.Add(descLabel);
+            y += 44;
 
-            Controls.Add(new Label { Text = "Gemini Model", AutoSize = true, Location = new Point(labelX, y) });
-            y += 22;
-            _geminiModelBox = new TextBox
+            // ============================
+            // CHECKBOXES
+            // ============================
+            _piiScanCheck = new CheckBox
             {
+                Text = "Bật quét thông tin nhạy cảm (PII Scanner)",
+                AutoSize = true,
                 Location = new Point(inputX, y),
-                Width = inputWidth,
-                PlaceholderText = "gemini-3.5-flash"
+                Font = new Font("Segoe UI", 9.5f)
             };
-            Controls.Add(_geminiModelBox);
-            y += 32;
-
-            Controls.Add(new Label { Text = "OpenRouter API Key (tùy chọn)", AutoSize = true, Location = new Point(labelX, y) });
-            y += 22;
-            _openRouterKeyBox = new TextBox
-            {
-                Location = new Point(inputX, y),
-                Width = inputWidth,
-                UseSystemPasswordChar = true,
-                PlaceholderText = "sk-or-..."
-            };
-            Controls.Add(_openRouterKeyBox);
-            y += 32;
-
-            Controls.Add(new Label { Text = "OpenRouter Model (tùy chọn)", AutoSize = true, Location = new Point(labelX, y) });
-            y += 22;
-            _openRouterModelBox = new TextBox
-            {
-                Location = new Point(inputX, y),
-                Width = inputWidth,
-                PlaceholderText = "openai/gpt-oss-120b:free"
-            };
-            Controls.Add(_openRouterModelBox);
+            Controls.Add(_piiScanCheck);
             y += 30;
 
-            _showKeysCheck = new CheckBox
+            _piiToastCheck = new CheckBox
             {
-                Text = "Hiện API key",
+                Text = "Hiển thị cảnh báo Toast khi phát hiện thông tin nhạy cảm",
                 AutoSize = true,
-                Location = new Point(inputX, y)
+                Location = new Point(inputX, y),
+                Font = new Font("Segoe UI", 9.5f)
             };
-            _showKeysCheck.CheckedChanged += (s, e) =>
-            {
-                _geminiKeyBox.UseSystemPasswordChar = !_showKeysCheck.Checked;
-                _openRouterKeyBox.UseSystemPasswordChar = !_showKeysCheck.Checked;
-            };
-            Controls.Add(_showKeysCheck);
+            Controls.Add(_piiToastCheck);
+            y += 30;
 
+            _piiMaskHistoryCheck = new CheckBox
+            {
+                Text = "Tự động che thông tin nhạy cảm trong Lịch sử Clipboard",
+                AutoSize = true,
+                Location = new Point(inputX, y),
+                Font = new Font("Segoe UI", 9.5f)
+            };
+            Controls.Add(_piiMaskHistoryCheck);
+            y += 40;
+
+            // ============================
+            // CUSTOM KEYWORDS
+            // ============================
+            var keywordsHeader = new Label
+            {
+                Text = "Từ khóa nhạy cảm tùy chỉnh",
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(230, 126, 34),
+                AutoSize = true,
+                Location = new Point(labelX, y)
+            };
+            Controls.Add(keywordsHeader);
+            y += 26;
+
+            var keywordsDesc = new Label
+            {
+                Text = "Nhập các từ khóa mà bạn muốn HapiCopi cảnh báo khi phát hiện trong clipboard, mỗi từ một dòng. Ví dụ: tên dự án bí mật, mã nội bộ...",
+                ForeColor = Color.FromArgb(100, 100, 100),
+                Font = new Font("Segoe UI", 8.5f),
+                Location = new Point(labelX, y),
+                Size = new Size(inputWidth, 30)
+            };
+            Controls.Add(keywordsDesc);
+            y += 34;
+
+            _customKeywordsBox = new TextBox
+            {
+                Location = new Point(inputX, y),
+                Width = inputWidth,
+                Height = 80,
+                Multiline = true,
+                ScrollBars = ScrollBars.Vertical,
+                PlaceholderText = "Ví dụ:\nProject Phoenix\nKH-VIP-2026\nmật khẩu wifi công ty"
+            };
+            Controls.Add(_customKeywordsBox);
+            y += 90;
+
+            // ============================
+            // BUTTONS
+            // ============================
             var saveButton = new Button
             {
                 Text = "Lưu",
@@ -148,43 +163,29 @@ namespace HapiCopi
 
         private void LoadCurrentValues()
         {
-            string provider = AppConfig.Get("AI_PROVIDER") ?? "gemini";
-            _providerCombo.SelectedItem = provider.ToLowerInvariant() == "openrouter" ? "openrouter" : "gemini";
-            if (_providerCombo.SelectedIndex < 0)
-            {
-                _providerCombo.SelectedIndex = 0;
-            }
-
-            _geminiKeyBox.Text = AppConfig.Get("GEMINI_API_KEY") ?? "";
-            _geminiModelBox.Text = AppConfig.Get("GEMINI_MODEL") ?? "";
-            _openRouterKeyBox.Text = AppConfig.Get("OPENROUTER_API_KEY") ?? "";
-            _openRouterModelBox.Text = AppConfig.Get("OPENROUTER_MODEL") ?? "";
+            _piiScanCheck.Checked = (AppConfig.Get("PII_SCAN_ENABLED") ?? "true").ToLower() != "false";
+            _piiToastCheck.Checked = (AppConfig.Get("PII_TOAST_ENABLED") ?? "true").ToLower() != "false";
+            _piiMaskHistoryCheck.Checked = (AppConfig.Get("PII_MASK_HISTORY") ?? "true").ToLower() != "false";
+            _customKeywordsBox.Text = (AppConfig.Get("PII_CUSTOM_KEYWORDS") ?? "").Replace("|", "\r\n");
         }
 
         private void OnSaveClicked(object? sender, EventArgs e)
         {
             try
             {
-                string provider = _providerCombo.SelectedItem?.ToString() ?? "gemini";
+                AppConfig.Set("PII_SCAN_ENABLED", _piiScanCheck.Checked ? "true" : "false");
+                AppConfig.Set("PII_TOAST_ENABLED", _piiToastCheck.Checked ? "true" : "false");
+                AppConfig.Set("PII_MASK_HISTORY", _piiMaskHistoryCheck.Checked ? "true" : "false");
 
-                if (provider == "gemini" && string.IsNullOrWhiteSpace(_geminiKeyBox.Text))
-                {
-                    MessageBox.Show("Vui lòng nhập Gemini API Key để dùng tính năng định dạng AI (Ctrl+M).",
-                        "Thiếu API Key", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-                if (provider == "openrouter" && string.IsNullOrWhiteSpace(_openRouterKeyBox.Text))
-                {
-                    MessageBox.Show("Vui lòng nhập OpenRouter API Key để dùng tính năng định dạng AI (Ctrl+M).",
-                        "Thiếu API Key", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                AppConfig.Set("AI_PROVIDER", provider);
-                AppConfig.Set("GEMINI_API_KEY", _geminiKeyBox.Text.Trim());
-                AppConfig.Set("GEMINI_MODEL", _geminiModelBox.Text.Trim());
-                AppConfig.Set("OPENROUTER_API_KEY", _openRouterKeyBox.Text.Trim());
-                AppConfig.Set("OPENROUTER_MODEL", _openRouterModelBox.Text.Trim());
+                // Lưu custom keywords dưới dạng pipe-separated (| thay cho newline)
+                string keywords = _customKeywordsBox.Text
+                    .Replace("\r\n", "|")
+                    .Replace("\n", "|")
+                    .Replace("\r", "|");
+                // Loại bỏ các pipe trống liên tiếp
+                while (keywords.Contains("||")) keywords = keywords.Replace("||", "|");
+                keywords = keywords.Trim('|');
+                AppConfig.Set("PII_CUSTOM_KEYWORDS", keywords);
 
                 MessageBox.Show("Đã lưu cấu hình thành công!", "HapiCopi",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);

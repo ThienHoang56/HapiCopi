@@ -308,6 +308,67 @@ namespace HapiCopi
             return success;
         }
 
+        public static void StartLiveGhostTyping(System.Collections.Concurrent.BlockingCollection<string> chunkQueue)
+        {
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    object wordAppObj = null;
+                    try
+                    {
+                        Guid clsid = WordClsid;
+                        GetActiveObject(ref clsid, IntPtr.Zero, out wordAppObj);
+                    }
+                    catch
+                    {
+                        Program.Log("Ghost Typing: Không kết nối được với MS Word.");
+                        return;
+                    }
+
+                    if (wordAppObj == null) return;
+
+                    dynamic wordApp = wordAppObj;
+                    if (wordApp.Windows == null || wordApp.Windows.Count == 0) return;
+                    dynamic activeWindow = wordApp.ActiveWindow;
+                    if (activeWindow == null) return;
+                    dynamic selection = activeWindow.Selection;
+                    if (selection == null) return;
+
+                    // Xóa phần bôi đen
+                    selection.Delete();
+
+                    while (!chunkQueue.IsCompleted)
+                    {
+                        if (chunkQueue.TryTake(out string chunk, 100))
+                        {
+                            if (string.IsNullOrEmpty(chunk)) continue;
+                            
+                            string[] parts = chunk.Split(new[] { "\n", "\r\n" }, StringSplitOptions.None);
+                            for(int i = 0; i < parts.Length; i++)
+                            {
+                                if (parts[i].Length > 0)
+                                {
+                                    selection.TypeText(parts[i]);
+                                }
+                                if (i < parts.Length - 1)
+                                {
+                                    selection.TypeParagraph();
+                                }
+                            }
+                        }
+                    }
+                    Program.Log("Ghost Typing hoàn tất.");
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"Lỗi Ghost Typing STA: {ex.Message}");
+                }
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.Start();
+        }
+
         private static int ExtractHeadingLevel(string styleName)
         {
             // Bắt khớp "Heading 1", "Tiêu đề 1", "Heading 2"...

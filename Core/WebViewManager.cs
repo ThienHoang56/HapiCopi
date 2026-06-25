@@ -234,7 +234,51 @@ namespace HapiCopi
             string escapedHtml = EscapeJsString(html);
             string escapedCache = EscapeJsString(mermaidCacheJson);
             string wordTargetParam = isWordTarget ? "true" : "false";
-            return await ExecuteScriptAsync($"cleanHtml('{escapedHtml}', '{fontName}', {fontSize}, {lineSpacing}, {parentHeadingLevel}, {wordTargetParam}, '{escapedCache}')");
+            
+            string id = Guid.NewGuid().ToString("N");
+            await ExecuteScriptAsync($"startCleanHtml('{id}', '{escapedHtml}', '{fontName}', {fontSize}, {lineSpacing}, {parentHeadingLevel}, {wordTargetParam}, '{escapedCache}')");
+
+            int timeoutMs = 15000;
+            int elapsedMs = 0;
+            while (elapsedMs < timeoutMs)
+            {
+                await Task.Delay(50);
+                elapsedMs += 50;
+                
+                string statusJson = await ExecuteScriptAsync($"JSON.stringify(window.cleanHtmlResults['{id}'])");
+                if (!string.IsNullOrEmpty(statusJson) && statusJson != "null" && statusJson != "{}")
+                {
+                    try
+                    {
+                        using (var doc = JsonDocument.Parse(statusJson))
+                        {
+                            var root = doc.RootElement;
+                            if (root.TryGetProperty("status", out var statusProp))
+                            {
+                                string status = statusProp.GetString() ?? "";
+                                if (status == "success")
+                                {
+                                    if (root.TryGetProperty("result", out var resultProp))
+                                        return resultProp.GetString() ?? "";
+                                    return "";
+                                }
+                                else if (status == "error")
+                                {
+                                    Program.Log($"[WebViewManager LỖI] Lỗi JS CleanHtmlAsync");
+                                    return html;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Program.Log($"[WebViewManager LỖI] Lỗi phân tích JSON kết quả CleanHtml: {ex.Message}");
+                    }
+                }
+            }
+            
+            Program.Log($"[WebViewManager LỖI] Quá thời gian CleanHtmlAsync");
+            return html;
         }
 
         public static async Task<string> ProcessLatexInPlainTextAsync(string text)

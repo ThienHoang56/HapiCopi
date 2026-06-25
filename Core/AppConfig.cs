@@ -33,7 +33,9 @@ namespace HapiCopi
                 return fromUserConfig;
             }
 
-            var fromDotEnv = GeminiClient.LoadValueFromDotEnv(key);
+            // Fallback: đọc từ file .env trong thư mục ứng dụng
+            var dotEnvPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".env");
+            var fromDotEnv = ReadKeyFromFile(dotEnvPath, key);
             if (!string.IsNullOrWhiteSpace(fromDotEnv))
             {
                 return fromDotEnv;

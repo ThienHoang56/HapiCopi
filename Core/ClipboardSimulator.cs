@@ -96,7 +96,16 @@ namespace HapiCopi
                     System.Threading.Thread.Sleep(50);
 
                     // 2. Giả lập nhấn Ctrl + V để dán đè lên đoạn bôi đen
-                    SendKeys.SendWait("^v");
+                    try
+                    {
+                        HapiCopiApplicationContext.IsSimulatingPaste = true;
+                        SendKeys.SendWait("^v");
+                    }
+                    finally
+                    {
+                        System.Threading.Thread.Sleep(100);
+                        HapiCopiApplicationContext.IsSimulatingPaste = false;
+                    }
 
                     // Chờ ứng dụng xử lý dán xong trước khi dọn/khôi phục clipboard
                     System.Threading.Thread.Sleep(250);
@@ -108,6 +117,53 @@ namespace HapiCopi
                 catch (Exception ex)
                 {
                     Program.Log($"Lỗi trong WriteTextViaClipboard: {ex.Message}");
+                }
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+
+            return success;
+        }
+
+        /// <summary>
+        /// Đưa đồng thời văn bản thô và HTML định dạng Office vào clipboard, dán vào ứng dụng bằng Ctrl+V, và khôi phục lại clipboard gốc.
+        /// </summary>
+        public static bool WriteOfficeHtmlViaClipboard(string plainText, string officeHtml)
+        {
+            if (string.IsNullOrEmpty(officeHtml)) return false;
+
+            bool success = false;
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    // 1. Đẩy đồng thời văn bản thô và HTML định dạng Office vào clipboard
+                    ClipboardHelper.SetOfficeClipboard(plainText, officeHtml);
+                    System.Threading.Thread.Sleep(50);
+
+                    // 2. Giả lập nhấn Ctrl + V để dán đè lên đoạn bôi đen
+                    try
+                    {
+                        HapiCopiApplicationContext.IsSimulatingPaste = true;
+                        SendKeys.SendWait("^v");
+                    }
+                    finally
+                    {
+                        System.Threading.Thread.Sleep(100);
+                        HapiCopiApplicationContext.IsSimulatingPaste = false;
+                    }
+
+                    // Chờ ứng dụng xử lý dán xong trước khi dọn/khôi phục clipboard
+                    System.Threading.Thread.Sleep(250);
+
+                    // 3. Khôi phục lại dữ liệu clipboard ban đầu của người dùng
+                    RestoreClipboardInternal();
+                    success = true;
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"Lỗi trong WriteOfficeHtmlViaClipboard: {ex.Message}");
                 }
             });
             thread.SetApartmentState(System.Threading.ApartmentState.STA);
