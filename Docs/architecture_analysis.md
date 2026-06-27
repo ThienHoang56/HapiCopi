@@ -52,7 +52,9 @@ graph TD
 
 ### Flow A: Automatic Clipboard Paste Interception (Original Feature)
 1. **Copy Action**: The user copies text from a source (e.g., ChatGPT, browser, text file).
-2. **Clipboard Update**: Windows fires `WM_CLIPBOARDUPDATE`. `ClipboardListener` receives it and triggers `OnClipboardChanged` in `Program.cs`.
+2. **Clipboard Update**: Windows fires `WM_CLIPBOARDUPDATE`. `ClipboardListener` receives it and trigg
+
+ers `OnClipboardChanged` in `Program.cs`.
 3. **Validation**: `ProcessClipboard` runs. It queries the clipboard. If it detects Markdown or AI HTML structure (`IsMarkdownOrAiHtml` returns `true`):
    - It formats the text into Office-compatible HTML.
    - It writes the formatted HTML and plain text back to the clipboard.

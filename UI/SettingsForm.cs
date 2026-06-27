@@ -14,16 +14,22 @@ namespace HapiCopi
         private readonly CheckBox _piiScanCheck;
         private readonly CheckBox _piiToastCheck;
         private readonly CheckBox _piiMaskHistoryCheck;
+        private readonly CheckBox _mlFormatCheck;
         private readonly TextBox _customKeywordsBox;
+        private readonly CheckBox _enableHistoryCheck;
+        private readonly CheckBox _saveToDiskCheck;
+        private readonly CheckBox _encryptHistoryCheck;
+        private readonly System.Collections.Generic.List<ClipboardHistoryItem> _historyList;
 
-        public SettingsForm()
+        public SettingsForm(System.Collections.Generic.List<ClipboardHistoryItem> history)
         {
+            _historyList = history;
             Text = "HapiCopi - Cài đặt";
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(520, 420);
+            ClientSize = new Size(520, 640);
             Font = new Font("Segoe UI", 9F);
             BackColor = Color.White;
 
@@ -88,6 +94,16 @@ namespace HapiCopi
                 Font = new Font("Segoe UI", 9.5f)
             };
             Controls.Add(_piiMaskHistoryCheck);
+            y += 30;
+
+            _mlFormatCheck = new CheckBox
+            {
+                Text = "Tự động cấu trúc văn bản thô bằng mô hình học máy (ML)",
+                AutoSize = true,
+                Location = new Point(inputX, y),
+                Font = new Font("Segoe UI", 9.5f)
+            };
+            Controls.Add(_mlFormatCheck);
             y += 40;
 
             // ============================
@@ -128,6 +144,58 @@ namespace HapiCopi
             y += 90;
 
             // ============================
+            // HEADER: Cấu hình Lịch sử Clipboard
+            // ============================
+            y += 10;
+            var historyHeader = new Label
+            {
+                Text = "📋 Cấu hình Lịch sử Clipboard",
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(52, 152, 219),
+                AutoSize = true,
+                Location = new Point(labelX, y)
+            };
+            Controls.Add(historyHeader);
+            y += 26;
+
+            _enableHistoryCheck = new CheckBox
+            {
+                Text = "Ghi nhớ lịch sử clipboard (Tối đa 30 mục)",
+                AutoSize = true,
+                Location = new Point(inputX, y),
+                Font = new Font("Segoe UI", 9.5f)
+            };
+            _enableHistoryCheck.CheckedChanged += (s, e) => {
+                _saveToDiskCheck.Enabled = _enableHistoryCheck.Checked;
+                _encryptHistoryCheck.Enabled = _enableHistoryCheck.Checked && _saveToDiskCheck.Checked;
+            };
+            Controls.Add(_enableHistoryCheck);
+            y += 30;
+
+            _saveToDiskCheck = new CheckBox
+            {
+                Text = "Lưu lịch sử vào ổ đĩa để không bị mất khi khởi động lại",
+                AutoSize = true,
+                Location = new Point(inputX, y),
+                Font = new Font("Segoe UI", 9.5f)
+            };
+            _saveToDiskCheck.CheckedChanged += (s, e) => {
+                _encryptHistoryCheck.Enabled = _enableHistoryCheck.Checked && _saveToDiskCheck.Checked;
+            };
+            Controls.Add(_saveToDiskCheck);
+            y += 30;
+
+            _encryptHistoryCheck = new CheckBox
+            {
+                Text = "Mã hóa dữ liệu lịch sử trên ổ đĩa (Khuyên dùng) 🛡️",
+                AutoSize = true,
+                Location = new Point(inputX, y),
+                Font = new Font("Segoe UI", 9.5f)
+            };
+            Controls.Add(_encryptHistoryCheck);
+            y += 40;
+
+            // ============================
             // BUTTONS
             // ============================
             var saveButton = new Button
@@ -166,7 +234,15 @@ namespace HapiCopi
             _piiScanCheck.Checked = (AppConfig.Get("PII_SCAN_ENABLED") ?? "true").ToLower() != "false";
             _piiToastCheck.Checked = (AppConfig.Get("PII_TOAST_ENABLED") ?? "true").ToLower() != "false";
             _piiMaskHistoryCheck.Checked = (AppConfig.Get("PII_MASK_HISTORY") ?? "true").ToLower() != "false";
+            _mlFormatCheck.Checked = (AppConfig.Get("ML_FORMAT_ENABLED") ?? "true").ToLower() != "false";
             _customKeywordsBox.Text = (AppConfig.Get("PII_CUSTOM_KEYWORDS") ?? "").Replace("|", "\r\n");
+
+            _enableHistoryCheck.Checked = (AppConfig.Get("HISTORY_ENABLED") ?? "true").ToLower() != "false";
+            _saveToDiskCheck.Checked = (AppConfig.Get("SAVE_HISTORY_TO_DISK") ?? "true").ToLower() != "false";
+            _encryptHistoryCheck.Checked = (AppConfig.Get("ENCRYPT_HISTORY_DATA") ?? "true").ToLower() != "false";
+
+            _saveToDiskCheck.Enabled = _enableHistoryCheck.Checked;
+            _encryptHistoryCheck.Enabled = _enableHistoryCheck.Checked && _saveToDiskCheck.Checked;
         }
 
         private void OnSaveClicked(object? sender, EventArgs e)
@@ -176,6 +252,14 @@ namespace HapiCopi
                 AppConfig.Set("PII_SCAN_ENABLED", _piiScanCheck.Checked ? "true" : "false");
                 AppConfig.Set("PII_TOAST_ENABLED", _piiToastCheck.Checked ? "true" : "false");
                 AppConfig.Set("PII_MASK_HISTORY", _piiMaskHistoryCheck.Checked ? "true" : "false");
+                AppConfig.Set("ML_FORMAT_ENABLED", _mlFormatCheck.Checked ? "true" : "false");
+
+                AppConfig.Set("HISTORY_ENABLED", _enableHistoryCheck.Checked ? "true" : "false");
+                AppConfig.Set("SAVE_HISTORY_TO_DISK", _saveToDiskCheck.Checked ? "true" : "false");
+                AppConfig.Set("ENCRYPT_HISTORY_DATA", _encryptHistoryCheck.Checked ? "true" : "false");
+
+                // Gọi di trú dữ liệu nóng (Hot-Migration)
+                HistoryManager.MigrateHistoryData(_historyList);
 
                 // Lưu custom keywords dưới dạng pipe-separated (| thay cho newline)
                 string keywords = _customKeywordsBox.Text

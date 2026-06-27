@@ -68,17 +68,18 @@ namespace HapiCopi
     /// </summary>
     public static class PiiScanner
     {
-        // =============================================
-        // ENGINE 1: Regex Pattern Matching
-        // =============================================
+        // Các ký tự đặc trưng của code được bỏ qua không quét Entropy, tải động từ AppConfig
+        private static readonly char[] CodeBypassChars = 
+            (AppConfig.Get("PII_BYPASS_CHARS") ?? "()[]{}=,;<>/\\+-*&|^%!~\"'").ToCharArray();
 
         // API Keys — Định dạng cố định, không bao giờ xuất hiện trong văn bản tự nhiên
         private static readonly Regex GeminiKeyRegex = new Regex(
             @"AIzaSy[A-Za-z0-9_-]{33}",
             RegexOptions.Compiled);
 
+        // OpenAI: sk-... (mọi độ dài từ 16+, có thể có proj- prefix)
         private static readonly Regex OpenAiKeyRegex = new Regex(
-            @"sk-(proj-)?[a-zA-Z0-9_-]{32,}",
+            @"sk-(proj-)?[a-zA-Z0-9_-]{16,}",
             RegexOptions.Compiled);
 
         private static readonly Regex GitHubTokenRegex = new Regex(
@@ -91,6 +92,38 @@ namespace HapiCopi
 
         private static readonly Regex GenericBearerTokenRegex = new Regex(
             @"(?i)Bearer\s+[A-Za-z0-9_\-\.]{20,}",
+            RegexOptions.Compiled);
+
+        // Generic Secret Prefix: bắt các key có prefix phổ biến (sk_, pk_, rk_, tvly-, pcsk_, etc.)
+        // Format: prefix + phần ngẫu nhiên dài từ 12 ký tự trở lên
+        private static readonly Regex GenericSecretPrefixRegex = new Regex(
+            @"(?<![a-zA-Z0-9_-])(?:" +
+                @"sk[_-]|pk[_-]|rk[_-]|" +                    // Generic secret/public/restricted key
+                @"sk_(?:live|test)_|pk_(?:live|test)_|" +      // Stripe
+                @"tvly[_-]|" +                                  // Tavily
+                @"pcsk[_-]|" +                                  // Prisma Cloud
+                @"xoxb[_-]|xoxp[_-]|xoxa[_-]|" +             // Slack
+                @"eyJ[A-Za-z0-9]|" +                           // JWT tokens (base64 of {"...)
+                @"glpat-|" +                                    // GitLab
+                @"nk_|np_|" +                                   // Generic
+                @"whsec_|" +                                    // Webhook secret
+                @"SG\.|" +                                      // SendGrid
+                @"xkeysib-|" +                                  // Sendinblue/Brevo
+                @"AC[a-f0-9]{32}|" +                           // Twilio
+                @"sk-ant-|" +                                   // Anthropic
+                @"hf_[A-Za-z]|" +                              // HuggingFace
+                @"ya29\." +                                     // Google OAuth
+            @")[A-Za-z0-9_\-\.]{12,}",
+            RegexOptions.Compiled);
+
+        // Supabase, Firebase, Vercel tokens
+        private static readonly Regex CloudTokenRegex = new Regex(
+            @"(?i)(?:sbp_|supabase_|vercel_|firebase[_-])[A-Za-z0-9_\-\.]{12,}",
+            RegexOptions.Compiled);
+
+        // Private Key block (PEM)
+        private static readonly Regex PrivateKeyBlockRegex = new Regex(
+            @"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----",
             RegexOptions.Compiled);
 
         // Connection Strings
@@ -185,7 +218,7 @@ namespace HapiCopi
                 sum += n;
                 alternate = !alternate;
             }
-            return (sum % 10 == 0);
+            return sum % 10 == 0;
         }
 
         // =============================================
@@ -203,12 +236,17 @@ namespace HapiCopi
 
             // --- Engine 1: Regex ---
 
-            // API Keys
-            ScanWithRegex(result, text, GeminiKeyRegex, "API Key", MaskApiKey);
-            ScanWithRegex(result, text, OpenAiKeyRegex, "API Key", MaskApiKey);
-            ScanWithRegex(result, text, GitHubTokenRegex, "API Key", MaskApiKey);
-            ScanWithRegex(result, text, AwsKeyRegex, "API Key", MaskApiKey);
-            ScanWithRegex(result, text, GenericBearerTokenRegex, "API Key", MaskApiKey);
+            // API Keys (specific patterns)
+            ScanWithRegex(result, text, GeminiKeyRegex, "API Key (Gemini)", MaskApiKey);
+            ScanWithRegex(result, text, OpenAiKeyRegex, "API Key (OpenAI)", MaskApiKey);
+            ScanWithRegex(result, text, GitHubTokenRegex, "API Key (GitHub)", MaskApiKey);
+            ScanWithRegex(result, text, AwsKeyRegex, "API Key (AWS)", MaskApiKey);
+            ScanWithRegex(result, text, GenericBearerTokenRegex, "Bearer Token", MaskApiKey);
+
+            // API Keys (generic prefix-based)
+            ScanWithRegex(result, text, GenericSecretPrefixRegex, "API Key / Secret", MaskApiKey);
+            ScanWithRegex(result, text, CloudTokenRegex, "Cloud Token", MaskApiKey);
+            ScanWithRegex(result, text, PrivateKeyBlockRegex, "Private Key", _ => "-----BEGIN PRIVATE KEY-----[MASKED]");
 
             // Connection Strings
             ScanWithRegex(result, text, ConnectionStringRegex, "Connection String", MaskConnectionString);
@@ -238,8 +276,23 @@ namespace HapiCopi
             // CCCD (12 chữ số, bắt đầu bằng 0XX + chữ số giới tính)
             ScanWithRegex(result, text, CccdRegex, "CCCD", MaskCccd);
 
-            // --- Engine 2: Entropy ---
+            // --- Engine 2: Entropy (bắt các token lạ không match regex nào) ---
             ScanHighEntropyTokens(result, text);
+
+            // --- Custom Keywords từ Settings ---
+            ScanCustomKeywords(result, text);
+
+            // --- BƯỚC QUAN TRỌNG: Lọc bỏ các mục nhạy cảm nằm trong danh sách ngoại lệ (Exclusions) ---
+            try
+            {
+                result.Matches = result.Matches
+                    .Where(m => !ExclusionManager.IsExcluded(m.Value))
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[PiiScanner LỖI] Lỗi lọc ngoại lệ: {ex.Message}");
+            }
 
             return result;
         }
@@ -265,49 +318,129 @@ namespace HapiCopi
         }
 
         /// <summary>
-        /// Quét các token có entropy cao kết hợp với từ khóa ngữ cảnh nhạy cảm.
+        /// Quét các token có entropy cao — kiểm tra ngữ cảnh và cấu trúc chữ-số cực kỳ chặt chẽ
+        /// để tránh tuyệt đối các báo động giả (False Positives) trên mã nguồn.
         /// </summary>
         private static void ScanHighEntropyTokens(PiiScanResult result, string text)
         {
-            // Tách các "token" là chuỗi liền mạch (không chứa khoảng trắng) dài từ 16 ký tự trở lên
-            var tokenRegex = new Regex(@"\S{16,}");
+            if (string.IsNullOrWhiteSpace(text)) return;
+
+            // Tách các token liền mạch dài từ 12 ký tự trở lên.
+            var tokenRegex = new Regex(@"['""]?(\S{12,})['""]?");
+            string textLower = text.ToLowerInvariant();
+
             foreach (Match match in tokenRegex.Matches(text))
             {
-                string token = match.Value;
+                string token = match.Groups[1].Value;
+                int tokenIndex = match.Groups[1].Index;
+                int tokenLength = match.Groups[1].Length;
 
-                // Bỏ qua nếu đã bị Engine 1 phát hiện
+                // Bỏ qua nếu đã bị Engine 1 (Regex) phát hiện
                 bool alreadyCovered = result.Matches.Any(m =>
-                    match.Index >= m.StartIndex && match.Index < m.StartIndex + m.Length);
+                    tokenIndex >= m.StartIndex && tokenIndex < m.StartIndex + m.Length);
                 if (alreadyCovered) continue;
 
-                // Bỏ qua URL
-                if (token.StartsWith("http://") || token.StartsWith("https://") || token.StartsWith("file://")) continue;
+                // Bỏ qua URL hoặc đường dẫn tệp tin
+                if (token.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || 
+                    token.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || 
+                    token.StartsWith("file://", StringComparison.OrdinalIgnoreCase) ||
+                    token.Contains("\\") || token.Contains("/")) continue;
+
+                // Loại trừ các trường hợp không phải là key/secret ngẫu nhiên:
+                // 1. Chỉ toàn chữ thường, chữ hoa, hoặc chỉ toàn chữ số
+                bool isPureLowercase = token.All(c => char.IsLower(c) || c == '_' || c == '-');
+                bool isPureUppercase = token.All(c => char.IsUpper(c) || c == '_' || c == '-');
+                bool isPureDigits = token.All(char.IsDigit);
+
+                if (isPureLowercase || isPureUppercase || isPureDigits) continue;
+
+                // 2. PHÒNG NGỪA FALSE POSITIVE CỰC MẠNH:
+                // Các khóa mật mã, API keys, hoặc mật khẩu ngẫu nhiên hầu hết đều chứa hỗn hợp chữ và số.
+                // Nếu một chuỗi dài chỉ gồm chữ cái (không có chữ số nào, ví dụ: "ReconstructWithAiAsync", "ClipboardHistoryForm"),
+                // thì đó chắc chắn là tên phương thức/lớp/biến dạng PascalCase/camelCase, không phải secret.
+                bool hasDigits = token.Any(char.IsDigit);
+                if (!hasDigits) continue;
+
+                // 3. Nếu chứa bất kỳ ký tự đặc trưng nào của code (indexOfAny CodeBypassChars)
+                if (token.IndexOfAny(CodeBypassChars) >= 0) continue;
+
+                // 4. Nếu chứa dấu chấm (loại trừ thuộc tính đối tượng)
+                if (token.Contains("."))
+                {
+                    bool isJwt = token.Length > 80 && token.StartsWith("eyJ");
+                    if (!isJwt) continue;
+                }
+
+                // 5. Kiểm tra bối cảnh nhạy cảm (Context-Aware Entropy):
+                // Nếu văn bản dài (ví dụ file code), chỉ quét entropy nếu token nằm gần từ khóa nhạy cảm (như key, password, token...).
+                // Nếu văn bản ngắn (dưới 120 ký tự), có thể người dùng chỉ copy độc lập mỗi chuỗi key đó, ta sẽ quét trực tiếp.
+                if (text.Length >= 120)
+                {
+                    bool hasContext = false;
+                    // Kiểm tra trong phạm vi 60 ký tự trước và sau token xem có chứa từ khóa nhạy cảm không
+                    int searchStart = Math.Max(0, tokenIndex - 60);
+                    int searchEnd = Math.Min(text.Length, tokenIndex + tokenLength + 60);
+                    string contextArea = textLower.Substring(searchStart, searchEnd - searchStart);
+
+                    foreach (var kw in EntropyContextKeywords)
+                    {
+                        if (contextArea.Contains(kw))
+                        {
+                            hasContext = true;
+                            break;
+                        }
+                    }
+
+                    if (!hasContext) continue; // Bỏ qua nếu không có bối cảnh nhạy cảm
+                }
 
                 double entropy = CalculateEntropy(token);
-                if (entropy < 4.2) continue;
+                double requiredEntropy = token.Length >= 20 ? 3.2 : 3.5;
 
-                // Kiểm tra ngữ cảnh: tìm từ khóa nhạy cảm trong phạm vi ±80 ký tự
-                int contextStart = Math.Max(0, match.Index - 80);
-                int contextEnd = Math.Min(text.Length, match.Index + match.Length + 80);
-                string context = text.Substring(contextStart, contextEnd - contextStart).ToLowerInvariant();
-
-                bool hasContextKeyword = EntropyContextKeywords.Any(kw => context.Contains(kw));
-
-                // Hoặc kiểm tra nếu token nằm trong pattern key=value hoặc key: value
-                bool hasAssignment = Regex.IsMatch(
-                    text.Substring(Math.Max(0, match.Index - 30), Math.Min(30, match.Index)),
-                    @"(?i)\w+\s*[:=]\s*[""']?\s*$");
-
-                if (hasContextKeyword || hasAssignment)
+                if (entropy >= requiredEntropy)
                 {
                     result.Matches.Add(new PiiMatch
                     {
                         Type = "Secret (Entropy)",
                         Value = token,
                         MaskedValue = MaskApiKey(token),
-                        StartIndex = match.Index,
-                        Length = match.Length
+                        StartIndex = tokenIndex,
+                        Length = tokenLength
                     });
+                }
+            }
+        }
+
+        /// <summary>
+        /// Quét từ khóa tùy chỉnh từ Settings (pipe-separated).
+        /// </summary>
+        private static void ScanCustomKeywords(PiiScanResult result, string text)
+        {
+            string keywords = AppConfig.Get("PII_CUSTOM_KEYWORDS") ?? "";
+            if (string.IsNullOrWhiteSpace(keywords)) return;
+
+            foreach (string keyword in keywords.Split('|', StringSplitOptions.RemoveEmptyEntries))
+            {
+                string kw = keyword.Trim();
+                if (string.IsNullOrEmpty(kw) || kw.Length < 3) continue;
+
+                int idx = text.IndexOf(kw, StringComparison.OrdinalIgnoreCase);
+                while (idx >= 0)
+                {
+                    bool alreadyCovered = result.Matches.Any(m =>
+                        idx >= m.StartIndex && idx < m.StartIndex + m.Length);
+                    if (!alreadyCovered)
+                    {
+                        result.Matches.Add(new PiiMatch
+                        {
+                            Type = "Từ khóa nhạy cảm",
+                            Value = text.Substring(idx, kw.Length),
+                            MaskedValue = new string('*', kw.Length),
+                            StartIndex = idx,
+                            Length = kw.Length
+                        });
+                    }
+                    idx = text.IndexOf(kw, idx + kw.Length, StringComparison.OrdinalIgnoreCase);
                 }
             }
         }

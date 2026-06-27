@@ -130,11 +130,17 @@ namespace HapiCopi
                 {
                     var dataObject = new DataObject();
                     
-                    // 1. Đưa định dạng HTML chuẩn Office vào Clipboard
-                    dataObject.SetText(officeHtml, TextDataFormat.Html);
+                    // 1. Đưa định dạng HTML chuẩn Office vào Clipboard (nếu có)
+                    if (!string.IsNullOrEmpty(officeHtml))
+                    {
+                        dataObject.SetText(officeHtml, TextDataFormat.Html);
+                    }
                     
-                    // 2. Đưa định dạng Unicode Text
-                    dataObject.SetText(plainText, TextDataFormat.UnicodeText);
+                    // 2. Đưa định dạng Unicode Text (nếu có)
+                    if (!string.IsNullOrEmpty(plainText))
+                    {
+                        dataObject.SetText(plainText, TextDataFormat.UnicodeText);
+                    }
                     
                     // 3. Đánh dấu Marker để tránh đệ quy vô hạn
                     dataObject.SetData(MarkerFormat, true);

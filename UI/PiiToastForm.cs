@@ -28,9 +28,14 @@ namespace HapiCopi
         private bool _isFadingOut = false;
 
         /// <summary>
-        /// Được gọi khi người dùng nhấn "Làm sạch" trên toast.
+        /// Được gọi khi người dùng nhấn "Mã hóa" trên toast.
         /// </summary>
         public event Action? OnSanitizeClicked;
+
+        /// <summary>
+        /// Được gọi khi người dùng nhấn "Giữ nguyên" trên toast.
+        /// </summary>
+        public event Action? OnIgnoreClicked;
 
         /// <summary>
         /// Ngăn form chiếm focus khi hiển thị.
@@ -51,7 +56,7 @@ namespace HapiCopi
             }
         }
 
-        public PiiToastForm(string piiSummary, int autoCloseSeconds = 6)
+        public PiiToastForm(string piiSummary, int autoCloseSeconds = 6, bool isSecurityFirst = false)
         {
             // --- Form Properties ---
             this.FormBorderStyle = FormBorderStyle.None;
@@ -87,8 +92,9 @@ namespace HapiCopi
                     e.Graphics.DrawRectangle(pen, 0, 0, this.Width - 1, this.Height - 1);
                 }
 
-                // Accent bar bên trái (màu cam cảnh báo)
-                using (var brush = new SolidBrush(Color.FromArgb(230, 126, 34)))
+                // Accent bar bên trái (màu xanh bảo vệ hoặc màu cam cảnh báo)
+                Color accentColor = isSecurityFirst ? Color.FromArgb(46, 204, 113) : Color.FromArgb(230, 126, 34);
+                using (var brush = new SolidBrush(accentColor))
                 {
                     e.Graphics.FillRectangle(brush, 0, 0, 4, this.Height);
                 }
@@ -103,8 +109,8 @@ namespace HapiCopi
             // --- Title Label ---
             _titleLabel = new Label
             {
-                Text = "⚠ Phát hiện thông tin nhạy cảm",
-                ForeColor = Color.FromArgb(230, 126, 34),
+                Text = isSecurityFirst ? "🛡️ Đã che thông tin nhạy cảm" : "⚠ Phát hiện thông tin nhạy cảm",
+                ForeColor = isSecurityFirst ? Color.FromArgb(46, 204, 113) : Color.FromArgb(230, 126, 34),
                 Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
                 Location = new Point(52, 14),
                 AutoSize = true
@@ -132,7 +138,7 @@ namespace HapiCopi
             // --- Buttons ---
             var sanitizeButton = new Button
             {
-                Text = "🧹 Làm sạch",
+                Text = isSecurityFirst ? "Đồng ý 🛡️" : "🔒 Mã hóa",
                 ForeColor = Color.White,
                 BackColor = Color.FromArgb(46, 204, 113),
                 FlatStyle = FlatStyle.Flat,
@@ -152,19 +158,23 @@ namespace HapiCopi
 
             var ignoreButton = new Button
             {
-                Text = "Bỏ qua",
+                Text = isSecurityFirst ? "Khôi phục" : "Giữ nguyên",
                 ForeColor = Color.FromArgb(160, 160, 160),
                 BackColor = Color.FromArgb(45, 45, 48),
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Segoe UI", 8.5f),
-                Width = 80,
+                Width = 100,
                 Height = 30,
                 Location = new Point(160, 66),
                 Cursor = Cursors.Hand
             };
             ignoreButton.FlatAppearance.BorderSize = 0;
             ignoreButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(60, 60, 65);
-            ignoreButton.Click += (s, e) => FadeOutAndClose();
+            ignoreButton.Click += (s, e) =>
+            {
+                OnIgnoreClicked?.Invoke();
+                FadeOutAndClose();
+            };
             this.Controls.Add(ignoreButton);
 
             // Nút đóng

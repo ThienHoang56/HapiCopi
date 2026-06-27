@@ -30,8 +30,12 @@ namespace HapiCopi
         private readonly List<ClipboardHistoryItem> _clipboardHistory = new List<ClipboardHistoryItem>();
         private const int MaxHistoryItems = 30;
 
-        // DLP Toast tracking (tránh spam nhiều toast cùng lúc)
         private PiiToastForm? _currentToast;
+        private IntPtr _lastPastedWindowHandle = IntPtr.Zero;
+        private bool _hasPastedSinceCopy = false;
+        private DateTime _lastPasteTime = DateTime.MinValue;
+        private bool _isLastPasteTerminal = false;
+        private long _currentClipboardSeq = 0; // Mã tuần tự clipboard cho AI ngầm bất đồng bộ
 
         public HapiCopiApplicationContext()
         {
@@ -79,6 +83,18 @@ namespace HapiCopi
             _keyboardHook = new KeyboardHook();
             _keyboardHook.PastePressed += OnPastePressed;
 
+            // Nạp lịch sử từ đĩa vật lý khi khởi động
+            try
+            {
+                var loaded = HistoryManager.LoadHistory();
+                _clipboardHistory.AddRange(loaded);
+                Program.Log($"[Startup] Đã nạp {_clipboardHistory.Count} mục lịch sử clipboard từ ổ đĩa.");
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[Startup LỖI] Lỗi nạp lịch sử clipboard: {ex.Message}");
+            }
+
             // 5. Thực hiện xử lý clipboard đang có sẵn ngay khi khởi động
             ProcessClipboard(isStartup: true);
         }
@@ -101,7 +117,7 @@ namespace HapiCopi
                     return;
                 }
 
-                _settingsForm = new SettingsForm();
+                _settingsForm = new SettingsForm(_clipboardHistory);
                 _settingsForm.FormClosed += (s, args) => _settingsForm = null;
                 _settingsForm.Show();
                 _settingsForm.BringToFront();
@@ -146,11 +162,23 @@ namespace HapiCopi
 
         private void AddToHistory(ClipboardHistoryItem item)
         {
+            // Kiểm tra cấu hình có bật tính năng ghi nhớ lịch sử không
+            bool historyEnabled = (AppConfig.Get("HISTORY_ENABLED") ?? "true").ToLower() != "false";
+            if (!historyEnabled)
+            {
+                _clipboardHistory.Clear();
+                HistoryManager.DeletePhysicalFiles();
+                return;
+            }
+
             _clipboardHistory.Add(item);
             while (_clipboardHistory.Count > MaxHistoryItems)
             {
                 _clipboardHistory.RemoveAt(0);
             }
+
+            // Lưu lịch sử xuống đĩa thích ứng theo cấu hình
+            HistoryManager.SaveHistory(_clipboardHistory);
 
             // Cập nhật form lịch sử nếu đang mở
             if (_historyForm != null && !_historyForm.IsDisposed)
@@ -301,136 +329,246 @@ namespace HapiCopi
                 return;
             }
 
+            // Tăng mã tuần tự để đồng bộ hóa luồng AI bất đồng bộ
+            long currentSeq = ++_currentClipboardSeq;
+
             try
             {
-                string text = ClipboardHelper.GetPlainText();
-                string webHtml = "";
+                // Reset trạng thái dán của lượt copy mới
+                _hasPastedSinceCopy = false;
+                _lastPastedWindowHandle = IntPtr.Zero;
+                _lastPasteTime = DateTime.MinValue;
+                _isLastPasteTerminal = false;
+
+                string originalText = ClipboardHelper.GetPlainText();
+                string originalHtml = "";
                 bool hasHtml = false;
                 if (Clipboard.ContainsText(TextDataFormat.Html))
                 {
-                    webHtml = Clipboard.GetText(TextDataFormat.Html);
-                    hasHtml = !string.IsNullOrEmpty(webHtml);
+                    originalHtml = Clipboard.GetText(TextDataFormat.Html);
+                    hasHtml = !string.IsNullOrEmpty(originalHtml);
                 }
 
-                if (string.IsNullOrEmpty(text) && !hasHtml)
+                if (string.IsNullOrEmpty(originalText) && !hasHtml)
                 {
                     Program.Log("Bỏ qua: Clipboard trống.");
                     return;
                 }
 
-                // ============================
-                // DLP: QUÉT PII TRƯỚC KHI XỬ LÝ
-                // ============================
+
+
+                // 2. Xác định các cờ phân tích định dạng
                 ActiveAppInfo sourceApp = ActiveWindowHelper.GetActiveAppInfo();
                 string appName = sourceApp.ProcessName ?? "Unknown";
 
-                bool piiScanEnabled = (AppConfig.Get("PII_SCAN_ENABLED") ?? "true").ToLower() != "false";
-                PiiScanResult? piiResult = null;
+                bool mlFormatEnabled = (AppConfig.Get("ML_FORMAT_ENABLED") ?? "true").ToLower() != "false";
+                bool isUnstructured = mlFormatEnabled && !isStartup && !string.IsNullOrEmpty(originalText) && AutoFormatter.IsUnstructuredRawText(originalText);
+                bool isMarkdownOrAi = IsMarkdownOrAiHtml(originalText, originalHtml);
+                bool isPdfText = !isStartup && PdfHeuristicCleaner.IsLikelyPdfText(originalText, originalHtml);
+                bool shouldFormat = isMarkdownOrAi || isUnstructured || isPdfText;
 
-                if (piiScanEnabled && !isStartup && !string.IsNullOrEmpty(text))
-                {
-                    piiResult = PiiScanner.Scan(text);
-                    if (piiResult.HasPii)
-                    {
-                        Program.Log($"[DLP] Phát hiện thông tin nhạy cảm: {piiResult.GetSummary()} ({piiResult.Matches.Count} mục)");
+                // Cache dữ liệu gốc để xử lý dán động
+                _lastRawText = originalText;
+                _lastRawHtml = originalHtml;
+                _lastWasProcessed = shouldFormat;
 
-                        // Hiển thị Toast cảnh báo
-                        bool toastEnabled = (AppConfig.Get("PII_TOAST_ENABLED") ?? "true").ToLower() != "false";
-                        if (toastEnabled)
-                        {
-                            ShowPiiToast(piiResult, text);
-                        }
-                    }
-                }
-
-                // ============================
-                // KIỂM TRA VÀ XỬ LÝ MARKDOWN
-                // ============================
-                bool shouldProcess = IsMarkdownOrAiHtml(text, webHtml);
-                
-                // Tạo history item
+                // Khởi tạo history item
                 var historyItem = new ClipboardHistoryItem
                 {
                     AppName = appName,
-                    OriginalText = text,
-                    OriginalHtml = webHtml,
-                    PiiResult = piiResult
+                    OriginalText = originalText,
+                    OriginalHtml = originalHtml
                 };
 
-                if (!shouldProcess)
+                // Capture all clipboard formats for deep inspection (Phase 1)
+                try
                 {
-                    // Heuristic: Dọn rác PDF siêu tốc nếu không phải Markdown/AI
-                    if (!isStartup && PdfHeuristicCleaner.IsLikelyPdfText(text, webHtml))
+                    IDataObject dataObj = Clipboard.GetDataObject();
+                    if (dataObj != null)
                     {
-                        Program.Log("Phát hiện văn bản PDF đứt gãy. Đang chạy Heuristic gỡ rối siêu tốc...");
-                        string fixedText = PdfHeuristicCleaner.FixLineBreaks(text);
-                        SetClipboardOnStaThread(fixedText, "");
-                        Program.Log("Đã xử lý xong văn bản PDF bằng Heuristic.");
-                        
-                        historyItem.ProcessedText = fixedText;
-                        historyItem.Status = "PDF Heuristic";
+                        foreach (string format in dataObj.GetFormats(false))
+                        {
+                            try
+                            {
+                                object? data = dataObj.GetData(format);
+                                if (data is string strData)
+                                {
+                                    historyItem.ClipboardFormats[format] = strData;
+                                }
+                                else if (data is byte[] bytes)
+                                {
+                                    string hex = string.Join(" ", bytes.Take(32).Select(b => b.ToString("X2")));
+                                    string ascii = System.Text.Encoding.ASCII.GetString(bytes.Take(32).ToArray());
+                                    ascii = new string(ascii.Select(c => char.IsControl(c) ? '.' : c).ToArray());
+                                    historyItem.ClipboardFormats[format] = $"[Mảng Byte: {bytes.Length} bytes]\r\nHex: {hex}{(bytes.Length > 32 ? "..." : "")}\r\nASCII: {ascii}";
+                                }
+                                else if (data != null)
+                                {
+                                    historyItem.ClipboardFormats[format] = $"[{data.GetType().Name}] {data}";
+                                }
+                                else
+                                {
+                                    historyItem.ClipboardFormats[format] = "(null)";
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                historyItem.ClipboardFormats[format] = $"[Lỗi đọc dữ liệu: {ex.Message}]";
+                            }
+                        }
                     }
-                    else if (!isStartup)
-                    {
-                        _lastWasProcessed = false;
-                        historyItem.Status = "Bỏ qua";
-                    }
-
-                    if (!isStartup) AddToHistory(historyItem);
-                    return;
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"[DLP] Lỗi đọc danh sách formats từ clipboard: {ex.Message}");
                 }
 
-                _lastRawText = text;
-                _lastRawHtml = webHtml;
-                _lastWasProcessed = true;
-                Program.Log("Đã cache dữ liệu Copy thô.");
+                // Nếu là Startup hoặc không cần định dạng và không quét bảo mật (hoặc chỉ quét bảo mật)
+                bool piiScanEnabled = (AppConfig.Get("PII_SCAN_ENABLED") ?? "true").ToLower() != "false";
 
+                // Chạy luồng xử lý ngầm (đảm bảo thứ tự trước sau rõ ràng: Định dạng -> Bảo mật)
                 System.Threading.Tasks.Task.Run(async () =>
                 {
                     try
                     {
-                        if (text != null && (text.Contains("```mermaid") || MermaidRenderer.IsRawMermaidCode(text)))
+                        string formattedText = originalText;
+                        string formattedHtml = originalHtml;
+                        string status = "Bỏ qua";
+
+                        // ==================================================
+                        // BƯỚC 1: ĐỊNH DẠNG & TÁI CẤU TRÚC (Làm việc trên văn bản GỐC sạch sẽ)
+                        // ==================================================
+                        if (shouldFormat)
                         {
-                            await PreCacheMermaidDiagramsAsync(text);
+                            // Kiểm tra xem HTML gốc có chứa cấu trúc bảng/danh sách thực sự không.
+                            // Nếu có, ưu tiên giữ nguyên cấu trúc HTML thay vì tái tạo từ plain text bị vỡ.
+                            bool htmlHasRichStructure = hasHtml && !string.IsNullOrEmpty(originalHtml) &&
+                                (originalHtml.IndexOf("<table", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 originalHtml.IndexOf("<ul", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 originalHtml.IndexOf("<ol", StringComparison.OrdinalIgnoreCase) >= 0);
+
+                            if (isUnstructured && !htmlHasRichStructure)
+                            {
+                                Program.Log("Phát hiện văn bản thô phi cấu trúc. Chạy AutoFormatter.FormatTextSmart...");
+                                formattedText = AutoFormatter.FormatTextSmart(originalText);
+                                status = "Heuristic Reconstruct";
+                            }
+                            else if (isUnstructured && htmlHasRichStructure)
+                            {
+                                Program.Log("Văn bản thô phi cấu trúc nhưng HTML gốc có bảng/danh sách. Ưu tiên giữ cấu trúc HTML.");
+                                status = "Đã xử lý (HTML ưu tiên)";
+                            }
+                            else if (isPdfText)
+                            {
+                                Program.Log("Phát hiện văn bản PDF đứt gãy. Chạy AutoFormatter.FormatTextSmart...");
+                                formattedText = AutoFormatter.FormatTextSmart(originalText);
+                                status = "PDF Heuristic";
+                            }
+                            else
+                            {
+                                status = "Đã xử lý";
+                            }
+
+                            if (formattedText != null && (formattedText.Contains("```mermaid") || MermaidRenderer.IsRawMermaidCode(formattedText)))
+                            {
+                                await PreCacheMermaidDiagramsAsync(formattedText);
+                            }
+
+                            WordFormatInfo formatInfo = WordInterop.GetCurrentFormatWithTimeout(80);
+                            formatInfo.IsWordTarget = formatInfo.IsFromActiveWord;
+                            formatInfo.MermaidImageCache = _mermaidCache;
+
+                            // Quyết định đường xử lý HTML:
+                            // - Nếu HTML gốc có cấu trúc phong phú (bảng, danh sách), LUÔN dùng nhánh clean HTML
+                            //   để bảo toàn cấu trúc từ web nguồn (Kaggle, Wikipedia, v.v.)
+                            // - Nếu không có HTML hoặc là text thuần, dùng nhánh convert từ Markdown/plain text
+                            bool hasMermaid = formattedText != null && (formattedText.Contains("```mermaid") || MermaidRenderer.IsRawMermaidCode(formattedText));
+                            bool shouldUseHtmlCleanPath = hasHtml && !hasMermaid && (!isUnstructured || htmlHasRichStructure) && !isPdfText;
+
+                            if (shouldUseHtmlCleanPath)
+                            {
+                                string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(originalHtml);
+                                string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, formatInfo);
+                                formattedHtml = MarkdownToWordConverter.PackageAsClipboardHtml(cleanFragment);
+                            }
+                            else
+                            {
+                                formattedHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(formattedText ?? "", formatInfo);
+                            }
+
+                            formattedText = await MarkdownToWordConverter.ProcessLatexInPlainTextAsync(formattedText ?? "");
                         }
 
-                        WordFormatInfo formatInfo = WordInterop.GetCurrentFormatWithTimeout(80);
-                        formatInfo.IsWordTarget = formatInfo.IsFromActiveWord;
-                        formatInfo.MermaidImageCache = _mermaidCache;
-
-                        string officeHtml = "";
-                        bool hasMermaid = text != null && (text.Contains("```mermaid") || MermaidRenderer.IsRawMermaidCode(text));
-                        if (hasHtml && !hasMermaid)
+                        // ==================================================
+                        // BƯỚC 2: QUÉT BẢO MẬT & CHE CHẮN DLP (Chạy trên kết quả sau định dạng)
+                        // ==================================================
+                        PiiScanResult? piiResult = null;
+                        if (piiScanEnabled && !isStartup && !string.IsNullOrEmpty(formattedText))
                         {
-                            string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(webHtml);
-                            string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, formatInfo);
-                            officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(cleanFragment);
+                            piiResult = PiiScanner.Scan(formattedText);
+                        }
+
+                        historyItem.ProcessedText = formattedText;
+                        historyItem.PiiResult = piiResult;
+                        historyItem.Status = status;
+
+                        if (piiResult != null && piiResult.HasPii)
+                        {
+                            // Phát hiện nhạy cảm: Che chắn và ghi đè Clipboard bằng bản sạch
+                            Program.Log($"[DLP] Phát hiện {piiResult.Matches.Count} thông tin nhạy cảm trên văn bản đã định dạng. Tiến hành che bảo vệ.");
+                            
+                            string sanitizedText = piiResult.GetSanitizedText(formattedText);
+                            string sanitizedHtml = "";
+                            if (shouldFormat)
+                            {
+                                WordFormatInfo formatInfo = WordInterop.GetCurrentFormatWithTimeout(80);
+                                formatInfo.IsWordTarget = formatInfo.IsFromActiveWord;
+                                formatInfo.MermaidImageCache = _mermaidCache;
+                                sanitizedHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(sanitizedText, formatInfo);
+                            }
+
+                            // Ghi đè Clipboard bằng bản sạch bảo mật
+                            SetClipboardOnStaThread(sanitizedText, sanitizedHtml);
+
+                            historyItem.ProcessedText = sanitizedText;
+                            historyItem.Status = $"🛡️ Đã che ({status})";
+
+                            _syncContext.Post(_ => AddToHistory(historyItem), null);
+
+                            // Hiển thị Toast Bảo mật (Cho phép khôi phục lại bản định dạng gốc formattedText & formattedHtml)
+                            bool toastEnabled = (AppConfig.Get("PII_TOAST_ENABLED") ?? "true").ToLower() != "false";
+                            if (toastEnabled)
+                            {
+                                ShowPiiToast(piiResult, formattedText, formattedHtml, historyItem);
+                            }
                         }
                         else
                         {
-                            officeHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(text ?? "", formatInfo);
+                            // An toàn: Đẩy bản định dạng sạch vào Clipboard
+                            if (shouldFormat)
+                            {
+                                SetClipboardOnStaThread(formattedText, formattedHtml);
+                            }
+
+                            _syncContext.Post(_ => AddToHistory(historyItem), null);
+
+                            // Hiển thị thông báo định dạng tương ứng
+                            if (shouldFormat && !isStartup && !_hasShownWelcome)
+                            {
+                                string tipText = isStartup
+                                    ? "Đã tự động tối ưu hóa dữ liệu clipboard có sẵn!"
+                                    : "Bắt đầu tự động tối ưu hóa clipboard!";
+                                _notifyIcon.ShowBalloonTip(2000, "HapiCopi kích hoạt!", tipText, ToolTipIcon.None);
+                                _hasShownWelcome = true;
+                            }
                         }
 
-                        string cleanText = await MarkdownToWordConverter.ProcessLatexInPlainTextAsync(text ?? "");
-                        SetClipboardOnStaThread(cleanText, officeHtml);
-
-                        // Ghi nhận lịch sử
-                        historyItem.ProcessedText = cleanText;
-                        historyItem.Status = "Đã xử lý";
-                        _syncContext.Post(_ => AddToHistory(historyItem), null);
-
-                        if (!_hasShownWelcome)
-                        {
-                            string tipText = isStartup
-                                ? "Đã tự động tối ưu hóa dữ liệu clipboard có sẵn!"
-                                : "Bắt đầu tự động tối ưu hóa clipboard!";
-                            _notifyIcon.ShowBalloonTip(2000, "HapiCopi kích hoạt!", tipText, ToolTipIcon.None);
-                            _hasShownWelcome = true;
-                        }
+                        // Luồng AI/PDF ngầm chậm đã được gỡ bỏ trong thiết kế Pivot để tránh lỗi Smart Replace đè phím.
+                        // Văn bản đã được tối ưu hóa đồng bộ tức thời ở trên.
                     }
                     catch (Exception ex)
                     {
-                        Program.Log($"Lỗi xử lý clipboard ngầm: {ex.Message}");
+                        Program.Log($"Lỗi xử lý clipboard ngầm: {ex.Message}\n{ex.StackTrace}");
                         historyItem.Status = "Lỗi";
                         _syncContext.Post(_ => AddToHistory(historyItem), null);
                     }
@@ -446,7 +584,7 @@ namespace HapiCopi
         // DLP: TOAST CẢNH BÁO PII
         // ============================
 
-        private void ShowPiiToast(PiiScanResult piiResult, string originalText)
+        private void ShowPiiToast(PiiScanResult piiResult, string originalText, string originalHtml, ClipboardHistoryItem historyItem)
         {
             _syncContext.Post(_ =>
             {
@@ -459,31 +597,215 @@ namespace HapiCopi
                     }
 
                     string summary = piiResult.GetSummary();
-                    _currentToast = new PiiToastForm(summary);
+                    Program.Log($"[DLP Toast] Tạo Toast dạng Security-First với summary: {summary}");
+                    
+                    // Khởi tạo Toast ở chế độ Security-First (màu xanh lá cây, tự động che trước)
+                    _currentToast = new PiiToastForm(summary, autoCloseSeconds: 6, isSecurityFirst: true);
+
+                    // Phát âm thanh cảnh báo dịu tai
+                    PlayGentleAlert();
+
+                    // Người dùng chọn ĐỒNG Ý giữ bản đã che (hoặc tự động đóng)
                     _currentToast.OnSanitizeClicked += () =>
+                    {
+                        Program.Log("[DLP] Người dùng chọn ĐỒNG Ý giữ bản đã che.");
+                        // Không cần thay đổi gì thêm vì clipboard đã được che an toàn từ trước
+                    };
+
+                    // Người dùng chọn KHÔI PHỤC (Rollback) về bản gốc đã định dạng
+                    _currentToast.OnIgnoreClicked += () =>
                     {
                         try
                         {
-                            string sanitized = piiResult.GetSanitizedText(originalText);
+                            // Tự học ngoại lệ: Thêm các chuỗi bị che vào danh sách ngoại lệ exclusions.dat để lần sau không chặn
+                            if (piiResult != null && piiResult.Matches != null)
+                            {
+                                foreach (var match in piiResult.Matches)
+                                {
+                                    ExclusionManager.AddExclusion(match.Value);
+                                }
+                            }
+
+                            // 1. Khôi phục lại bản gốc đã định dạng (bao gồm cả HTML) vào Clipboard
                             _isSimulatingClipboard = true;
-                            ClipboardHelper.SetOfficeClipboard(sanitized, "");
+                            ClipboardHelper.SetOfficeClipboard(originalText, originalHtml);
                             _isSimulatingClipboard = false;
-                            Program.Log($"[DLP] Đã làm sạch clipboard (đã che {piiResult.Matches.Count} thông tin nhạy cảm).");
+                            
+                            historyItem.Status = "⚠ Đã khôi phục";
+                            Program.Log("[DLP] Người dùng chọn KHÔI PHỤC bản gốc. Đã ghi nhận ngoại lệ và trả lại dữ liệu.");
+
+                            // 2. Tự động thay thế bản che đã dán bằng bản gốc (nếu thỏa mãn các điều kiện an toàn)
+                            bool isWithinTimeLimit = (DateTime.Now - _lastPasteTime).TotalSeconds <= 5.0;
+
+                            if (_hasPastedSinceCopy && 
+                                _lastPastedWindowHandle != IntPtr.Zero && 
+                                isWithinTimeLimit && 
+                                !_isLastPasteTerminal)
+                            {
+                                _syncContext.Post(async __ =>
+                                {
+                                    try
+                                    {
+                                        Program.Log("[DLP Rollback] Đang tự động khôi phục bản gốc tại ứng dụng đích...");
+                                        
+                                        // A. Khôi phục focus cho ứng dụng đích
+                                        ActiveWindowHelper.SetForegroundWindow(_lastPastedWindowHandle);
+                                        await System.Threading.Tasks.Task.Delay(150); // Chờ cửa sổ nhận focus ổn định
+
+                                        // B. Gửi Ctrl+Z để hoàn tác việc dán bản che
+                                        SendKeys.SendWait("^z");
+                                        await System.Threading.Tasks.Task.Delay(100);
+
+                                        // C. Gửi Ctrl+V để dán bản gốc
+                                        SendKeys.SendWait("^v");
+                                        Program.Log("[DLP Rollback] Đã tự động hoàn tất khôi phục bản gốc thành công!");
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Program.Log($"[DLP Rollback LỖI] {ex.Message}");
+                                    }
+                                }, null);
+                            }
+                            else if (_hasPastedSinceCopy)
+                            {
+                                string reason = "";
+                                if (!isWithinTimeLimit) reason = "quá giới hạn thời gian (5 giây)";
+                                else if (_isLastPasteTerminal) reason = "ứng dụng đích là Terminal";
+                                else reason = "cửa sổ không hợp lệ";
+
+                                Program.Log($"[DLP Rollback] Bỏ qua khôi phục tự động tại ứng dụng do: {reason}. Chỉ khôi phục clipboard.");
+                            }
                         }
                         catch (Exception ex)
                         {
                             _isSimulatingClipboard = false;
-                            Program.Log($"[DLP] Lỗi làm sạch clipboard: {ex.Message}");
+                            Program.Log($"[DLP Rollback LỖI] {ex.Message}");
                         }
                     };
+
                     _currentToast.FormClosed += (s, args) => _currentToast = null;
                     _currentToast.Show();
+                    Program.Log($"[DLP Toast] Toast đã Show() thành công.");
                 }
                 catch (Exception ex)
                 {
-                    Program.Log($"[DLP Toast LỖI] {ex.Message}");
+                    Program.Log($"[DLP Toast LỖI] {ex.Message}\n{ex.StackTrace}");
                 }
             }, null);
+        }
+
+        /// <summary>
+        /// Chuyển đổi định dạng URL trình duyệt sang đường dẫn vật lý cục bộ nếu là file PDF.
+        /// </summary>
+        private string? GetLocalPdfPath(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return null;
+
+            try
+            {
+                string path = url;
+                if (path.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+                {
+                    var uri = new Uri(path);
+                    path = uri.LocalPath;
+                }
+                else if (path.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                {
+                    var uri = new Uri(path);
+                    path = uri.LocalPath;
+                }
+
+                // Giải mã các ký tự escape URL (%20 -> khoảng trắng, v.v.)
+                path = Uri.UnescapeDataString(path);
+                
+                // Chuẩn hóa dấu gạch chéo cho hệ điều hành Windows
+                path = path.Replace('/', '\\');
+
+                if (System.IO.File.Exists(path) && path.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+                {
+                    return path;
+                }
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[PDF Bridge] Lỗi phân tích đường dẫn URL PDF: {ex.Message}");
+            }
+            return null;
+        }
+        // Các phương thức CallPdfBridgeAndReplaceAsync và CallAiAndReplaceAsync
+        // đã được gỡ bỏ hoàn toàn để tránh việc giả lập đè phím ngầm (Smart Replace) gây lỗi tài liệu của người dùng.
+
+
+
+        private bool IsCorrectedVersion(string newText, string oldText)
+        {
+            if (string.IsNullOrEmpty(newText) || string.IsNullOrEmpty(oldText)) return false;
+
+            string normNew = NormalizeForSimilarity(newText);
+            string normOld = NormalizeForSimilarity(oldText);
+
+            if (string.IsNullOrEmpty(normNew) || string.IsNullOrEmpty(normOld)) return false;
+
+            string[] wordsNew = normNew.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            string[] wordsOld = normOld.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+            int maxLen = Math.Max(wordsNew.Length, wordsOld.Length);
+            if (maxLen < 15) return false;
+
+            if (Math.Abs(wordsNew.Length - wordsOld.Length) > maxLen * 0.3) return false;
+
+            int distance = GetWordEditDistance(wordsNew, wordsOld);
+            double similarity = 1.0 - ((double)distance / maxLen);
+
+            Program.Log($"[ML Similarity] So sánh độ tương đồng từ vựng: {similarity:P2} (Edit Distance = {distance}/{maxLen} từ)");
+
+            return similarity >= 0.80;
+        }
+
+        private string NormalizeForSimilarity(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            string lower = text.ToLowerInvariant();
+            
+            char[] chars = lower.ToCharArray();
+            for (int i = 0; i < chars.Length; i++)
+            {
+                char c = chars[i];
+                if (!char.IsLetterOrDigit(c))
+                {
+                    chars[i] = ' ';
+                }
+            }
+            
+            string clean = new string(chars);
+            return Regex.Replace(clean, @"\s+", " ").Trim();
+        }
+
+        private int GetWordEditDistance(string[] s, string[] t)
+        {
+            int n = s.Length;
+            int m = t.Length;
+            if (n == 0) return m;
+            if (m == 0) return n;
+
+            int[] prev = new int[m + 1];
+            int[] curr = new int[m + 1];
+
+            for (int j = 0; j <= m; j++) prev[j] = j;
+
+            for (int i = 1; i <= n; i++)
+            {
+                curr[0] = i;
+                for (int j = 1; j <= m; j++)
+                {
+                    int cost = (s[i - 1] == t[j - 1]) ? 0 : 1;
+                    curr[j] = Math.Min(Math.Min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+                }
+                int[] temp = prev;
+                prev = curr;
+                curr = temp;
+            }
+            return prev[m];
         }
 
         // ============================
@@ -492,6 +814,32 @@ namespace HapiCopi
 
         private async void OnPastePressed()
         {
+            // Nếu có Toast PII đang hiển thị, ghi nhận cửa sổ vừa dán để có thể tự động thay thế sau đó
+            if (_currentToast != null && !_currentToast.IsDisposed)
+            {
+                try
+                {
+                    ActiveAppInfo activeApp = ActiveWindowHelper.GetActiveAppInfo();
+                    string procName = activeApp.ProcessName ?? "";
+                    _isLastPasteTerminal = procName.Equals("powershell", StringComparison.OrdinalIgnoreCase) ||
+                                           procName.Equals("cmd", StringComparison.OrdinalIgnoreCase) ||
+                                           procName.Equals("wt", StringComparison.OrdinalIgnoreCase) ||
+                                           procName.Equals("conhost", StringComparison.OrdinalIgnoreCase) ||
+                                           procName.Equals("bash", StringComparison.OrdinalIgnoreCase) ||
+                                           procName.Equals("wsl", StringComparison.OrdinalIgnoreCase);
+
+                    _lastPastedWindowHandle = activeApp.WindowHandle;
+                    _hasPastedSinceCopy = true;
+                    _lastPasteTime = DateTime.Now;
+
+                    Program.Log($"[DLP] Ghi nhận cửa sổ dán: Process={procName}, Hwnd={activeApp.WindowHandle}, IsTerminal={_isLastPasteTerminal}");
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"[DLP] Lỗi ghi nhận cửa sổ dán: {ex.Message}");
+                }
+            }
+
             if (_isPaused || IsSimulatingPaste || !_lastWasProcessed) return;
 
             try
@@ -727,6 +1075,33 @@ namespace HapiCopi
             catch
             {
                 return SystemIcons.Application;
+            }
+        }
+
+        private void PlayGentleAlert()
+        {
+            try
+            {
+                string soundPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Media", "Windows Notify System Generic.wav");
+                if (!System.IO.File.Exists(soundPath))
+                {
+                    soundPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Media", "Notification.wav");
+                }
+                if (System.IO.File.Exists(soundPath))
+                {
+                    using (var player = new System.Media.SoundPlayer(soundPath))
+                    {
+                        player.Play();
+                    }
+                }
+                else
+                {
+                    System.Media.SystemSounds.Asterisk.Play();
+                }
+            }
+            catch
+            {
+                try { System.Media.SystemSounds.Asterisk.Play(); } catch {}
             }
         }
 

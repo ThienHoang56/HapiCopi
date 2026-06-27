@@ -307,9 +307,107 @@
             return result;
         }
 
+        // Tiền xử lý phát hiện các bảng chữ thô (TSV từ Excel, hoặc căn cột bằng nhiều khoảng trắng) để dựng thành Markdown table
+        function preprocessPlainTables(text) {
+            if (!text) return "";
+            let lines = text.split(/\r?\n/);
+            if (lines.length < 2) return text;
+
+            let processedLines = [];
+            let inTable = false;
+            let tableRows = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i].trim();
+
+                // Bỏ qua các dòng chú thích Markdown hoặc code blocks
+                if (line.startsWith('#') || line.startsWith('`') || line.includes('|') || line.startsWith('---')) {
+                    if (inTable) {
+                        flushTable(tableRows, processedLines);
+                        inTable = false;
+                        tableRows = [];
+                    }
+                    processedLines.push(lines[i]);
+                    continue;
+                }
+
+                // Phát hiện dấu phân tách cột: Tab (\t) hoặc từ 2 khoảng trắng trở lên
+                let hasTabs = line.includes('\t');
+                let hasMultiSpaces = /\s{2,}/.test(line);
+
+                // Dòng trống hoặc không có dấu phân tách cột thì không phải là dòng bảng
+                let isTableRow = (hasTabs || hasMultiSpaces) && line.length > 0;
+
+                if (isTableRow) {
+                    let cells = [];
+                    if (hasTabs) {
+                        cells = line.split('\t');
+                    } else {
+                        cells = line.split(/\s{2,}/);
+                    }
+                    cells = cells.map(c => c.trim()).filter(c => c.length > 0);
+
+                    // Kiểm tra xem số cột có hợp lệ không (phải có từ 2 cột trở lên)
+                    if (cells.length >= 2) {
+                        tableRows.push(cells);
+                        inTable = true;
+                    } else {
+                        if (inTable) {
+                            flushTable(tableRows, processedLines);
+                            inTable = false;
+                            tableRows = [];
+                        }
+                        processedLines.push(lines[i]);
+                    }
+                } else {
+                    if (inTable) {
+                        flushTable(tableRows, processedLines);
+                        inTable = false;
+                        tableRows = [];
+                    }
+                    processedLines.push(lines[i]);
+                }
+            }
+
+            if (inTable) {
+                flushTable(tableRows, processedLines);
+            }
+
+            return processedLines.join('\n');
+        }
+
+        // Helper xuất các hàng bảng đã thu thập ra định dạng Markdown table
+        function flushTable(rows, outputLines) {
+            if (rows.length === 0) return;
+            if (rows.length < 2) {
+                // Nếu chỉ có 1 dòng thì không đủ cấu trúc bảng, trả lại văn bản thô gốc
+                for (let r of rows) {
+                    outputLines.push(r.join('  '));
+                }
+                return;
+            }
+
+            // Dòng Header
+            outputLines.push('| ' + rows[0].join(' | ') + ' |');
+            
+            // Dòng Phân cách cột của Markdown (---|---|...)
+            let divider = rows[0].map(() => '---');
+            outputLines.push('| ' + divider.join(' | ') + ' |');
+
+            // Các dòng dữ liệu tiếp theo
+            for (let i = 1; i < rows.length; i++) {
+                // Đảm bảo số cột của dòng dữ liệu khớp với dòng header để tránh vỡ bảng
+                let rowCells = rows[i];
+                while (rowCells.length < rows[0].length) rowCells.push('');
+                if (rowCells.length > rows[0].length) rowCells = rowCells.slice(0, rows[0].length);
+                
+                outputLines.push('| ' + rowCells.join(' | ') + ' |');
+            }
+        }
+
         function convertMarkdownToHtml(markdown, isWordTarget) {
             try {
-                let text = markdown;
+                let text = preprocessPlainTables(markdown);
 
                 // Tự động bọc $$ cho các khối \begin... \end thô chưa được bọc dấu
                 const environments = ["matrix", "bmatrix", "pmatrix", "vmatrix", "Vmatrix", "cases", "array", "align", "gather", "equation"];
@@ -667,6 +765,75 @@
             return textArea.value;
         }
 
+        // Tự động nhận diện và chuyển đổi các bảng biểu giả lập bằng div (div-based grid/flex tables) thành table thực tế
+        function reconstructDivTables(doc) {
+            try {
+                // 1. Tìm các thẻ div đóng vai trò làm bảng bằng role, class hoặc style
+                let tableCandidates = doc.querySelectorAll('div[role="table"], div.table, div[class*="table-"], div[style*="display: table"]');
+                
+                for (let cand of tableCandidates) {
+                    if (cand.tagName.toLowerCase() === 'table') continue;
+
+                    // Tạo thẻ table chuẩn
+                    let table = doc.createElement('table');
+                    let id = cand.getAttribute('id');
+                    if (id) table.setAttribute('id', id);
+
+                    // 2. Tìm các hàng (rows)
+                    let rows = cand.querySelectorAll('div[role="row"], div.tr, div[class*="row-"], div[style*="display: table-row"]');
+                    if (rows.length === 0) {
+                        // Nếu không có class/role rõ rệt, coi các con trực tiếp của table là hàng
+                        rows = Array.from(cand.children).filter(c => c.tagName.toLowerCase() === 'div');
+                    }
+
+                    let hasAddedRow = false;
+                    for (let r of rows) {
+                        let tr = doc.createElement('tr');
+
+                        // 3. Tìm các ô (cells)
+                        let cells = r.querySelectorAll('div[role="cell"], div[role="gridcell"], div[role="columnheader"], div.td, div.th, div[class*="cell-"], div[style*="display: table-cell"]');
+                        if (cells.length === 0) {
+                            // Nếu không có class/role rõ rệt, coi các con trực tiếp của hàng là ô
+                            cells = Array.from(r.children).filter(c => c.tagName.toLowerCase() === 'div' || c.tagName.toLowerCase() === 'span');
+                        }
+
+                        if (cells.length > 0) {
+                            for (let c of cells) {
+                                let isHeader = c.tagName.toLowerCase() === 'th' || 
+                                               c.classList.contains('th') || 
+                                               c.getAttribute('role') === 'columnheader' ||
+                                               c.classList.contains('column-header');
+                                
+                                let cellElement = doc.createElement(isHeader ? 'th' : 'td');
+
+                                // Di chuyển toàn bộ nội dung từ div cũ sang cell mới
+                                while (c.firstChild) {
+                                    cellElement.appendChild(c.firstChild);
+                                }
+
+                                // Giữ lại thuộc tính gộp dòng/gộp cột nếu có
+                                let colspan = c.getAttribute('colspan');
+                                if (colspan) cellElement.setAttribute('colspan', colspan);
+                                let rowspan = c.getAttribute('rowspan');
+                                if (rowspan) cellElement.setAttribute('rowspan', rowspan);
+
+                                tr.appendChild(cellElement);
+                            }
+                            table.appendChild(tr);
+                            hasAddedRow = true;
+                        }
+                    }
+
+                    // Thay thế div bảng giả lập bằng table chuẩn vừa dựng
+                    if (hasAddedRow && cand.parentNode) {
+                        cand.parentNode.replaceChild(table, cand);
+                    }
+                }
+            } catch (e) {
+                console.error("Lỗi trong reconstructDivTables: ", e);
+            }
+        }
+
         // 4. Hàm làm sạch HTML rác bằng DOM Parser của trình duyệt và tịnh tiến Heading
         async function doCleanHtmlAsync(html, fontName, fontSize, lineSpacing, parentHeadingLevel, isWordTarget, mermaidCacheJson) {
             if (!html) return "";
@@ -696,6 +863,9 @@
 
                 // Dọn dẹp tất cả các thẻ MathJax v2/v3 và KaTeX còn sót lại chưa vẽ được thành ảnh
                 cleanRemainingMathMarkup(doc);
+
+                // Tự động tái cấu trúc bảng biểu giả lập div-based thành table thực tế
+                reconstructDivTables(doc);
 
                 // Giải mã và thay thế sơ đồ Mermaid từ cache
                 let mermaidCache = {};
@@ -742,6 +912,15 @@
                     if (name === 'col' || name === 'colgroup' || name === 'meta' || name === 'title' || name === 'link' || name === 'style' || name === 'script') {
                         el.remove();
                         continue;
+                    }
+
+                    // Lột class rác để tránh Google Docs nhận nhầm hoặc thừa kế CSS của web nguồn
+                    let keepClasses = ['latex-math', 'latex-matrix', 'latex-math-image'];
+                    let classList = Array.from(el.classList);
+                    for (let cls of classList) {
+                        if (!keepClasses.includes(cls)) {
+                            el.classList.remove(cls);
+                        }
                     }
 
                     // Đọc in đậm, in nghiêng, căn lề và độ rộng hiện hành trước khi xóa style
@@ -794,19 +973,44 @@
                         if (el.classList.contains('latex-matrix')) {
                             cleanStyles.push('display: inline-table; border-collapse: collapse; margin: 0 4px; vertical-align: middle; border: none;');
                         } else {
-                            cleanStyles.push('border-collapse: collapse; width: 100%; border: 1px solid #cccccc; margin: 6pt 0;');
+                            // Đếm số cột để quyết định chiều rộng bảng thông minh
+                            let firstRow = el.querySelector('tr');
+                            let colCount = 0;
+                            if (firstRow) {
+                                colCount = firstRow.querySelectorAll('td, th').length;
+                            }
+                            if (colCount > 8) {
+                                // Bảng rộng (Kaggle DataFrame, bảng dữ liệu lớn): để width tự nhiên, tránh ép chữ xếp dọc
+                                cleanStyles.push('border-collapse: collapse; width: auto; border: 1px solid #cccccc; margin: 6pt 0;');
+                            } else {
+                                // Bảng hẹp (3-6 cột): trải rộng 100% cho đẹp
+                                cleanStyles.push('border-collapse: collapse; width: 100%; border: 1px solid #cccccc; margin: 6pt 0;');
+                            }
                         }
                     } else if (name === 'th') {
                         if (el.closest('table.latex-matrix')) {
                             cleanStyles.push('padding: 2px 6px; text-align: center; border: none;');
                         } else {
-                            cleanStyles.push('border: 1px solid #cccccc; padding: 6px; background-color: #f2f2f2; text-align: left;');
+                            // Thêm white-space: nowrap cho bảng rộng để tránh chữ xếp dọc
+                            let parentTable = el.closest('table');
+                            let isWideTable = false;
+                            if (parentTable) {
+                                let fr = parentTable.querySelector('tr');
+                                if (fr && fr.querySelectorAll('td, th').length > 8) isWideTable = true;
+                            }
+                            cleanStyles.push('border: 1px solid #cccccc; padding: 6px; background-color: #f2f2f2; text-align: left;' + (isWideTable ? ' white-space: nowrap;' : ''));
                         }
                     } else if (name === 'td') {
                         if (el.closest('table.latex-matrix')) {
                             cleanStyles.push('padding: 2px 6px; text-align: center; border: none;');
                         } else {
-                            cleanStyles.push('border: 1px solid #cccccc; padding: 6px; text-align: left;');
+                            let parentTable = el.closest('table');
+                            let isWideTable = false;
+                            if (parentTable) {
+                                let fr = parentTable.querySelector('tr');
+                                if (fr && fr.querySelectorAll('td, th').length > 8) isWideTable = true;
+                            }
+                            cleanStyles.push('border: 1px solid #cccccc; padding: 6px; text-align: left;' + (isWideTable ? ' white-space: nowrap;' : ''));
                         }
                     } else if (name === 'pre') {
                         cleanStyles = ["font-family: 'Consolas', 'Courier New', monospace;", "font-size: 10pt;", "background-color: #f8f9fa;", "border: 1px solid #e9ecef;", "padding: 8pt;", "margin: 6pt 0;", "white-space: pre;", "line-height: 1.2;", "color: #212529;"];
