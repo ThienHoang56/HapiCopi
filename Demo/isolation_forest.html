@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Isolation Forest – Phát hiện bất thường</title>
+<style>
+  body{font-family:"Georgia",serif;background:#f4ecd8;color:#2b2b2b;max-width:820px;margin:0 auto;padding:32px;line-height:1.7;}
+  h1{font-family:"Trebuchet MS",sans-serif;background:linear-gradient(90deg,#1b3a4b,#2e6e7e);color:#fff;padding:14px 18px;border-radius:8px;}
+  h2{font-family:"Trebuchet MS",sans-serif;color:#1b3a4b;border-bottom:3px solid #d8a657;padding-bottom:4px;}
+  h3{color:#7a4f01;}
+  .callout{background:#fff3cd;border-left:6px solid #d8a657;padding:12px 16px;margin:16px 0;border-radius:4px;}
+  .danger{background:#fde2e1;border-left:6px solid #c0392b;padding:12px 16px;margin:16px 0;}
+  code{background:#272822;color:#a6e22e;padding:2px 6px;border-radius:4px;font-family:"Consolas",monospace;}
+  pre{background:#272822;color:#f8f8f2;padding:16px;border-radius:8px;overflow-x:auto;font-family:"Consolas",monospace;font-size:14px;}
+  pre .kw{color:#f92672;} pre .fn{color:#66d9ef;} pre .str{color:#e6db74;} pre .cm{color:#75715e;}
+  table{border-collapse:collapse;width:100%;margin:18px 0;background:#fff;}
+  th{background:#1b3a4b;color:#fff;padding:10px;text-align:left;}
+  td{border:1px solid #ccc;padding:8px;}
+  tr:nth-child(even){background:#f0e6cc;}
+  blockquote{font-style:italic;color:#555;border-left:4px solid #2e6e7e;margin:16px 0;padding-left:16px;background:#eef6f7;}
+  .formula{background:#eef6f7;text-align:center;padding:14px;font-family:"Cambria Math","Times New Roman",serif;font-size:18px;border-radius:6px;margin:14px 0;}
+  ul li{margin:6px 0;}
+</style>
+</head>
+<body>
+
+<h1>Isolation Forest: Phát hiện bất thường bằng cô lập ngẫu nhiên</h1>
+
+<p><strong>Tác giả gốc:</strong> Fei Tony Liu, Kai Ming Ting, Zhi-Hua Zhou (ICDM 2008). Tài liệu tổng hợp cho mục đích minh hoạ định dạng.</p>
+
+<div class="callout">
+<strong>Tóm tắt:</strong> Isolation Forest (iForest) là thuật toán <em>học không giám sát</em> để phát hiện điểm bất thường (anomaly). Ý tưởng cốt lõi: điểm bất thường <strong>“ít và khác”</strong> nên dễ bị <em>cô lập</em> hơn điểm bình thường.
+</div>
+
+<h2>1. Trực giác</h2>
+<p>Thay vì mô hình hoá phân phối của dữ liệu bình thường rồi tìm điểm lệch (như nhiều phương pháp khác), iForest <strong>chủ động cô lập</strong> từng điểm bằng cách cắt không gian một cách ngẫu nhiên. Điểm bất thường nằm thưa thớt → bị tách ra chỉ sau vài lần cắt → <em>độ sâu nhỏ</em> trong cây.</p>
+
+<blockquote>“Anomalies are few and different, which make them more susceptible to isolation.” — Liu et al., 2008</blockquote>
+
+<h2>2. Công thức điểm bất thường</h2>
+<p>Với tập <em>n</em> mẫu, độ dài đường đi trung bình của một cây nhị phân tìm kiếm không thành công là:</p>
+
+<div class="formula">c(n) = 2·H(n − 1) − ( 2·(n − 1) / n )</div>
+
+<p>trong đó <code>H(i) ≈ ln(i) + 0.5772156649</code> (hằng số Euler–Mascheroni). Điểm bất thường của mẫu <em>x</em>:</p>
+
+<div class="formula">s(x, n) = 2<sup>−E(h(x)) / c(n)</sup></div>
+
+<ul>
+  <li><strong>s → 1</strong>: gần như chắc chắn là bất thường.</li>
+  <li><strong>s ≈ 0.5</strong>: không phân biệt được rõ.</li>
+  <li><strong>s &lt; 0.5</strong>: nhiều khả năng là điểm bình thường.</li>
+</ul>
+
+<h2>3. Mã giả (Pseudocode)</h2>
+<pre><span class="cm"># Xây một iTree</span>
+<span class="kw">def</span> <span class="fn">iTree</span>(X, e, l):
+    <span class="kw">if</span> e &gt;= l <span class="kw">or</span> len(X) &lt;= 1:
+        <span class="kw">return</span> exNode(size=len(X))
+    q = random_feature(X)            <span class="cm"># chọn thuộc tính ngẫu nhiên</span>
+    p = random_split(min_q, max_q)   <span class="cm"># chọn ngưỡng cắt ngẫu nhiên</span>
+    Xl = X[X[q] &lt; p]
+    Xr = X[X[q] &gt;= p]
+    <span class="kw">return</span> inNode(left=iTree(Xl, e+1, l),
+                  right=iTree(Xr, e+1, l),
+                  split_att=q, split_val=p)</pre>
+
+<h2>4. So sánh với các phương pháp khác</h2>
+<table>
+  <thead>
+    <tr><th>Phương pháp</th><th>Kiểu</th><th>Độ phức tạp</th><th>Dữ liệu cao chiều</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Isolation Forest</td><td>Cây cô lập</td><td>O(n log n)</td><td>Tốt</td></tr>
+    <tr><td>One-Class SVM</td><td>Biên</td><td>O(n²)–O(n³)</td><td>Trung bình</td></tr>
+    <tr><td>Local Outlier Factor</td><td>Mật độ</td><td>O(n²)</td><td>Kém</td></tr>
+    <tr><td>k-Means + khoảng cách</td><td>Cụm</td><td>O(n·k·i)</td><td>Kém</td></tr>
+  </tbody>
+</table>
+
+<h2>5. Siêu tham số chính (scikit-learn)</h2>
+<table>
+  <thead><tr><th>Tham số</th><th>Ý nghĩa</th><th>Mặc định</th></tr></thead>
+  <tbody>
+    <tr><td><code>n_estimators</code></td><td>Số cây trong rừng</td><td>100</td></tr>
+    <tr><td><code>max_samples</code></td><td>Số mẫu mỗi cây</td><td>256 (auto)</td></tr>
+    <tr><td><code>contamination</code></td><td>Tỉ lệ bất thường ước lượng</td><td>auto</td></tr>
+    <tr><td><code>max_features</code></td><td>Số thuộc tính mỗi cây</td><td>1.0</td></tr>
+  </tbody>
+</table>
+
+<h2>6. Ví dụ code Python</h2>
+<pre><span class="kw">from</span> sklearn.ensemble <span class="kw">import</span> IsolationForest
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+X = np.random.randn(<span class="str">1000</span>, <span class="str">2</span>)
+clf = <span class="fn">IsolationForest</span>(n_estimators=<span class="str">100</span>,
+                      contamination=<span class="str">0.05</span>,
+                      random_state=<span class="str">42</span>)
+clf.<span class="fn">fit</span>(X)
+scores = clf.<span class="fn">decision_function</span>(X)   <span class="cm"># càng nhỏ càng bất thường</span>
+labels = clf.<span class="fn">predict</span>(X)              <span class="cm"># -1 = anomaly, 1 = normal</span></pre>
+
+<div class="danger">
+<strong>Lưu ý thực tế:</strong> iForest nhạy với <code>contamination</code>. Đặt sai tỉ lệ này sẽ khiến mô hình gắn nhãn bất thường sai hàng loạt. Luôn kiểm định trên tập có nhãn nếu có.
+</div>
+
+<h2>7. Sơ đồ luồng thuật toán (Mermaid)</h2>
+<p>Dưới đây là code Mermaid mô tả luồng cô lập một điểm. <strong>Bôi đen riêng khối này → Ctrl+C</strong>: HapiCopi sẽ render thành ảnh sơ đồ khi dán vào Word/Docs.</p>
+<pre>```mermaid
+flowchart TD
+    A[Du lieu dau vao X] --> B[Chon ngau nhien thuoc tinh q]
+    B --> C[Chon nguong cat p ngau nhien]
+    C --> D{Gia tri tai q nho hon p}
+    D -->|Dung| E[Di sang nhanh trai]
+    D -->|Sai| F[Di sang nhanh phai]
+    E --> G{Dat do sau gioi han hoac con 1 diem}
+    F --> G
+    G -->|Chua| B
+    G -->|Roi| H[Nut la: ghi nhan do sau h cua x]
+    H --> I[Tinh diem bat thuong s tu do sau trung binh]
+    I --> J{Diem s gan 1}
+    J -->|Dung| K[Ket luan: BAT THUONG]
+    J -->|Sai| L[Ket luan: Binh thuong]
+```</pre>
+
+<h2>8. Ứng dụng</h2>
+<ol>
+  <li>Phát hiện gian lận giao dịch thẻ.</li>
+  <li>Giám sát log hệ thống / phát hiện xâm nhập.</li>
+  <li>Kiểm soát chất lượng cảm biến IoT.</li>
+  <li>Làm sạch dữ liệu trước khi huấn luyện mô hình khác.</li>
+</ol>
+
+<p style="margin-top:32px;color:#888;font-size:13px;">— Hết tài liệu minh hoạ. Hãy thử <strong>Ctrl+C</strong> toàn bộ trang này rồi <strong>Ctrl+V</strong> vào Google Docs (bản thô) và so với khi có HapiCopi.</p>
+
+</body>
+</html>

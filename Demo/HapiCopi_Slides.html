@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HapiCopi — Pitch Deck</title>
+<style>
+  :root{
+    --bg:#0b1020; --bg2:#121a33; --fg:#e8edff; --muted:#9fb0d8;
+    --accent:#5ee0c8; --accent2:#7aa2ff; --danger:#ff6b6b; --warn:#ffd166;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:"Segoe UI","Inter",system-ui,sans-serif;
+    background:var(--bg); color:var(--fg);
+    scroll-snap-type:y mandatory; overflow-y:scroll; scroll-behavior:smooth;
+  }
+  .slide{
+    min-height:100vh; width:100%; scroll-snap-align:start;
+    display:flex; flex-direction:column; justify-content:center;
+    padding:6vh 9vw; position:relative;
+    background:radial-gradient(1200px 600px at 80% -10%, rgba(94,224,200,.12), transparent),
+               radial-gradient(900px 500px at -10% 110%, rgba(122,162,255,.12), transparent);
+    border-bottom:1px solid rgba(255,255,255,.05);
+  }
+  .kicker{color:var(--accent); font-weight:700; letter-spacing:3px; text-transform:uppercase; font-size:.8rem; margin-bottom:14px;}
+  h1{font-size:clamp(2.4rem,6vw,4.6rem); line-height:1.05; margin-bottom:18px; font-weight:800;}
+  h2{font-size:clamp(1.8rem,3.8vw,3rem); margin-bottom:22px; font-weight:800;}
+  .lead{font-size:clamp(1.1rem,2vw,1.5rem); color:var(--muted); max-width:60ch; line-height:1.6;}
+  .grad{background:linear-gradient(90deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  ul{list-style:none; margin-top:18px;}
+  li{font-size:clamp(1rem,1.6vw,1.25rem); margin:12px 0; padding-left:34px; position:relative; color:#dbe4ff; line-height:1.5;}
+  li::before{content:"▹"; color:var(--accent); position:absolute; left:0; font-size:1.2em;}
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:18px; margin-top:26px;}
+  .card{background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:22px;}
+  .card h3{color:var(--accent2); font-size:1.15rem; margin-bottom:10px;}
+  .card p{color:var(--muted); font-size:.98rem; line-height:1.5;}
+  .badge{display:inline-block; background:rgba(94,224,200,.12); color:var(--accent); border:1px solid rgba(94,224,200,.3); padding:6px 14px; border-radius:999px; font-size:.85rem; font-weight:600; margin:6px 6px 0 0;}
+  .big{font-size:clamp(2rem,5vw,3.4rem); font-weight:800; margin:10px 0;}
+  .danger{color:var(--danger);} .ok{color:var(--accent);} .warn{color:var(--warn);}
+  table{width:100%; border-collapse:collapse; margin-top:22px; font-size:1.05rem;}
+  th,td{text-align:left; padding:14px 16px; border-bottom:1px solid rgba(255,255,255,.08);}
+  th{color:var(--accent); font-size:.85rem; text-transform:uppercase; letter-spacing:1px;}
+  .num{position:absolute; top:5vh; right:9vw; color:rgba(255,255,255,.18); font-weight:800; font-size:1.1rem;}
+  .quote{font-size:clamp(1.4rem,3vw,2.2rem); font-weight:700; line-height:1.4; max-width:24ch;}
+  .hint{position:fixed; bottom:18px; right:22px; color:var(--muted); font-size:.8rem; opacity:.6; z-index:10;}
+  .flow{display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin-top:24px;}
+  .step{background:rgba(122,162,255,.1); border:1px solid rgba(122,162,255,.3); border-radius:12px; padding:14px 18px; font-weight:600;}
+  .arrow{color:var(--accent); font-size:1.6rem;}
+</style>
+</head>
+<body>
+
+<!-- 1 -->
+<section class="slide">
+  <span class="num">01</span>
+  <div class="kicker">Bảo mật clipboard cho thời đại AI</div>
+  <h1><span class="grad">HapiCopi</span><br>Chặn rò rỉ dữ liệu ngay tại Ctrl+C</h1>
+  <p class="lead">Một bí mật đã dán vào ChatGPT thì không thể lấy lại. HapiCopi phát hiện và che thông tin nhạy cảm <strong>trước khi nó rời máy bạn</strong> — chạy 100% offline.</p>
+  <div style="margin-top:24px;">
+    <span class="badge">Offline 100%</span>
+    <span class="badge">0 thao tác thêm</span>
+    <span class="badge">Không gửi data lên cloud</span>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="slide">
+  <span class="num">02</span>
+  <div class="kicker">Vấn đề</div>
+  <h2>Thời AI, ai cũng copy-paste vào chatbot</h2>
+  <p class="lead">Nhân viên dán source code, thông tin khách hàng, API key, hợp đồng vào ChatGPT/Gemini để "nhờ xử lý nhanh". Samsung từng cấm ChatGPT sau khi kỹ sư làm rò mã nguồn. JPMorgan, Apple cấm theo.</p>
+  <div class="big danger">Đã dán = đã gửi. Không có nút hoàn tác.</div>
+  <p class="lead">Bạn không thể "Chọn tất cả" để rút lại một bí mật đã lộ. Cách duy nhất là <strong>chặn trước khi nó đi</strong>.</p>
+</section>
+
+<!-- 3 -->
+<section class="slide">
+  <span class="num">03</span>
+  <div class="kicker">Giải pháp</div>
+  <h2>Chốt chặn ngay tại điểm rò phổ biến nhất: <span class="grad">clipboard</span></h2>
+  <div class="flow">
+    <div class="step">Bạn nhấn Ctrl+C</div>
+    <span class="arrow">→</span>
+    <div class="step">HapiCopi quét nội dung (offline)</div>
+    <span class="arrow">→</span>
+    <div class="step">Phát hiện PII → cảnh báo + che</div>
+    <span class="arrow">→</span>
+    <div class="step">Dán ra: dữ liệu đã được che</div>
+  </div>
+  <p class="lead" style="margin-top:26px;">Người dùng không đổi thói quen. Vẫn Ctrl+C / Ctrl+V như cũ. Việc bảo vệ diễn ra vô hình ở giữa.</p>
+</section>
+
+<!-- 4 -->
+<section class="slide">
+  <span class="num">04</span>
+  <div class="kicker">Năng lực phát hiện</div>
+  <h2>9 loại dữ liệu nhạy cảm — quét cục bộ dưới 1ms</h2>
+  <div class="grid">
+    <div class="card"><h3>API Keys</h3><p>OpenAI, AWS, GitHub, Google, Stripe, Slack… nhận theo mẫu cố định.</p></div>
+    <div class="card"><h3>Thẻ tín dụng</h3><p>Regex + kiểm tra thuật toán Luhn để loại báo động giả.</p></div>
+    <div class="card"><h3>Định danh cá nhân</h3><p>Số điện thoại VN, email, số CCCD 12 chữ số.</p></div>
+    <div class="card"><h3>Bí mật hạ tầng</h3><p>Connection string, private key (PEM), Bearer token.</p></div>
+    <div class="card"><h3>Secret lạ</h3><p>Shannon Entropy bắt chuỗi ngẫu nhiên không khớp mẫu nào.</p></div>
+    <div class="card"><h3>Từ khóa tùy chỉnh</h3><p>Doanh nghiệp tự thêm tên dự án/khách hàng cần bảo vệ.</p></div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="slide">
+  <span class="num">05</span>
+  <div class="kicker">Vì sao là chúng tôi</div>
+  <h2>Khác biệt: <span class="grad">offline</span> + đúng vector + 0 ma sát</h2>
+  <table>
+    <tr><th>Tiêu chí</th><th>DLP doanh nghiệp</th><th>HapiCopi</th></tr>
+    <tr><td>Triển khai</td><td>Nặng, cần IT, đắt</td><td class="ok">Cài 1 phút, chạy nền</td></tr>
+    <tr><td>Dữ liệu khi quét</td><td>Thường gửi lên cloud</td><td class="ok">100% trên máy</td></tr>
+    <tr><td>Thói quen người dùng</td><td>Phải học quy trình</td><td class="ok">Không đổi gì</td></tr>
+    <tr><td>Đối tượng</td><td>Tập đoàn lớn</td><td class="ok">Dev team, SMB, cá nhân</td></tr>
+  </table>
+</section>
+
+<!-- 6 -->
+<section class="slide">
+  <span class="num">06</span>
+  <div class="kicker">Tiện ích cộng thêm (không phải lõi)</div>
+  <h2>Tiện thể, nó còn dọn dẹp khi dán</h2>
+  <ul>
+    <li>Dán vào Word/Docs: làm sạch nền &amp; font từ web, giữ cấu trúc, để tài liệu đích tự áp style.</li>
+    <li>Code Mermaid → tự render thành ảnh sơ đồ.</li>
+    <li>Bảng → mã LaTeX cho Overleaf.</li>
+    <li>Text copy từ PDF bị đứt dòng → nối liền câu.</li>
+    <li>Lịch sử clipboard (mã hóa cục bộ).</li>
+  </ul>
+  <p class="lead" style="margin-top:18px;">Đây là "and also" — tăng giá trị hằng ngày để người dùng giữ app luôn bật. Lõi vẫn là bảo mật.</p>
+</section>
+
+<!-- 7 -->
+<section class="slide">
+  <span class="num">07</span>
+  <div class="kicker">Thị trường &amp; điểm vào</div>
+  <h2>Beachhead: nơi clipboard là vector chính</h2>
+  <div class="grid">
+    <div class="card"><h3>Đội Dev / kỹ thuật</h3><p>Suốt ngày copy code &amp; key vào AI. Nhạy cảm với rò secret, thích công cụ nhẹ.</p></div>
+    <div class="card"><h3>SMB ngành quy định</h3><p>Kế toán, phòng khám, văn phòng luật — cần tuân thủ nhưng không kham nổi DLP doanh nghiệp.</p></div>
+    <div class="card"><h3>Tổ chức privacy-first</h3><p>Không chấp nhận công cụ bảo mật lại gửi data lên cloud.</p></div>
+  </div>
+</section>
+
+<!-- 8 -->
+<section class="slide">
+  <span class="num">08</span>
+  <div class="kicker">Lộ trình</div>
+  <h2>Clipboard là cái nêm đầu tiên</h2>
+  <div class="flow">
+    <div class="step"><strong>Nay:</strong> Bảo vệ clipboard, offline</div>
+    <span class="arrow">→</span>
+    <div class="step"><strong>Kế:</strong> Browser extension — quét đúng nội dung submit lên trang AI (phủ cả gõ tay &amp; upload)</div>
+    <span class="arrow">→</span>
+    <div class="step"><strong>Sau:</strong> Console quản lý + nhật ký audit cho team</div>
+  </div>
+  <p class="lead" style="margin-top:26px;">Trả lời sẵn câu "thế gõ tay/upload thì sao?": có trong lộ trình. Ta bắt đầu từ vector tần suất cao nhất.</p>
+</section>
+
+<!-- 9 -->
+<section class="slide">
+  <span class="num">09</span>
+  <div class="kicker">Thành thật về phạm vi</div>
+  <h2>Chúng tôi <span class="warn">không</span> thay thế DLP doanh nghiệp</h2>
+  <p class="lead">HapiCopi không quét sạch mọi vector, không thay Microsoft Purview hay Zscaler. Chúng tôi chặn <strong>vector phổ biến và bất cẩn nhất</strong> — copy-paste vào AI — một cách nhẹ, offline, 0 thao tác.</p>
+  <div class="big">Phạm vi rõ ràng = đáng tin.</div>
+</section>
+
+<!-- 10 -->
+<section class="slide">
+  <span class="num">10</span>
+  <div class="kicker">Chốt</div>
+  <p class="quote">"Bạn không thể <span class="grad">‘select all’</span> để lấy lại một bí mật đã lỡ dán. HapiCopi chặn nó ngay tại Ctrl+C."</p>
+  <p class="lead" style="margin-top:30px;">Offline. Không đổi thói quen. Bắt đầu từ vector rò rỉ phổ biến nhất của thời đại AI.</p>
+  <div style="margin-top:20px;"><span class="badge">HapiCopi</span> <span class="badge">Clipboard Security for the AI era</span></div>
+</section>
+
+<div class="hint">↓ / → : slide tiếp &nbsp;|&nbsp; ↑ / ← : slide trước</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  let idx = 0;
+  function go(n){ idx = Math.max(0, Math.min(slides.length-1, n)); slides[idx].scrollIntoView({behavior:'smooth'}); }
+  window.addEventListener('keydown', e=>{
+    if(['ArrowDown','ArrowRight','PageDown',' '].includes(e.key)){ e.preventDefault(); go(idx+1); }
+    if(['ArrowUp','ArrowLeft','PageUp'].includes(e.key)){ e.preventDefault(); go(idx-1); }
+  });
+  // sync idx khi cuộn tay
+  const obs = new IntersectionObserver((entries)=>{
+    entries.forEach(en=>{ if(en.isIntersecting) idx = slides.indexOf(en.target); });
+  }, {threshold:.6});
+  slides.forEach(s=>obs.observe(s));
+</script>
+</body>
+</html>

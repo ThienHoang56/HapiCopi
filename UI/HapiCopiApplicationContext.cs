@@ -530,6 +530,11 @@ namespace HapiCopi
                             // Ghi đè Clipboard bằng bản sạch bảo mật
                             SetClipboardOnStaThread(sanitizedText, sanitizedHtml);
 
+                            // QUAN TRỌNG: ép mọi đường dán (Notepad/Word/Docs/LaTeX) dùng bản đã che,
+                            // tránh OnPastePressed dựng lại từ bản gốc chưa che gây rò rỉ.
+                            _lastRawText = sanitizedText;
+                            _lastRawHtml = "";
+
                             historyItem.ProcessedText = sanitizedText;
                             historyItem.Status = $"🛡️ Đã che ({status})";
 
