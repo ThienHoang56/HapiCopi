@@ -1,0 +1,25 @@
+# Kiểm tra TikZ
+
+## Hình học cơ bản
+
+```tikz
+\begin{tikzpicture}
+  \draw[thick,->] (-0.5,0) -- (4,0) node[right] {x};
+  \draw[thick,->] (0,-0.5) -- (0,3) node[above] {y};
+  \draw[fill=blue!20] (0,0) rectangle (2,1.5);
+  \draw[red,thick] (0,0) -- (3,2.5);
+  \node[circle,fill=black,inner sep=1.5pt] at (3,2.5) {};
+  \node at (3.3,2.5) {A};
+\end{tikzpicture}
+```
+
+## Đồ thị hàm số (pgfplots)
+
+```tikz
+\begin{axis}[width=9cm,height=6cm,grid=both,xlabel=x,ylabel=y,
+             domain=-3:3,samples=100,legend pos=north west]
+  \addplot[blue,thick]{x^2};
+  \addplot[red,thick]{2*x+1};
+  \legend{$x^2$,$2x+1$}
+\end{axis}
+```

@@ -5,17 +5,20 @@
     <meta charset="utf-8" />
     <title>HapiCopi Chromium Core Parser</title>
     <script src="marked.js"></script>
-    <script src="mathjax.js?v=3"></script>
-    <script src="mermaid.js"></script>
     <script>
-        // Cấu hình MathJax v3
+        // QUAN TRỌNG: cấu hình MathJax PHẢI đặt TRƯỚC khi nạp bundle.
+        // fontCache 'local' => mỗi SVG tự chứa glyph (không tham chiếu ngoài) nên rasterize độc lập được.
         window.MathJax = {
             tex: {
                 inlineMath: [['$', '$'], ['\\(', '\\)']],
                 displayMath: [['$$', '$$'], ['\\[', '\\]']]
-            }
+            },
+            svg: { fontCache: 'local' },
+            startup: { typeset: false }
         };
     </script>
+    <script src="mathjax-tex-svg.js?v=1"></script>
+    <script src="mermaid.js"></script>
 </head>
 
 <body>
@@ -31,6 +34,16 @@
             theme: 'default',
             securityLevel: 'loose'
         });
+
+        // Bóc các dấu phân cách toán học ($...$, $$...$$, \(...\), \[...\]) để lấy LaTeX thuần.
+        function stripMathDelims(s) {
+            let c = (s || "").trim();
+            if (c.startsWith("$$") && c.endsWith("$$")) c = c.substring(2, c.length - 2);
+            else if (c.startsWith("\\[") && c.endsWith("\\]")) c = c.substring(2, c.length - 2);
+            else if (c.startsWith("\\(") && c.endsWith("\\)")) c = c.substring(2, c.length - 2);
+            else if (c.startsWith("$") && c.endsWith("$")) c = c.substring(1, c.length - 1);
+            return c.trim();
+        }
 
         // Helper sửa lỗi LaTeX thô (ví dụ: \beginbmatrix -> \begin{bmatrix})
         function normalizeLatex(latex) {
@@ -409,66 +422,63 @@
             try {
                 let text = preprocessPlainTables(markdown);
 
-                // Tự động bọc $$ cho các khối \begin... \end thô chưa được bọc dấu
-                const environments = ["matrix", "bmatrix", "pmatrix", "vmatrix", "Vmatrix", "cases", "array", "align", "gather", "equation"];
-                for (let env of environments) {
-                    let pattern = new RegExp("\\\\begin\\{?" + env + "\\}?[\\s\\S]*?\\\\end\\{?" + env + "\\}?", "g");
-                    text = text.replace(pattern, (match, offset) => {
-                        let before = text.substring(Math.max(0, offset - 5), offset);
-                        let after = text.substring(offset + match.length, offset + match.length + 5);
-                        if (before.includes('$') || before.includes('[') || before.includes('(') || 
-                            after.includes('$') || after.includes(']') || after.includes(')')) {
-                            return match;
-                        }
-                        return "\n$$\n" + match + "\n$$\n";
-                    });
-                }
+                // Bảo vệ các khối code fence (``` ... ```): tạm cất đi để bước tách math KHÔNG đụng
+                // vào $...$ hay \begin{...} nằm trong code (ví dụ nhãn $x^2$ trong khối ```tikz).
+                let codeStore = [];
+                text = text.replace(/```[\s\S]*?```/g, (m) => {
+                    let ph = "HCCODEX" + codeStore.length + "XHCCODE";
+                    codeStore.push(m);
+                    return ph;
+                });
 
                 // Sửa lỗi nhân dấu ngầm
                 text = text.replace(/(\d)\s*(?:\\in|∈|€)\s*([a-zA-Z])/g, '$1 \\cdot $2');
 
-                // Lưu trữ các khối toán học để tránh marked.js phá hỏng cấu trúc
-                let mathBlocks = [];
+                // Lưu trữ các khối toán học để tránh marked.js phá hỏng cấu trúc.
+                // Placeholder dùng tiền tố + hậu tố riêng để không bị lẫn khi index nhiều chữ số (HCMATHX1 vs HCMATHX11).
+                let mathBlocks = []; // { latex (đã bóc dấu), display }
 
-                const saveMath = (regex) => {
-                    text = text.replace(regex, (match) => {
-                        let placeholder = `HCMATHPLACEHOLDER${mathBlocks.length}`;
-                        mathBlocks.push(match);
-                        return placeholder;
-                    });
+                const pushMath = (match, display) => {
+                    let ph = "HCMATHX" + mathBlocks.length + "XHCMATH";
+                    mathBlocks.push({ latex: stripMathDelims(match), display: display });
+                    return ph;
                 };
 
-                // Dịch các khối Display và Inline
-                saveMath(/\$\$([\s\S]*?)\$\$/g);
-                saveMath(/\\\[([\s\S]*?)\\\]/g);
-                saveMath(/\\\(([\s\S]*?)\\\)/g);
-
-                // Dán inline $...$
+                // 1) Tách math ĐÃ có dấu phân cách TRƯỚC, để nguyên cả khối (tránh bị bước bọc \begin cắt vụn).
+                //    Display ($$, \[) trước rồi mới inline ($, \() để không bị ăn nhầm.
+                text = text.replace(/\$\$([\s\S]*?)\$\$/g, (m) => pushMath(m, true));
+                text = text.replace(/\\\[([\s\S]*?)\\\]/g, (m) => pushMath(m, true));
+                text = text.replace(/\\\(([\s\S]*?)\\\)/g, (m) => pushMath(m, false));
                 text = text.replace(/\$([^$\n]+)\$/g, (match, inner) => {
-                    if (inner.includes('\\') || inner.includes('_') || inner.includes('^') || inner.includes('{') || inner.includes('}') || inner.includes('+') || inner.includes('=') || inner.includes('-') || inner.includes('*') || inner.includes('/')) {
-                        let placeholder = `HCMATHPLACEHOLDER${mathBlocks.length}`;
-                        mathBlocks.push(match);
-                        return placeholder;
-                    }
+                    // Nhận cả công thức 1 chữ cái (ví dụ $x$, $y$) lẫn công thức có ký hiệu toán.
+                    if (/[\\_^{}+=*/-]/.test(inner) || /^\s*[A-Za-z]\s*$/.test(inner)) return pushMath(match, false);
                     return match;
                 });
+
+                // 2) Bọc các khối \begin{env}...\end{env} THÔ còn sót (chưa nằm trong dấu $) thành math display.
+                //    Chạy SAU bước (1) nên không thể cắt vào khối $$ đã được tách ra placeholder.
+                const environments = ["matrix", "bmatrix", "pmatrix", "vmatrix", "Vmatrix", "cases", "array", "align", "gather", "equation"];
+                for (let env of environments) {
+                    let pattern = new RegExp("\\\\begin\\{?" + env + "\\}?[\\s\\S]*?\\\\end\\{?" + env + "\\}?", "g");
+                    text = text.replace(pattern, (m) => pushMath(m, true));
+                }
+
+                // Trả lại các khối code fence TRƯỚC khi marked.parse để marked render đúng thành <pre><code>.
+                for (let i = 0; i < codeStore.length; i++) {
+                    text = text.split("HCCODEX" + i + "XHCCODE").join(codeStore[i]);
+                }
 
                 // Dịch Markdown bằng marked.js
                 let html = marked.parse(text);
 
-                // Phục hồi các khối toán học và chuyển thành MathML hoặc thẻ span.latex-math
+                // Phục hồi thành span .latex-math (mọi target đều render ra ảnh PNG ở bước sau).
+                // Dùng split/join để thay TẤT CẢ và tránh ký tự '$' bị hiểu đặc biệt trong String.replace.
                 for (let i = 0; i < mathBlocks.length; i++) {
-                    let match = mathBlocks[i];
-                    let replacement = "";
-                    if (isWordTarget) {
-                        let mml = convertLatexToMathML(match);
-                        if (mml) replacement = mml;
-                        else replacement = match;
-                    } else {
-                        let encodedLatex = match.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-                        replacement = `<span class="latex-math" data-latex="${encodedLatex}"></span>`;
-                    }
-                    html = html.replace(`HCMATHPLACEHOLDER${i}`, replacement);
+                    let ph = "HCMATHX" + i + "XHCMATH";
+                    let enc = mathBlocks[i].latex
+                        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    let span = '<span class="latex-math" data-latex="' + enc + '" data-display="' + (mathBlocks[i].display ? '1' : '0') + '"></span>';
+                    html = html.split(ph).join(span);
                 }
 
                 return html;
@@ -498,11 +508,28 @@
             return false;
         }
 
-        // Parse LaTeX formulas inside raw HTML content
+        // Parse LaTeX thô trong HTML (dùng cho trường hợp dán HTML từ web có $...$ trong text node).
+        // Bọc công thức thành span .latex-math để bước sau render ra ảnh PNG (thống nhất một đường xử lý).
         function processLatexInHtml(html, isWordTarget) {
             if (!html) return "";
+            // Nếu math đã được convertMarkdownToHtml xử lý thành span .latex-math thì bỏ qua,
+            // tránh regex đụng vào nội dung LaTeX nằm trong thuộc tính data-latex.
+            if (html.indexOf('class="latex-math"') !== -1) return html;
             try {
                 let text = html;
+
+                // Bảo vệ code (<pre>, <code>): $...$ hay \begin{...} trong code (vd nhãn $x^2$ của khối ```tikz)
+                // KHÔNG được nhận là toán — nếu không sẽ làm lệch textContent so với cache sơ đồ.
+                let protectStore = [];
+                const protectCode = (re) => {
+                    text = text.replace(re, (m) => {
+                        let ph = "HCPROTX" + protectStore.length + "XHCPROT";
+                        protectStore.push(m);
+                        return ph;
+                    });
+                };
+                protectCode(/<pre[\s\S]*?<\/pre>/gi);
+                protectCode(/<code[\s\S]*?<\/code>/gi);
 
                 // Tự động bọc $$ cho các khối \begin... \end thô chưa được bọc dấu
                 const environments = ["matrix", "bmatrix", "pmatrix", "vmatrix", "Vmatrix", "cases", "array", "align", "gather", "equation"];
@@ -522,32 +549,24 @@
                 // Sửa lỗi nhân dấu ngầm
                 text = text.replace(/(\d)\s*(?:\\in|∈|€)\s*([a-zA-Z])/g, '$1 \\cdot $2');
 
-                const replaceMath = (regex) => {
-                    text = text.replace(regex, (match, latex) => {
-                        if (isWordTarget) {
-                            let mml = convertLatexToMathML(match);
-                            if (mml) return mml;
-                        }
-                        return translateLatexToHtml(match);
-                    });
+                const wrapSpan = (raw, display) => {
+                    let enc = stripMathDelims(raw)
+                        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                    return '<span class="latex-math" data-latex="' + enc + '" data-display="' + (display ? '1' : '0') + '"></span>';
                 };
 
-                // Dịch các khối Display và Inline
-                replaceMath(/\$\$([\s\S]*?)\$\$/g);
-                replaceMath(/\\\[([\s\S]*?)\\\]/g);
-                replaceMath(/\\\(([\s\S]*?)\\\)/g);
-
-                // Dán inline $...$
+                text = text.replace(/\$\$([\s\S]*?)\$\$/g, (m) => wrapSpan(m, true));
+                text = text.replace(/\\\[([\s\S]*?)\\\]/g, (m) => wrapSpan(m, true));
+                text = text.replace(/\\\(([\s\S]*?)\\\)/g, (m) => wrapSpan(m, false));
                 text = text.replace(/\$([^$\n]+)\$/g, (match, inner) => {
-                    if (inner.includes('\\') || inner.includes('_') || inner.includes('^') || inner.includes('{') || inner.includes('}') || inner.includes('+') || inner.includes('=') || inner.includes('-') || inner.includes('*') || inner.includes('/')) {
-                        if (isWordTarget) {
-                            let mml = convertLatexToMathML(match);
-                            if (mml) return mml;
-                        }
-                        return translateLatexToHtml(match);
-                    }
+                    if (/[\\_^{}+=*/-]/.test(inner)) return wrapSpan(match, false);
                     return match;
                 });
+
+                // Trả lại các khối code đã bảo vệ.
+                for (let i = 0; i < protectStore.length; i++) {
+                    text = text.split("HCPROTX" + i + "XHCPROT").join(protectStore[i]);
+                }
 
                 return text;
             } catch (err) {
@@ -559,67 +578,65 @@
         async function convertMathContainersAsync(doc, isWordTarget) {
             let promises = [];
 
-            const processContainer = (container, getLatex) => {
+            // Render mọi công thức ra ảnh PNG (dùng chung cho cả Word lẫn Google Docs vì ảnh nhúng đâu cũng chuẩn).
+            const processContainer = (container, getLatex, isDisplay) => {
                 if (!container.parentNode) return;
                 let latex = getLatex(container);
+                if (!latex) return;
 
-                if (latex) {
-                    if (isWordTarget) {
-                        let replacementHtml = convertLatexToMathML(latex);
+                let p = renderLatexToPngAsync(latex, isDisplay).then(result => {
+                    if (!container.parentNode) return;
+                    if (result && result.data) {
+                        let img = doc.createElement('img');
+                        img.src = result.data;
+                        img.className = 'latex-math-image';
+                        if (result.width) img.style.width = result.width + 'px';
+                        if (result.height) img.style.height = result.height + 'px';
+                        if (isDisplay) {
+                            img.style.display = 'block';
+                            img.style.margin = '6px 0';
+                        } else {
+                            img.style.verticalAlign = result.verticalAlign || 'middle';
+                        }
+                        container.parentNode.replaceChild(img, container);
+                    } else {
+                        // Fallback Unicode nếu MathJax render lỗi
+                        let replacementHtml = translateLatexToHtml(latex);
                         if (replacementHtml) {
                             let tempSpan = doc.createElement('span');
                             tempSpan.innerHTML = replacementHtml;
                             container.parentNode.replaceChild(tempSpan, container);
                         }
-                    } else {
-                        // Async image render for Google Docs / PlainText fallback
-                        let p = renderLatexToPngAsync(latex).then(result => {
-                            if (result && result.data) {
-                                let img = doc.createElement('img');
-                                img.src = result.data;
-                                img.className = 'latex-math-image';
-                                if (result.width) img.style.width = result.width + 'px';
-                                if (result.height) img.style.height = result.height + 'px';
-                                if (result.verticalAlign) img.style.verticalAlign = result.verticalAlign;
-                                else img.style.verticalAlign = 'middle';
-                                container.parentNode.replaceChild(img, container);
-                            } else {
-                                // Fallback to Unicode
-                                let replacementHtml = translateLatexToHtml(latex);
-                                if (replacementHtml) {
-                                    let tempSpan = doc.createElement('span');
-                                    tempSpan.innerHTML = replacementHtml;
-                                    container.parentNode.replaceChild(tempSpan, container);
-                                }
-                            }
-                        });
-                        promises.push(p);
                     }
-                }
+                });
+                promises.push(p);
             };
 
-            // Find all KaTeX containers
+            // KaTeX containers (dán từ web)
             let katexContainers = doc.querySelectorAll('.katex');
             for (let container of katexContainers) {
+                let isDisplay = container.classList.contains('katex-display') || (container.closest && container.closest('.katex-display') !== null);
                 processContainer(container, c => {
                     let annotation = c.querySelector('annotation');
                     return annotation ? annotation.textContent : (c.getAttribute('aria-label') || c.textContent || "");
-                });
+                }, isDisplay);
             }
 
-            // Find all MathJax containers
+            // MathJax containers (dán từ web)
             let mathjaxContainers = doc.querySelectorAll('mjx-container, .mathjax, [class*="MathJax"]');
             for (let container of mathjaxContainers) {
+                let isDisplay = container.getAttribute && container.getAttribute('display') === 'true';
                 processContainer(container, c => {
                     let annotation = c.querySelector('annotation');
                     return annotation ? annotation.textContent : (c.getAttribute('data-tex') || c.textContent || "");
-                });
+                }, isDisplay);
             }
 
-            // Find all general math containers (e.g. Gemini classes, and our temporary .latex-math spans)
+            // Span .latex-math do pipeline của chúng ta tạo (có cờ data-display)
             let generalMathContainers = doc.querySelectorAll('.math-inline, .math-display, .latex-math');
             for (let container of generalMathContainers) {
-                processContainer(container, c => c.getAttribute('data-latex') || c.textContent || "");
+                let isDisplay = container.getAttribute('data-display') === '1' || container.classList.contains('math-display');
+                processContainer(container, c => c.getAttribute('data-latex') || c.textContent || "", isDisplay);
             }
 
             await Promise.all(promises);
@@ -687,57 +704,60 @@
             }
         }
 
-        async function renderLatexToPngAsync(latex) {
+        async function renderLatexToPngAsync(latex, isDisplay) {
             return new Promise((resolve) => {
                 try {
-                    let clean = latex.trim();
-                    if (clean.startsWith("\\[") && clean.endsWith("\\]")) clean = clean.substring(2, clean.length - 2);
-                    else if (clean.startsWith("\\(") && clean.endsWith("\\)")) clean = clean.substring(2, clean.length - 2);
-                    else if (clean.startsWith("$$") && clean.endsWith("$$")) clean = clean.substring(2, clean.length - 2);
-                    else if (clean.startsWith("$") && clean.endsWith("$")) clean = clean.substring(1, clean.length - 1);
-                    clean = clean.trim();
-                    clean = normalizeLatex(clean);
-
-                    let svgContainer = MathJax.tex2svg(clean);
-                    let svgElement = svgContainer.querySelector('svg');
-
-                    if (!svgElement) {
+                    if (typeof MathJax === 'undefined' || typeof MathJax.tex2svg !== 'function') {
                         resolve(null);
                         return;
                     }
 
-                    let viewBox = svgElement.getAttribute('viewBox');
-                    let widthPx = 100, heightPx = 50;
-                    let scale = 1.25; // Scale up slightly for crisper rendering
+                    let clean = normalizeLatex(stripMathDelims(latex));
+                    if (!clean) { resolve(null); return; }
 
-                    let verticalAlign = svgElement.style.verticalAlign;
+                    let node = MathJax.tex2svg(clean, { display: !!isDisplay });
+                    let svgElement = node.querySelector('svg');
+                    if (!svgElement) { resolve(null); return; }
 
-                    if (viewBox) {
-                        let parts = viewBox.split(' ');
-                        widthPx = parseFloat(parts[2]) * scale / 100;
-                        heightPx = parseFloat(parts[3]) * scale / 100;
+                    // MathJax xuất width/height theo đơn vị 'ex'. Quy đổi sang px để rasterize.
+                    const exToPx = 9; // ~9px / 1ex cho chữ rõ nét
+                    let wEx = parseFloat(svgElement.getAttribute('width')) || 2;
+                    let hEx = parseFloat(svgElement.getAttribute('height')) || 2;
+                    let widthPx = Math.max(1, wEx * exToPx);
+                    let heightPx = Math.max(1, hEx * exToPx);
 
-                        let retinaScale = 3;
-                        let canvas = document.createElement('canvas');
-                        canvas.width = widthPx * retinaScale;
-                        canvas.height = heightPx * retinaScale;
-                        let ctx = canvas.getContext('2d');
-                        ctx.scale(retinaScale, retinaScale);
-
-                        const svgString = new XMLSerializer().serializeToString(svgElement);
-                        const base64Svg = btoa(unescape(encodeURIComponent(svgString)));
-                        const dataURL = 'data:image/svg+xml;base64,' + base64Svg;
-
-                        const image = new Image();
-                        image.onload = () => {
-                            ctx.drawImage(image, 0, 0, widthPx, heightPx);
-                            resolve({ data: canvas.toDataURL('image/png'), width: widthPx, height: heightPx, verticalAlign: verticalAlign });
-                        };
-                        image.onerror = () => resolve(null);
-                        image.src = dataURL;
-                    } else {
-                        resolve(null);
+                    // vertical-align (đơn vị ex) để căn baseline khi inline
+                    let verticalAlign = svgElement.style.verticalAlign || '';
+                    if (verticalAlign.endsWith('ex')) {
+                        verticalAlign = Math.round(parseFloat(verticalAlign) * exToPx) + 'px';
                     }
+
+                    // Ép kích thước px tường minh để trình duyệt rasterize đúng, tránh mặc định gây mờ.
+                    svgElement.setAttribute('width', widthPx);
+                    svgElement.setAttribute('height', heightPx);
+
+                    const svgString = new XMLSerializer().serializeToString(svgElement);
+                    const base64Svg = btoa(unescape(encodeURIComponent(svgString)));
+                    const dataURL = 'data:image/svg+xml;base64,' + base64Svg;
+
+                    const retina = 3; // phóng đại cho nét khi zoom/in trong Word
+                    const image = new Image();
+                    image.onload = () => {
+                        try {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = Math.max(1, Math.round(widthPx * retina));
+                            canvas.height = Math.max(1, Math.round(heightPx * retina));
+                            const ctx = canvas.getContext('2d');
+                            ctx.setTransform(retina, 0, 0, retina, 0, 0);
+                            // Giữ nền trong suốt để công thức hòa vào nền tài liệu.
+                            ctx.drawImage(image, 0, 0, widthPx, heightPx);
+                            resolve({ data: canvas.toDataURL('image/png'), width: Math.round(widthPx), height: Math.round(heightPx), verticalAlign: verticalAlign, display: !!isDisplay });
+                        } catch (canvasErr) {
+                            resolve(null);
+                        }
+                    };
+                    image.onerror = () => resolve(null);
+                    image.src = dataURL;
                 } catch (err) {
                     console.error("Render Math PNG error", err);
                     resolve(null);
@@ -746,7 +766,9 @@
         }
 
         function normalizeCode(code) {
-            return code.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+            // Trim từng dòng để tránh lệch cache khi marked.js thay đổi thụt lề của khối code sơ đồ.
+            return code.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+                       .split('\n').map(function (l) { return l.trim(); }).join('\n').trim();
         }
 
         function lookupMermaidCache(code, cache) {
@@ -867,21 +889,32 @@
                 // Tự động tái cấu trúc bảng biểu giả lập div-based thành table thực tế
                 reconstructDivTables(doc);
 
-                // Giải mã và thay thế sơ đồ Mermaid từ cache
-                let mermaidCache = {};
+                // Giải mã và thay thế sơ đồ Mermaid và Kroki từ cache
+                let diagramCache = {};
                 if (mermaidCacheJson) {
                     try {
-                        mermaidCache = JSON.parse(mermaidCacheJson);
+                        diagramCache = JSON.parse(mermaidCacheJson);
                     } catch (e) {
-                        console.error("Lỗi parse mermaidCache:", e);
+                        console.error("Lỗi parse diagramCache:", e);
                     }
                 }
 
-                let mermaidContainers = doc.body.querySelectorAll('pre code.language-mermaid, div.mermaid, pre.mermaid');
-                for (let container of mermaidContainers) {
+                let diagramSelectors = [
+                    'pre code[class*="language-"]', 'div.mermaid', 'pre.mermaid'
+                ].join(', ');
+                let diagramContainers = Array.from(doc.body.querySelectorAll(diagramSelectors));
+                
+                // Vét cạn các thẻ <pre> và <code> không có class (thường gặp khi copy/paste thô)
+                doc.body.querySelectorAll('pre, code').forEach(el => {
+                    if (!diagramContainers.includes(el)) diagramContainers.push(el);
+                });
+
+                for (let container of diagramContainers) {
+                    if (!container.parentNode) continue; // Đã bị thay thế
                     let code = container.textContent.trim();
+                    if (!code) continue;
                     let decodedCode = decodeHtmlEntities(code);
-                    let base64Data = lookupMermaidCache(decodedCode, mermaidCache);
+                    let base64Data = lookupMermaidCache(decodedCode, diagramCache);
                     if (base64Data) {
                         let img = doc.createElement('img');
                         img.src = base64Data;
@@ -895,6 +928,33 @@
                         }
                         if (targetToReplace.parentNode) {
                             targetToReplace.parentNode.replaceChild(img, targetToReplace);
+                        }
+                    }
+                }
+
+                // Fallback tối thượng: Tìm kiếm vét cạn các phần tử có textContent trùng khớp chính xác mã sơ đồ (dùng cho Google Docs hoặc web không chuẩn)
+                for (let cachedCode of Object.keys(diagramCache)) {
+                    let walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null, false);
+                    let el;
+                    while (el = walker.nextNode()) {
+                        let text = el.textContent.trim();
+                        if (text && decodeHtmlEntities(text) === cachedCode) {
+                            // Tìm phần tử bao bọc lớn nhất có cùng text (để tránh thay thế một <span> nhỏ xíu và để lại các <div> rỗng lồng nhau)
+                            let targetToReplace = el;
+                            while (targetToReplace.parentNode && targetToReplace.parentNode.tagName.toLowerCase() !== 'body' && targetToReplace.parentNode.textContent.trim() === targetToReplace.textContent.trim()) {
+                                targetToReplace = targetToReplace.parentNode;
+                            }
+                            
+                            let img = doc.createElement('img');
+                            img.src = diagramCache[cachedCode];
+                            img.style.maxWidth = '100%';
+                            img.style.display = 'block';
+                            img.style.margin = '10px 0';
+                            
+                            if (targetToReplace.parentNode) {
+                                targetToReplace.parentNode.replaceChild(img, targetToReplace);
+                            }
+                            break; // Tìm thấy và thay thế xong sơ đồ này, sang sơ đồ tiếp theo
                         }
                     }
                 }
@@ -1192,6 +1252,86 @@
                     image.src = dataURL;
                 } catch (err) {
                     console.error("Lỗi render Mermaid: ", err);
+                    resolve("ERROR: " + err.toString());
+                }
+            });
+        }
+
+        // 7. Rasterize SVG bất kỳ (từ Kroki: PlantUML, Graphviz, D2, ...) sang PNG Base64 để Word có thể nhúng ảnh
+        window.svgResults = window.svgResults || {};
+
+        function startRenderSvg(svgString, id) {
+            window.svgResults[id] = { status: 'pending', result: null };
+            renderSvgToPng(svgString, id).then(res => {
+                window.svgResults[id] = { status: 'success', result: res };
+            }).catch(err => {
+                window.svgResults[id] = { status: 'error', result: 'ERROR: ' + err.toString() };
+            });
+            return 'started';
+        }
+
+        async function renderSvgToPng(svgString, id) {
+            return new Promise((resolve) => {
+                try {
+                    const parser = new DOMParser();
+                    const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
+                    const svgElement = svgDoc.querySelector('svg');
+
+                    if (!svgElement) {
+                        resolve("ERROR: No SVG element found");
+                        return;
+                    }
+
+                    // Xác định kích thước nội tại (ưu tiên viewBox để giữ đúng tỉ lệ)
+                    let vbW = 0, vbH = 0;
+                    if (svgElement.viewBox && svgElement.viewBox.baseVal && svgElement.viewBox.baseVal.width) {
+                        vbW = svgElement.viewBox.baseVal.width;
+                        vbH = svgElement.viewBox.baseVal.height;
+                    }
+                    let attrW = parseFloat(svgElement.getAttribute('width')) || 0;
+                    let attrH = parseFloat(svgElement.getAttribute('height')) || 0;
+
+                    let width = vbW || attrW || 800;
+                    let height = vbH || attrH || 600;
+
+                    // Ép width/height tường minh (px) để trình duyệt rasterize đúng kích thước, tránh mặc định 300x150 gây mờ
+                    svgElement.setAttribute('width', width);
+                    svgElement.setAttribute('height', height);
+
+                    const svgStr = new XMLSerializer().serializeToString(svgElement);
+                    const base64Svg = btoa(unescape(encodeURIComponent(svgStr)));
+                    const dataURL = 'data:image/svg+xml;base64,' + base64Svg;
+
+                    const image = new Image();
+                    image.onload = () => {
+                        try {
+                            let natW = image.naturalWidth || width;
+                            let natH = image.naturalHeight || height;
+
+                            // Phóng đại để ảnh nét hơn khi in/zoom trong Word
+                            const scale = 2;
+
+                            const canvas = document.createElement('canvas');
+                            canvas.width = Math.max(1, Math.round(natW * scale));
+                            canvas.height = Math.max(1, Math.round(natH * scale));
+
+                            const context = canvas.getContext('2d');
+                            // Nền trắng để tránh nền trong suốt bị đen khi dán vào Word
+                            context.fillStyle = '#ffffff';
+                            context.fillRect(0, 0, canvas.width, canvas.height);
+                            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+                            resolve(canvas.toDataURL('image/png'));
+                        } catch (canvasErr) {
+                            resolve("ERROR: Canvas drawing failed: " + canvasErr.toString());
+                        }
+                    };
+                    image.onerror = (e) => {
+                        resolve("ERROR: SVG Image loading failed");
+                    };
+                    image.src = dataURL;
+                } catch (err) {
+                    console.error("Lỗi render SVG: ", err);
                     resolve("ERROR: " + err.toString());
                 }
             });

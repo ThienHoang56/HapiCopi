@@ -1,0 +1,8 @@
+```seqdiag
+seqdiag {
+  browser -> server [label = "GET /index"];
+  browser <-- server;
+  browser -> server [label = "POST /login"];
+  browser <-- server;
+}
+```

@@ -1,0 +1,9 @@
+```graphviz
+digraph G {
+  rankdir=LR;
+  node [shape=box, style=rounded];
+  Start -> "Xử lý" -> "Kiểm tra";
+  "Kiểm tra" -> End [label="OK"];
+  "Kiểm tra" -> "Xử lý" [label="Lỗi"];
+}
+```

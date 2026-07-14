@@ -1,0 +1,5 @@
+```nomnoml
+[Người dùng|+tên;+email|+đăngNhập()]
+[Người dùng] -> [Đơn hàng]
+[Đơn hàng] o- [Sản phẩm]
+```

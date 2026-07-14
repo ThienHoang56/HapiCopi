@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <title>HapiCopi - Soạn công thức</title>
+    <script>
+        // Nạp thêm input AsciiMath bên cạnh tex-svg để có MathJax.asciimath2svg().
+        window.MathJax = {
+            loader: { load: ['input/asciimath'] },
+            svg: { fontCache: 'local' },
+            options: { enableAssistiveMml: false },
+            startup: { typeset: false }
+        };
+    </script>
+    <script src="mathjax-tex-svg.js?v=1"></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            display: flex; flex-direction: column;
+            background: #f5f6f8; color: #1f2328;
+        }
+        .toolbar {
+            display: flex; align-items: center; gap: 14px;
+            padding: 8px 12px; background: #ffffff; border-bottom: 1px solid #e1e4e8;
+            flex-wrap: wrap;
+        }
+        .toolbar label { font-size: 13px; cursor: pointer; user-select: none; }
+        #copyBtn {
+            margin-left: auto; padding: 7px 16px; border: none; border-radius: 6px;
+            background: #2563eb; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+        }
+        #copyBtn:hover { background: #1d4ed8; }
+        #status { font-size: 12px; color: #57606a; min-width: 140px; }
+        .main { flex: 1; display: flex; min-height: 0; }
+        .editor { width: 44%; display: flex; flex-direction: column; border-right: 1px solid #e1e4e8; }
+        #input {
+            flex: 1; border: none; resize: none; padding: 14px;
+            font-family: 'Consolas', 'Courier New', monospace; font-size: 15px; line-height: 1.5;
+            outline: none; background: #fff;
+        }
+        .palette {
+            padding: 8px 10px; background: #fafbfc; border-top: 1px solid #e1e4e8;
+            max-height: 48%; overflow: auto;
+        }
+        .pgroup { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+        .plabel { font-size: 11px; color: #8a929b; flex: 0 0 70px; }
+        .palette button {
+            min-width: 34px; height: 30px; padding: 0 9px;
+            border: 1px solid #d0d7de; border-radius: 6px; background: #fff;
+            font-size: 14px; line-height: 1; cursor: pointer; color: #24292f;
+        }
+        .palette button:hover { background: #eaf1ff; border-color: #2563eb; color: #1d4ed8; }
+        .phint { font-size: 11px; color: #8a929b; margin-top: 4px; }
+        .preview {
+            flex: 1; padding: 24px; overflow: auto; display: flex;
+            align-items: center; justify-content: center; background: #fff;
+        }
+        .preview svg { max-width: 100%; }
+        .err { color: #cf222e; font-size: 13px; font-family: monospace; }
+    </style>
+</head>
+
+<body>
+    <div class="toolbar">
+        <label><input type="radio" name="mode" value="asciimath" checked> AsciiMath (dễ)</label>
+        <label><input type="radio" name="mode" value="latex"> LaTeX</label>
+        <label><input type="checkbox" id="displayMode" checked> Chế độ khối</label>
+        <span id="status"></span>
+        <button id="copyBtn">Copy ảnh công thức</button>
+    </div>
+    <div class="main">
+        <div class="editor">
+            <textarea id="input" spellcheck="false">x = (-b +- sqrt(b^2 - 4ac)) / (2a)</textarea>
+            <div class="palette" id="palette">
+                <div class="pgroup">
+                    <span class="plabel">Cấu trúc</span>
+                    <button data-snip="(‸)/()" title="Phân số">a⁄b</button>
+                    <button data-snip="(‸)^()" title="Lũy thừa">x²</button>
+                    <button data-snip="(‸)_()" title="Chỉ số dưới">xᵢ</button>
+                    <button data-snip="sqrt(‸)" title="Căn bậc hai">√</button>
+                    <button data-snip="root()(‸)" title="Căn bậc n">ⁿ√</button>
+                    <button data-snip="abs(‸)" title="Trị tuyệt đối">|x|</button>
+                    <button data-snip="(‸)" title="Ngoặc đơn">( )</button>
+                    <button data-snip="{:(‸),():}" title="Hệ phương trình">{</button>
+                </div>
+                <div class="pgroup">
+                    <span class="plabel">Toán tử lớn</span>
+                    <button data-snip="sum_(‸)^()" title="Tổng Σ">∑</button>
+                    <button data-snip="prod_(‸)^()" title="Tích ∏">∏</button>
+                    <button data-snip="int_(‸)^() dx" title="Tích phân">∫</button>
+                    <button data-snip="lim_(‸ -> )" title="Giới hạn">lim</button>
+                    <button data-snip="[[‸,],[,]]" title="Ma trận 2×2">▦</button>
+                    <button data-snip="((‸),())" title="Vector cột">(⋮)</button>
+                </div>
+                <div class="pgroup">
+                    <span class="plabel">Quan hệ</span>
+                    <button data-snip="+- ">±</button>
+                    <button data-snip="xx ">×</button>
+                    <button data-snip="-: ">÷</button>
+                    <button data-snip="* ">⋅</button>
+                    <button data-snip="&lt;= ">≤</button>
+                    <button data-snip="&gt;= ">≥</button>
+                    <button data-snip="!= ">≠</button>
+                    <button data-snip="~~ ">≈</button>
+                    <button data-snip="-&gt; ">→</button>
+                    <button data-snip="=&gt; ">⇒</button>
+                    <button data-snip="&lt;=&gt; ">⇔</button>
+                    <button data-snip="oo ">∞</button>
+                </div>
+                <div class="pgroup">
+                    <span class="plabel">Tập / Logic</span>
+                    <button data-snip="in ">∈</button>
+                    <button data-snip="notin ">∉</button>
+                    <button data-snip="sub ">⊂</button>
+                    <button data-snip="sube ">⊆</button>
+                    <button data-snip="cup ">∪</button>
+                    <button data-snip="cap ">∩</button>
+                    <button data-snip="forall ">∀</button>
+                    <button data-snip="exists ">∃</button>
+                    <button data-snip="RR ">ℝ</button>
+                </div>
+                <div class="pgroup">
+                    <span class="plabel">Hy Lạp</span>
+                    <button data-snip="alpha ">α</button>
+                    <button data-snip="beta ">β</button>
+                    <button data-snip="gamma ">γ</button>
+                    <button data-snip="delta ">δ</button>
+                    <button data-snip="theta ">θ</button>
+                    <button data-snip="lambda ">λ</button>
+                    <button data-snip="mu ">μ</button>
+                    <button data-snip="pi ">π</button>
+                    <button data-snip="sigma ">σ</button>
+                    <button data-snip="phi ">φ</button>
+                    <button data-snip="omega ">ω</button>
+                    <button data-snip="Delta ">Δ</button>
+                    <button data-snip="Omega ">Ω</button>
+                </div>
+                <div class="pgroup">
+                    <span class="plabel">Hàm số</span>
+                    <button data-snip="sin ">sin</button>
+                    <button data-snip="cos ">cos</button>
+                    <button data-snip="tan ">tan</button>
+                    <button data-snip="log ">log</button>
+                    <button data-snip="ln ">ln</button>
+                    <button data-snip="hat(‸)" title="Mũ (hat)">x̂</button>
+                    <button data-snip="vec(‸)" title="Vector">v⃗</button>
+                    <button data-snip="bar(‸)" title="Gạch ngang">x̄</button>
+                </div>
+                <div class="phint">Bôi đen một phần công thức rồi bấm nút để bọc quanh (ví dụ chọn <code>x+1</code> rồi bấm √ → <code>sqrt(x+1)</code>).</div>
+            </div>
+        </div>
+        <div class="preview" id="preview"></div>
+    </div>
+
+    <script>
+        var ready = false;
+        var currentSvg = null;
+        var input = document.getElementById('input');
+        var preview = document.getElementById('preview');
+        var statusEl = document.getElementById('status');
+
+        function getMode() { return document.querySelector('input[name=mode]:checked').value; }
+        function isDisplay() { return document.getElementById('displayMode').checked; }
+
+        function render() {
+            if (!ready) return;
+            var src = input.value;
+            preview.innerHTML = '';
+            currentSvg = null;
+            if (!src.trim()) { statusEl.textContent = ''; return; }
+            try {
+                var opts = { display: isDisplay() };
+                var node = (getMode() === 'asciimath')
+                    ? MathJax.asciimath2svg(src, opts)
+                    : MathJax.tex2svg(src, opts);
+                var svg = node.querySelector('svg');
+                if (svg) {
+                    // Chỉ chèn riêng thẻ <svg> (bỏ mjx-assistive-mml) để không render đúp công thức.
+                    preview.appendChild(svg);
+                    currentSvg = svg;
+                    statusEl.textContent = '';
+                } else {
+                    statusEl.innerHTML = '<span class="err">Không dựng được công thức</span>';
+                }
+            } catch (e) {
+                statusEl.innerHTML = '<span class="err">Lỗi: ' + (e.message || e) + '</span>';
+            }
+        }
+
+        var timer = null;
+        input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(render, 150); });
+        document.querySelectorAll('input[name=mode], #displayMode').forEach(function (el) {
+            el.addEventListener('change', render);
+        });
+
+        // Chèn nhanh cú pháp từ palette. Ký tự '‸' đánh dấu vị trí con trỏ / chỗ bọc phần đã bôi đen.
+        var CARET = '\u2038';
+        function insertSnippet(snip) {
+            if (!snip) return;
+            var start = input.selectionStart, end = input.selectionEnd;
+            var sel = input.value.substring(start, end);
+            var text, caretPos;
+            var idx = snip.indexOf(CARET);
+            if (idx !== -1) {
+                text = snip.substring(0, idx) + sel + snip.substring(idx + 1);
+                caretPos = start + idx + sel.length;
+            } else {
+                text = snip;
+                caretPos = start + snip.length;
+            }
+            input.value = input.value.substring(0, start) + text + input.value.substring(end);
+            input.selectionStart = input.selectionEnd = caretPos;
+            input.focus();
+            render();
+        }
+
+        document.getElementById('palette').addEventListener('mousedown', function (e) {
+            var btn = e.target.closest ? e.target.closest('button') : null;
+            if (!btn) return;
+            e.preventDefault(); // giữ focus + vùng chọn trong textarea
+            insertSnippet(btn.getAttribute('data-snip'));
+        });
+
+        document.getElementById('copyBtn').addEventListener('click', copyImage);
+
+        function copyImage() {
+            if (!currentSvg) { statusEl.innerHTML = '<span class="err">Chưa có công thức để copy</span>'; return; }
+            try {
+                var svg = currentSvg;
+                var exToPx = 11;
+                var wEx = parseFloat(svg.getAttribute('width')) || 2;
+                var hEx = parseFloat(svg.getAttribute('height')) || 2;
+                var W = Math.max(1, wEx * exToPx);
+                var H = Math.max(1, hEx * exToPx);
+
+                var clone = svg.cloneNode(true);
+                clone.setAttribute('width', W);
+                clone.setAttribute('height', H);
+                var s = new XMLSerializer().serializeToString(clone);
+                var url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(s)));
+
+                var img = new Image();
+                img.onload = function () {
+                    var r = 3;
+                    var canvas = document.createElement('canvas');
+                    canvas.width = Math.round(W * r);
+                    canvas.height = Math.round(H * r);
+                    var ctx = canvas.getContext('2d');
+                    ctx.setTransform(r, 0, 0, r, 0, 0);
+                    ctx.drawImage(img, 0, 0, W, H);
+                    var png = canvas.toDataURL('image/png');
+                    if (window.chrome && window.chrome.webview) {
+                        window.chrome.webview.postMessage(JSON.stringify({
+                            type: 'copy', png: png, source: input.value, mode: getMode()
+                        }));
+                    }
+                    statusEl.textContent = 'Đã copy! Dán vào Word/Docs (Ctrl+V).';
+                };
+                img.onerror = function () { statusEl.innerHTML = '<span class="err">Lỗi rasterize ảnh</span>'; };
+                img.src = url;
+            } catch (e) {
+                statusEl.innerHTML = '<span class="err">Lỗi copy: ' + (e.message || e) + '</span>';
+            }
+        }
+
+        if (window.MathJax && MathJax.startup && MathJax.startup.promise) {
+            MathJax.startup.promise.then(function () { ready = true; render(); });
+        }
+    </script>
+</body>
+
+</html>

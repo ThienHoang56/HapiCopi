@@ -1,0 +1,11 @@
+```plantuml
+@startuml
+actor "Người dùng" as U
+participant "Ứng dụng" as App
+database "CSDL" as DB
+U -> App: Đăng nhập
+App -> DB: Kiểm tra tài khoản
+DB --> App: Hợp lệ
+App --> U: Đăng nhập thành công
+@enduml
+```

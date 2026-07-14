@@ -1,0 +1,11 @@
+```actdiag
+actdiag {
+  write -> convert -> image;
+  lane user {
+    write; image;
+  }
+  lane system {
+    convert;
+  }
+}
+```

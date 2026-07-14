@@ -1,0 +1,6 @@
+```blockdiag
+blockdiag {
+  A -> B -> C -> D;
+  A -> E -> D;
+}
+```

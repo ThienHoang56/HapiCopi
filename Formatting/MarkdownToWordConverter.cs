@@ -21,10 +21,23 @@ namespace HapiCopi
                 Program.Log("[Converter] Sử dụng WebView2 (Chromium ngầm) để chuyển đổi Markdown...");
                 
                 string processedMarkdown = markdownText;
-                if (MermaidRenderer.IsRawMermaidCode(markdownText))
+                // Chỉ tự bọc fence khi văn bản CHƯA có khối ``` (tránh bọc lồng gây hỏng cú pháp và trượt cache).
+                if (!markdownText.Contains("```"))
                 {
-                    processedMarkdown = $"```mermaid\r\n{markdownText}\r\n```";
-                    Program.Log("[Converter] Bọc mã Mermaid thô vào khối code block.");
+                    if (MermaidRenderer.IsRawMermaidCode(markdownText))
+                    {
+                        processedMarkdown = $"```mermaid\r\n{markdownText}\r\n```";
+                        Program.Log("[Converter] Bọc mã Mermaid thô vào khối code block.");
+                    }
+                    else
+                    {
+                        string detectedLang = KrokiRenderer.DetectRawDiagramLanguage(markdownText);
+                        if (detectedLang != null)
+                        {
+                            processedMarkdown = $"```{detectedLang}\r\n{markdownText}\r\n```";
+                            Program.Log($"[Converter] Bọc mã {detectedLang} thô vào khối code block.");
+                        }
+                    }
                 }
 
                 // 1. Gọi JS để chuyển đổi Markdown + LaTeX sang HTML hoàn chỉnh
@@ -32,6 +45,7 @@ namespace HapiCopi
                 
                 // 2. Gọi JS làm sạch HTML đồng thời đồng hóa Font/Size và tịnh tiến Heading
                 string cacheJson = System.Text.Json.JsonSerializer.Serialize(formatInfo.MermaidImageCache);
+
                 string cleanFragment = await WebViewManager.CleanHtmlAsync(htmlFragment, formatInfo.FontName, formatInfo.FontSize, formatInfo.LineSpacing, formatInfo.ParentHeadingLevel, formatInfo.IsWordTarget, cacheJson);
                 
                 // 3. Đóng gói chuẩn CF_HTML của Windows

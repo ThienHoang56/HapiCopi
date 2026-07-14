@@ -343,5 +343,57 @@ namespace HapiCopi
             
             return "ERROR: Render timeout";
         }
+
+        public static async Task<string> RenderSvgToPngAsync(string svg, int id)
+        {
+            if (!_isInitialized) return "";
+            string escaped = EscapeJsString(svg);
+
+            // 1. Khởi chạy tác vụ rasterize SVG -> PNG trong WebView2
+            await ExecuteScriptAsync($"startRenderSvg('{escaped}', {id})");
+
+            // 2. Vòng lặp chờ kết quả (polling)
+            int timeoutMs = 8000;
+            int elapsedMs = 0;
+            while (elapsedMs < timeoutMs)
+            {
+                await Task.Delay(50);
+                elapsedMs += 50;
+
+                string statusJson = await ExecuteScriptAsync($"JSON.stringify(window.svgResults[{id}])");
+                if (!string.IsNullOrEmpty(statusJson) && statusJson != "null" && statusJson != "{}")
+                {
+                    try
+                    {
+                        using (var doc = JsonDocument.Parse(statusJson))
+                        {
+                            var root = doc.RootElement;
+                            if (root.TryGetProperty("status", out var statusProp))
+                            {
+                                string status = statusProp.GetString() ?? "";
+                                if (status == "success")
+                                {
+                                    if (root.TryGetProperty("result", out var resultProp))
+                                        return resultProp.GetString() ?? "";
+                                    return "";
+                                }
+                                else if (status == "error")
+                                {
+                                    if (root.TryGetProperty("result", out var resultProp))
+                                        return resultProp.GetString() ?? "";
+                                    return "ERROR: Unknown JavaScript error";
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Program.Log($"[WebViewManager LỖI] Lỗi phân tích JSON kết quả SVG: {ex.Message}");
+                    }
+                }
+            }
+
+            return "ERROR: Render timeout";
+        }
     }
 }

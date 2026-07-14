@@ -51,11 +51,13 @@ namespace HapiCopi
 
             _pauseMenuItem = new ToolStripMenuItem("Tạm dừng", null, OnPauseClicked);
             var historyMenuItem = new ToolStripMenuItem("Lịch sử Clipboard...", null, OnHistoryClicked);
+            var mathEditorMenuItem = new ToolStripMenuItem("Soạn công thức toán...", null, OnMathEditorClicked);
             var settingsMenuItem = new ToolStripMenuItem("Cài đặt...", null, OnSettingsClicked);
             var exitMenuItem = new ToolStripMenuItem("Thoát", null, OnExitClicked);
 
             contextMenu.Items.Add(titleItem);
             contextMenu.Items.Add(new ToolStripSeparator());
+            contextMenu.Items.Add(mathEditorMenuItem);
             contextMenu.Items.Add(historyMenuItem);
             contextMenu.Items.Add(settingsMenuItem);
             contextMenu.Items.Add(_pauseMenuItem);
@@ -97,6 +99,33 @@ namespace HapiCopi
 
             // 5. Thực hiện xử lý clipboard đang có sẵn ngay khi khởi động
             ProcessClipboard(isStartup: true);
+        }
+
+        // ============================
+        // MATH EDITOR
+        // ============================
+
+        private MathEditorForm? _mathEditorForm;
+
+        private void OnMathEditorClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (_mathEditorForm != null && !_mathEditorForm.IsDisposed)
+                {
+                    _mathEditorForm.WindowState = FormWindowState.Normal;
+                    _mathEditorForm.BringToFront();
+                    _mathEditorForm.Activate();
+                    return;
+                }
+
+                _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                _mathEditorForm.Show();
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[MathEditor LỖI] Không mở được cửa sổ: {ex.Message}");
+            }
         }
 
         // ============================
@@ -253,20 +282,80 @@ namespace HapiCopi
         // MERMAID PRE-CACHE (Offline)
         // ============================
 
-        private async System.Threading.Tasks.Task RenderAndCacheMermaidAsync(string innerCode)
+        private async System.Threading.Tasks.Task RenderAndCacheDiagramAsync(string innerCode, string diagramType)
         {
             if (!_mermaidCache.ContainsKey(innerCode))
             {
                 string dataUri = "";
-                if (WebViewManager.IsInitialized)
+                if (diagramType == "mermaid")
                 {
-                    Program.Log($"[Mermaid] WebView2 đã sẵn sàng. Tiến hành render OFFLINE...");
-                    dataUri = await WebViewManager.RenderMermaidToPngAsync(innerCode, _mermaidCache.Count);
+                    if (WebViewManager.IsInitialized)
+                    {
+                        Program.Log($"[Diagram] WebView2 đã sẵn sàng. Tiến hành render OFFLINE Mermaid...");
+                        dataUri = await WebViewManager.RenderMermaidToPngAsync(innerCode, _mermaidCache.Count);
+                    }
+                    else
+                    {
+                        Program.Log($"[Diagram] WebView2 chưa sẵn sàng. Tiến hành render ONLINE Mermaid qua API...");
+                        dataUri = await MermaidRenderer.GetMermaidDataUriAsync(innerCode);
+                    }
+                }
+                else if (TikzRenderer.IsTikz(diagramType))
+                {
+                    // TikZ: biên dịch bằng LaTeX cài trên máy -> SVG -> rasterize sang PNG bằng WebView2.
+                    if (WebViewManager.IsInitialized)
+                    {
+                        Program.Log($"[Diagram] Biên dịch TikZ bằng LaTeX cục bộ ({TikzRenderer.EngineInfo})...");
+                        string svg = await TikzRenderer.RenderTikzToSvgAsync(innerCode);
+                        if (!string.IsNullOrEmpty(svg))
+                        {
+                            string png = await WebViewManager.RenderSvgToPngAsync(svg, _mermaidCache.Count);
+                            if (!string.IsNullOrEmpty(png) && !png.StartsWith("ERROR"))
+                            {
+                                dataUri = png;
+                            }
+                            else
+                            {
+                                Program.Log($"[Diagram] Rasterize TikZ SVG->PNG thất bại ({png}).");
+                            }
+                        }
+                        else
+                        {
+                            Program.Log("[Diagram] TikZ không render được (thiếu MiKTeX/TeX Live hoặc lỗi biên dịch).");
+                        }
+                    }
+                    else
+                    {
+                        Program.Log("[Diagram] WebView2 chưa sẵn sàng, không rasterize được TikZ.");
+                    }
                 }
                 else
                 {
-                    Program.Log($"[Mermaid] WebView2 chưa sẵn sàng. Tiến hành render ONLINE qua API...");
-                    dataUri = await MermaidRenderer.GetMermaidDataUriAsync(innerCode);
+                    // Kroki trả về SVG mà Word không nhúng được trong HTML clipboard.
+                    // Ưu tiên rasterize SVG -> PNG offline bằng WebView2, fallback tải PNG trực tiếp từ Kroki.
+                    if (WebViewManager.IsInitialized)
+                    {
+                        Program.Log($"[Diagram] Lấy SVG {diagramType} từ Kroki rồi rasterize sang PNG bằng WebView2...");
+                        string svg = await KrokiRenderer.GetKrokiSvgAsync(innerCode, diagramType);
+                        if (!string.IsNullOrEmpty(svg))
+                        {
+                            string png = await WebViewManager.RenderSvgToPngAsync(svg, _mermaidCache.Count);
+                            if (!string.IsNullOrEmpty(png) && !png.StartsWith("ERROR"))
+                            {
+                                dataUri = png;
+                            }
+                            else
+                            {
+                                Program.Log($"[Diagram] Rasterize SVG->PNG thất bại ({png}). Thử tải PNG trực tiếp từ Kroki...");
+                                dataUri = await KrokiRenderer.GetKrokiDataUriAsync(innerCode, diagramType, "png");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Program.Log($"[Diagram] WebView2 chưa sẵn sàng. Tải PNG {diagramType} trực tiếp từ Kroki API...");
+                        dataUri = await KrokiRenderer.GetKrokiDataUriAsync(innerCode, diagramType, "png");
+                    }
                 }
 
                 if (!string.IsNullOrEmpty(dataUri) && !dataUri.StartsWith("ERROR"))
@@ -281,27 +370,88 @@ namespace HapiCopi
             }
         }
 
-        private async System.Threading.Tasks.Task PreCacheMermaidDiagramsAsync(string text)
+        private async System.Threading.Tasks.Task PreCacheDiagramsAsync(string text, string html = null)
         {
             try
             {
-                var mermaidRegex = new Regex(@"```mermaid\s*[\r\n]+([\s\S]*?)\s*```", RegexOptions.IgnoreCase);
-                var matches = mermaidRegex.Matches(text);
+                var diagramRegex = new Regex(@"```([a-zA-Z0-9]+)\s*[\r\n]+([\s\S]*?)\s*```", RegexOptions.IgnoreCase);
+                var matches = diagramRegex.Matches(text);
 
+                bool hasAnyMatch = false;
                 if (matches.Count > 0)
                 {
                     foreach (Match match in matches)
                     {
-                        string innerCode = match.Groups[1].Value.Trim();
-                        await RenderAndCacheMermaidAsync(innerCode);
+                        string lang = match.Groups[1].Value.Trim().ToLowerInvariant();
+                        if (lang == "mermaid" || KrokiRenderer.IsSupportedDiagram(lang) || TikzRenderer.IsTikz(lang))
+                        {
+                            string innerCode = match.Groups[2].Value.Trim();
+                            await RenderAndCacheDiagramAsync(innerCode, lang);
+                            hasAnyMatch = true;
+                        }
                     }
                 }
-                else
+                
+                // Extract from HTML if provided (e.g. copied from ChatGPT/browser)
+                if (!string.IsNullOrEmpty(html))
+                {
+                    var htmlRegex = new Regex(@"<code[^>]*class=""[^""]*language-([a-zA-Z0-9]+)[^""]*""[^>]*>([\s\S]*?)</code>|<div[^>]*class=""[^""]*mermaid[^""]*""[^>]*>([\s\S]*?)</div>", RegexOptions.IgnoreCase);
+                    var htmlMatches = htmlRegex.Matches(html);
+                    foreach (Match match in htmlMatches)
+                    {
+                        string lang = "";
+                        string innerCode = "";
+                        if (match.Groups[1].Success)
+                        {
+                            lang = match.Groups[1].Value.Trim().ToLowerInvariant();
+                            innerCode = match.Groups[2].Value;
+                        }
+                        else if (match.Groups[3].Success)
+                        {
+                            lang = "mermaid";
+                            innerCode = match.Groups[3].Value;
+                        }
+
+                        // Simulate Javascript's textContent by stripping any inner HTML tags (e.g. syntax highlighting spans)
+                        innerCode = Regex.Replace(innerCode, "<.*?>", string.Empty).Trim();
+                        innerCode = System.Net.WebUtility.HtmlDecode(innerCode);
+
+                        if (lang == "mermaid" || KrokiRenderer.IsSupportedDiagram(lang) || TikzRenderer.IsTikz(lang))
+                        {
+                            await RenderAndCacheDiagramAsync(innerCode, lang);
+                            
+                            // To prevent cache miss when ConvertToOfficeHtmlAsync uses raw text, 
+                            // we also cache the raw text if it's available.
+                            if (!string.IsNullOrWhiteSpace(text))
+                            {
+                                await RenderAndCacheDiagramAsync(text.Trim(), lang);
+                            }
+                            
+                            hasAnyMatch = true;
+                        }
+                    }
+                }
+                
+                // Chỉ dò mã sơ đồ THÔ (không fence) khi chưa khớp bất kỳ khối ```lang nào,
+                // tránh gửi nhầm cả dấu ``` lên Kroki gây lỗi cú pháp.
+                if (text != null && !hasAnyMatch)
                 {
                     string trimmed = text.Trim();
                     if (MermaidRenderer.IsRawMermaidCode(trimmed))
                     {
-                        await RenderAndCacheMermaidAsync(trimmed);
+                        await RenderAndCacheDiagramAsync(trimmed, "mermaid");
+                        await RenderAndCacheDiagramAsync(text, "mermaid");
+                        await RenderAndCacheDiagramAsync(text.TrimEnd(), "mermaid");
+                    }
+                    else
+                    {
+                        string detectedLang = KrokiRenderer.DetectRawDiagramLanguage(trimmed);
+                        if (detectedLang != null)
+                        {
+                            await RenderAndCacheDiagramAsync(trimmed, detectedLang);
+                            await RenderAndCacheDiagramAsync(text, detectedLang);
+                            await RenderAndCacheDiagramAsync(text.TrimEnd(), detectedLang);
+                        }
                     }
                 }
             }
@@ -365,7 +515,13 @@ namespace HapiCopi
                 bool isUnstructured = mlFormatEnabled && !isStartup && !string.IsNullOrEmpty(originalText) && AutoFormatter.IsUnstructuredRawText(originalText);
                 bool isMarkdownOrAi = IsMarkdownOrAiHtml(originalText, originalHtml);
                 bool isPdfText = !isStartup && PdfHeuristicCleaner.IsLikelyPdfText(originalText, originalHtml);
-                bool shouldFormat = isMarkdownOrAi || isUnstructured || isPdfText;
+
+                // Phát hiện mã sơ đồ (Mermaid/Kroki) SỚM: mã sơ đồ cực nhạy với xuống dòng và fence ```,
+                // nên phải bỏ qua AutoFormatter (vốn nối dòng/dọn rác) để không phá hỏng cú pháp sơ đồ.
+                bool containsDiagram = (!string.IsNullOrEmpty(originalText) && KrokiRenderer.ContainsAnyDiagram(originalText)) ||
+                                       KrokiRenderer.ContainsAnyDiagramHtml(originalHtml);
+
+                bool shouldFormat = isMarkdownOrAi || isUnstructured || isPdfText || containsDiagram;
 
                 // Cache dữ liệu gốc để xử lý dán động
                 _lastRawText = originalText;
@@ -447,7 +603,13 @@ namespace HapiCopi
                                  originalHtml.IndexOf("<ul", StringComparison.OrdinalIgnoreCase) >= 0 ||
                                  originalHtml.IndexOf("<ol", StringComparison.OrdinalIgnoreCase) >= 0);
 
-                            if (isUnstructured && !htmlHasRichStructure)
+                            if (containsDiagram)
+                            {
+                                // Giữ nguyên văn bản gốc để bảo toàn fence ``` và các dòng của mã sơ đồ.
+                                Program.Log("Phát hiện mã sơ đồ (Mermaid/Kroki). Bỏ qua AutoFormatter, giữ nguyên mã nguồn sơ đồ.");
+                                status = "Đã xử lý (Sơ đồ)";
+                            }
+                            else if (isUnstructured && !htmlHasRichStructure)
                             {
                                 Program.Log("Phát hiện văn bản thô phi cấu trúc. Chạy AutoFormatter.FormatTextSmart...");
                                 formattedText = AutoFormatter.FormatTextSmart(originalText);
@@ -469,9 +631,9 @@ namespace HapiCopi
                                 status = "Đã xử lý";
                             }
 
-                            if (formattedText != null && (formattedText.Contains("```mermaid") || MermaidRenderer.IsRawMermaidCode(formattedText)))
+                            if ((formattedText != null && KrokiRenderer.ContainsAnyDiagram(formattedText)) || KrokiRenderer.ContainsAnyDiagramHtml(_lastRawHtml))
                             {
-                                await PreCacheMermaidDiagramsAsync(formattedText);
+                                await PreCacheDiagramsAsync(formattedText, _lastRawHtml);
                             }
 
                             WordFormatInfo formatInfo = WordInterop.GetCurrentFormatWithTimeout(80);
@@ -482,8 +644,8 @@ namespace HapiCopi
                             // - Nếu HTML gốc có cấu trúc phong phú (bảng, danh sách), LUÔN dùng nhánh clean HTML
                             //   để bảo toàn cấu trúc từ web nguồn (Kaggle, Wikipedia, v.v.)
                             // - Nếu không có HTML hoặc là text thuần, dùng nhánh convert từ Markdown/plain text
-                            bool hasMermaid = formattedText != null && (formattedText.Contains("```mermaid") || MermaidRenderer.IsRawMermaidCode(formattedText));
-                            bool shouldUseHtmlCleanPath = hasHtml && !hasMermaid && (!isUnstructured || htmlHasRichStructure) && !isPdfText;
+                            bool hasMermaid = (formattedText != null && KrokiRenderer.ContainsAnyDiagram(formattedText)) || KrokiRenderer.ContainsAnyDiagramHtml(_lastRawHtml);
+                            bool shouldUseHtmlCleanPath = hasHtml && (!isUnstructured || htmlHasRichStructure) && !isPdfText;
 
                             if (shouldUseHtmlCleanPath)
                             {
@@ -860,7 +1022,7 @@ namespace HapiCopi
                     var docsFormat = new WordFormatInfo { IsFromActiveWord = false, MermaidImageCache = _mermaidCache };
 
                     string docsHtml = "";
-                    bool hasMermaid = _lastRawText != null && (_lastRawText.Contains("```mermaid") || MermaidRenderer.IsRawMermaidCode(_lastRawText));
+                    bool hasMermaid = (_lastRawText != null && KrokiRenderer.ContainsAnyDiagram(_lastRawText)) || KrokiRenderer.ContainsAnyDiagramHtml(_lastRawHtml);
                     if (!string.IsNullOrEmpty(_lastRawHtml) && !hasMermaid)
                     {
                         string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(_lastRawHtml);
@@ -932,7 +1094,7 @@ namespace HapiCopi
                     formatInfo.MermaidImageCache = _mermaidCache;
 
                     string officeHtml = "";
-                    bool hasMermaid = _lastRawText != null && (_lastRawText.Contains("```mermaid") || MermaidRenderer.IsRawMermaidCode(_lastRawText));
+                    bool hasMermaid = (_lastRawText != null && KrokiRenderer.ContainsAnyDiagram(_lastRawText)) || KrokiRenderer.ContainsAnyDiagramHtml(_lastRawHtml);
                     if (!string.IsNullOrEmpty(_lastRawHtml) && !hasMermaid)
                     {
                         string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(_lastRawHtml);
@@ -1042,8 +1204,8 @@ namespace HapiCopi
                 return true;
             }
 
-            // 7. Mermaid
-            if (MermaidRenderer.IsRawMermaidCode(text))
+            // 7. Sơ đồ Mermaid và các sơ đồ khác (PlantUML, DBML, D2, v.v.)
+            if (KrokiRenderer.ContainsAnyDiagram(text))
             {
                 return true;
             }

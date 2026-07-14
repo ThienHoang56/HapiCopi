@@ -1,0 +1,31 @@
+# Kiểm tra công thức LaTeX
+
+Công thức inline: khối lượng - năng lượng $E = mc^2$ và nghiệm bậc hai $x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$.
+
+Ký tự Hy Lạp inline: $\alpha + \beta = \gamma$, góc $\theta$, tổng $\sum_{i=1}^{n} i$.
+
+## Công thức display
+
+Tích phân:
+
+$$\int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}$$
+
+Giới hạn:
+
+$$\lim_{x \to 0} \frac{\sin x}{x} = 1$$
+
+Phân số lồng nhau:
+
+$$\frac{1}{1 + \frac{1}{1 + \frac{1}{2}}}$$
+
+## Ma trận
+
+$$\begin{bmatrix} a & b \\ c & d \end{bmatrix} \begin{pmatrix} x \\ y \end{pmatrix} = \begin{pmatrix} ax + by \\ cx + dy \end{pmatrix}$$
+
+## Hàm nhiều nhánh
+
+$$f(x) = \begin{cases} x^2 & \text{nếu } x \geq 0 \\ -x & \text{nếu } x < 0 \end{cases}$$
+
+## Ký hiệu tập hợp
+
+Với mọi $x \in \mathbb{R}$, tồn tại $y$ sao cho $x \leq y$: $\forall x \, \exists y : x \leq y$.

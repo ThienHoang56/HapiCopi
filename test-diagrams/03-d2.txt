@@ -1,0 +1,8 @@
+```d2
+server: Máy chủ {
+  shape: cylinder
+}
+client: Client
+client -> server: request
+server -> client: response
+```
