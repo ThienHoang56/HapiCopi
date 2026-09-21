@@ -20,7 +20,7 @@ namespace HapiCopi
                 Log("Phát hiện instance HapiCopi khác đang hoạt động. Thoát instance mới.");
                 
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("\n[HapiCopi] ⚠️ Một phiên bản khác của HapiCopi đang chạy ẩn ở khay hệ thống (System Tray)!");
+                Console.WriteLine("\n[HapiCopi] Một phiên bản khác của HapiCopi đang chạy ẩn ở khay hệ thống (System Tray)!");
                 Console.WriteLine("[HapiCopi] Vui lòng tắt phiên bản đang chạy ở khay hệ thống trước khi khởi chạy lại bằng 'dotnet run'.\n");
                 Console.ResetColor();
                 return;

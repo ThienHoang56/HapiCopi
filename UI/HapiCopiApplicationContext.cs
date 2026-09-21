@@ -52,12 +52,14 @@ namespace HapiCopi
             _pauseMenuItem = new ToolStripMenuItem("Tạm dừng", null, OnPauseClicked);
             var historyMenuItem = new ToolStripMenuItem("Lịch sử Clipboard...", null, OnHistoryClicked);
             var mathEditorMenuItem = new ToolStripMenuItem("Soạn công thức toán...", null, OnMathEditorClicked);
+            var abcEditorMenuItem = new ToolStripMenuItem("Soạn bản nhạc (ABC)...", null, OnAbcEditorClicked);
             var settingsMenuItem = new ToolStripMenuItem("Cài đặt...", null, OnSettingsClicked);
             var exitMenuItem = new ToolStripMenuItem("Thoát", null, OnExitClicked);
 
             contextMenu.Items.Add(titleItem);
             contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add(mathEditorMenuItem);
+            contextMenu.Items.Add(abcEditorMenuItem);
             contextMenu.Items.Add(historyMenuItem);
             contextMenu.Items.Add(settingsMenuItem);
             contextMenu.Items.Add(_pauseMenuItem);
@@ -125,6 +127,33 @@ namespace HapiCopi
             catch (Exception ex)
             {
                 Program.Log($"[MathEditor LỖI] Không mở được cửa sổ: {ex.Message}");
+            }
+        }
+
+        // ============================
+        // ABC MUSIC EDITOR
+        // ============================
+
+        private AbcEditorForm? _abcEditorForm;
+
+        private void OnAbcEditorClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (_abcEditorForm != null && !_abcEditorForm.IsDisposed)
+                {
+                    _abcEditorForm.WindowState = FormWindowState.Normal;
+                    _abcEditorForm.BringToFront();
+                    _abcEditorForm.Activate();
+                    return;
+                }
+
+                _abcEditorForm = new AbcEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                _abcEditorForm.Show();
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[AbcEditor LỖI] Không mở được cửa sổ: {ex.Message}");
             }
         }
 

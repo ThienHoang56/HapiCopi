@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <title>HapiCopi - Soạn bản nhạc (ABC)</title>
+    <link rel="stylesheet" href="abcjs-audio.css" />
+    <script src="abcjs-basic-min.js?v=1"></script>
+    <script src="jquery.min.js?v=1"></script>
+    <script src="xml2abc.js?v=1"></script>
+    <script src="jszip.min.js?v=1"></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            display: flex; flex-direction: column;
+            background: #f5f6f8; color: #1f2328;
+        }
+        .toolbar {
+            display: flex; align-items: center; gap: 12px;
+            padding: 8px 12px; background: #ffffff; border-bottom: 1px solid #e1e4e8;
+            flex-wrap: wrap;
+        }
+        .toolbar label { font-size: 13px; color: #57606a; }
+        .toolbar select {
+            padding: 5px 8px; border: 1px solid #d0d7de; border-radius: 6px;
+            font-size: 13px; background: #fff; max-width: 240px;
+        }
+        #copyBtn {
+            margin-left: auto; padding: 7px 16px; border: none; border-radius: 6px;
+            background: #2563eb; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+        }
+        #copyBtn:hover { background: #1d4ed8; }
+        #importBtn {
+            padding: 6px 12px; border: 1px solid #d0d7de; border-radius: 6px;
+            background: #fff; color: #24292f; font-size: 13px; cursor: pointer;
+        }
+        #importBtn:hover { background: #eaf1ff; border-color: #2563eb; color: #1d4ed8; }
+        #status { font-size: 12px; color: #57606a; min-width: 120px; }
+        .main { flex: 1; display: flex; min-height: 0; }
+        .editor { width: 42%; display: flex; flex-direction: column; border-right: 1px solid #e1e4e8; }
+        #input {
+            flex: 1; border: none; resize: none; padding: 14px;
+            font-family: 'Consolas', 'Courier New', monospace; font-size: 14px; line-height: 1.5;
+            outline: none; background: #fff;
+        }
+        .palette {
+            padding: 8px 10px; background: #fafbfc; border-top: 1px solid #e1e4e8;
+            max-height: 46%; overflow: auto;
+        }
+        .pgroup { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+        .plabel { font-size: 11px; color: #8a929b; flex: 0 0 66px; }
+        .palette button {
+            min-width: 32px; height: 30px; padding: 0 8px;
+            border: 1px solid #d0d7de; border-radius: 6px; background: #fff;
+            font-size: 14px; line-height: 1; cursor: pointer; color: #24292f;
+        }
+        .palette button:hover { background: #eaf1ff; border-color: #2563eb; color: #1d4ed8; }
+        .phint { font-size: 11px; color: #8a929b; margin-top: 4px; }
+        .right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .preview { flex: 1; padding: 18px; overflow: auto; background: #fff; }
+        .preview svg { max-width: 100%; }
+        .audiobar { padding: 8px 12px; background: #fafbfc; border-top: 1px solid #e1e4e8; }
+        .err { color: #cf222e; font-size: 13px; font-family: monospace; white-space: pre-wrap; }
+    </style>
+</head>
+
+<body>
+    <div class="toolbar">
+        <button id="importBtn" title="Nhập file .abc hoặc MusicXML (.musicxml/.xml/.mxl)">Nhập file...</button>
+        <input type="file" id="fileInput" accept=".abc,.txt,.xml,.musicxml,.mxl" style="display:none" />
+        <label>Mẫu có sẵn:</label>
+        <select id="template">
+            <option value="">-- Chọn mẫu để chèn --</option>
+        </select>
+        <span id="status"></span>
+        <button id="copyBtn">Copy bản nhạc</button>
+    </div>
+    <div class="main">
+        <div class="editor">
+            <textarea id="input" spellcheck="false"></textarea>
+            <div class="palette" id="palette">
+                <div class="pgroup">
+                    <span class="plabel">Nốt thấp</span>
+                    <button data-snip="C ">C</button>
+                    <button data-snip="D ">D</button>
+                    <button data-snip="E ">E</button>
+                    <button data-snip="F ">F</button>
+                    <button data-snip="G ">G</button>
+                    <button data-snip="A ">A</button>
+                    <button data-snip="B ">B</button>
+                </div>
+                <div class="pgroup">
+                    <span class="plabel">Nốt cao</span>
+                    <button data-snip="c ">c</button>
+                    <button data-snip="d ">d</button>
+                    <button data-snip="e ">e</button>
+                    <button data-snip="f ">f</button>
+                    <button data-snip="g ">g</button>
+                    <button data-snip="a ">a</button>
+                    <button data-snip="b ">b</button>
+                </div>
+                <div class="pgroup">
+                    <span class="plabel">Cao độ</span>
+                    <button data-snip="^" title="Thăng (#)">♯</button>
+                    <button data-snip="_" title="Giáng (b)">♭</button>
+                    <button data-snip="=" title="Bình">♮</button>
+                    <button data-snip="'" title="Cao hơn 1 quãng 8">8va↑</button>
+                    <button data-snip="," title="Thấp hơn 1 quãng 8">8va↓</button>
+                    <button data-snip="z " title="Nốt lặng">lặng</button>
+                </div>
+                <div class="pgroup">
+                    <span class="plabel">Trường độ</span>
+                    <button data-snip="2" title="Gấp đôi">×2</button>
+                    <button data-snip="3" title="Gấp ba">×3</button>
+                    <button data-snip="/2" title="Nửa">÷2</button>
+                    <button data-snip="/" title="Nửa (ngắn gọn)">/</button>
+                    <button data-snip="-" title="Nối (tie)">‿</button>
+                    <button data-snip=">" title="Chấm dôi tới">&gt;</button>
+                </div>
+                <div class="pgroup">
+                    <span class="plabel">Cấu trúc</span>
+                    <button data-snip="| " title="Vạch nhịp">|</button>
+                    <button data-snip="|: " title="Bắt đầu lặp">|:</button>
+                    <button data-snip=":| " title="Kết thúc lặp">:|</button>
+                    <button data-snip="|] " title="Vạch kết">|]</button>
+                    <button data-snip="[‸]" title="Hợp âm">[hợp âm]</button>
+                    <button data-snip="(‸)" title="Luyến (slur)">( )</button>
+                    <button data-snip="&#10;w: " title="Dòng lời hát">lời</button>
+                </div>
+                <div class="phint">Bôi đen phần nhạc rồi bấm <b>[hợp âm]</b> hoặc <b>( )</b> để bọc quanh. Các nốt: chữ hoa = quãng thấp, chữ thường = quãng cao.</div>
+            </div>
+        </div>
+        <div class="right">
+            <div class="preview" id="paper"></div>
+            <div class="audiobar">
+                <div id="audio"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var DEFAULT_ABC =
+            "X:1\n" +
+            "T:Bản nhạc mới\n" +
+            "C:HapiCopi\n" +
+            "M:4/4\n" +
+            "L:1/4\n" +
+            "Q:1/4=100\n" +
+            "K:C\n" +
+            "C D E F | G A B c | c B A G | F E D C |]";
+
+        var TEMPLATES = {
+            "Gam Đô trưởng (luyện tập)":
+                "X:1\nT:Gam Đô trưởng\nM:4/4\nL:1/4\nQ:1/4=100\nK:C\n" +
+                "C D E F | G A B c | c B A G | F E D C |]",
+            "Twinkle Twinkle Little Star":
+                "X:1\nT:Twinkle Twinkle Little Star\nM:4/4\nL:1/4\nQ:1/4=110\nK:C\n" +
+                "C C G G | A A G2 | F F E E | D D C2 |\n" +
+                "G G F F | E E D2 | G G F F | E E D2 |\n" +
+                "C C G G | A A G2 | F F E E | D D C2 |]",
+            "Ode to Joy - Beethoven":
+                "X:1\nT:Ode to Joy\nC:L. van Beethoven\nM:4/4\nL:1/4\nQ:1/4=120\nK:C\n" +
+                "E E F G | G F E D | C C D E | E3 D/2D/2 |\n" +
+                "E E F G | G F E D | C C D E | D3 C/2C/2 |]",
+            "Nhịp Jig 6/8":
+                "X:1\nT:Nhịp Jig\nM:6/8\nL:1/8\nQ:3/8=120\nK:G\n" +
+                "GAB d2d | edB dBA | GAB d2d | edB A2G |]",
+            "Hợp âm + lời hát":
+                "X:1\nT:Ví dụ hợp âm & lời\nM:4/4\nL:1/4\nQ:1/4=90\nK:C\n" +
+                "\"C\"C E G c | \"G\"B2 G2 | \"F\"A c A F | \"C\"G2 E2 |]\n" +
+                "w: Đô mi son đô | son mãi son | fa la fa | son mi vang"
+        };
+
+        var input = document.getElementById('input');
+        var paper = document.getElementById('paper');
+        var statusEl = document.getElementById('status');
+        var templateSel = document.getElementById('template');
+        var audioEl = document.getElementById('audio');
+        var audioSupported = ABCJS.synth.supportsAudio();
+
+        var synthControl = null;
+        var currentVisual = null;
+
+        // Nạp danh sách template vào combobox
+        Object.keys(TEMPLATES).forEach(function (name) {
+            var opt = document.createElement('option');
+            opt.value = name; opt.textContent = name;
+            templateSel.appendChild(opt);
+        });
+        templateSel.addEventListener('change', function () {
+            var name = templateSel.value;
+            if (name && TEMPLATES[name]) {
+                input.value = TEMPLATES[name];
+                render();
+            }
+            templateSel.value = "";
+        });
+
+        // ---- Nhập file (.abc / MusicXML) ----
+        var importBtn = document.getElementById('importBtn');
+        var fileInput = document.getElementById('fileInput');
+        importBtn.addEventListener('click', function () { fileInput.value = ''; fileInput.click(); });
+        fileInput.addEventListener('change', function () {
+            var file = fileInput.files && fileInput.files[0];
+            if (file) importFile(file);
+        });
+
+        function loadAbcText(abc, label) {
+            input.value = abc;
+            render();
+            statusEl.textContent = (label || 'Đã nạp') + ' (' + abc.split('\n').length + ' dòng).';
+        }
+
+        // Chuyển chuỗi MusicXML -> ABC bằng xml2abc (hàm vertaal toàn cục).
+        function musicXmlToAbc(xmlString, label) {
+            try {
+                // xml2abc (vertaal) dùng jQuery bên trong nên cần truyền document do $.parseXML tạo ra.
+                var xmldoc = jQuery.parseXML(xmlString);
+                var res = vertaal(xmldoc, { d: 4, p: 'f' });
+                var abc = (res && res[0]) ? res[0] : '';
+                if (!abc.trim()) throw new Error('không trích được nốt nhạc từ MusicXML');
+                loadAbcText(abc, label || 'Đã chuyển MusicXML sang ABC');
+            } catch (e) {
+                statusEl.innerHTML = '<span class="err">Lỗi chuyển MusicXML: ' + (e.message || e) + '</span>';
+            }
+        }
+
+        function importFile(file) {
+            var name = (file.name || '').toLowerCase();
+            statusEl.textContent = 'Đang đọc "' + file.name + '"...';
+            if (name.endsWith('.abc') || name.endsWith('.txt')) {
+                var r = new FileReader();
+                r.onload = function () { loadAbcText(String(r.result), 'Đã nạp file ABC'); };
+                r.onerror = function () { statusEl.innerHTML = '<span class="err">Không đọc được file</span>'; };
+                r.readAsText(file);
+            } else if (name.endsWith('.xml') || name.endsWith('.musicxml')) {
+                var r2 = new FileReader();
+                r2.onload = function () { musicXmlToAbc(String(r2.result)); };
+                r2.onerror = function () { statusEl.innerHTML = '<span class="err">Không đọc được file</span>'; };
+                r2.readAsText(file);
+            } else if (name.endsWith('.mxl')) {
+                var r3 = new FileReader();
+                r3.onload = function () { unzipMxl(r3.result); };
+                r3.onerror = function () { statusEl.innerHTML = '<span class="err">Không đọc được file</span>'; };
+                r3.readAsArrayBuffer(file);
+            } else {
+                statusEl.innerHTML = '<span class="err">Định dạng chưa hỗ trợ (chỉ .abc, .xml, .musicxml, .mxl)</span>';
+            }
+        }
+
+        // Giải nén .mxl (MusicXML nén = zip) và lấy file nhạc bên trong.
+        function unzipMxl(arrayBuffer) {
+            if (typeof JSZip === 'undefined') {
+                statusEl.innerHTML = '<span class="err">Thiếu thư viện giải nén (.mxl)</span>';
+                return;
+            }
+            JSZip.loadAsync(arrayBuffer).then(function (zip) {
+                // Ưu tiên rootfile khai báo trong META-INF/container.xml; nếu không có thì lấy .xml đầu tiên.
+                var container = zip.file('META-INF/container.xml');
+                function pickAndConvert(path) {
+                    zip.file(path).async('string').then(function (xml) { musicXmlToAbc(xml, 'Đã giải nén & chuyển .mxl'); });
+                }
+                if (container) {
+                    container.async('string').then(function (cxml) {
+                        var doc = new DOMParser().parseFromString(cxml, 'application/xml');
+                        var rf = doc.querySelector('rootfile');
+                        var path = rf && rf.getAttribute('full-path');
+                        if (path && zip.file(path)) { pickAndConvert(path); return; }
+                        fallbackFirstXml(zip);
+                    });
+                } else {
+                    fallbackFirstXml(zip);
+                }
+            }).catch(function (e) {
+                statusEl.innerHTML = '<span class="err">Lỗi giải nén .mxl: ' + (e.message || e) + '</span>';
+            });
+        }
+
+        function fallbackFirstXml(zip) {
+            var found = null;
+            zip.forEach(function (path, entry) {
+                if (!found && !entry.dir && /\.(xml|musicxml)$/i.test(path) && path.indexOf('META-INF/') !== 0) {
+                    found = path;
+                }
+            });
+            if (found) {
+                zip.file(found).async('string').then(function (xml) { musicXmlToAbc(xml, 'Đã giải nén & chuyển .mxl'); });
+            } else {
+                statusEl.innerHTML = '<span class="err">Không tìm thấy MusicXML trong file .mxl</span>';
+            }
+        }
+
+        // ---- Chèn nhanh từ palette ----
+        var CARET = '\u2038';
+        function insertSnippet(snip) {
+            if (!snip) return;
+            var start = input.selectionStart, end = input.selectionEnd;
+            var sel = input.value.substring(start, end);
+            var text, caretPos;
+            var idx = snip.indexOf(CARET);
+            if (idx !== -1) {
+                text = snip.substring(0, idx) + sel + snip.substring(idx + 1);
+                caretPos = start + idx + sel.length;
+            } else {
+                text = snip;
+                caretPos = start + snip.length;
+            }
+            input.value = input.value.substring(0, start) + text + input.value.substring(end);
+            input.selectionStart = input.selectionEnd = caretPos;
+            input.focus();
+            render();
+        }
+        document.getElementById('palette').addEventListener('mousedown', function (e) {
+            var btn = e.target.closest ? e.target.closest('button') : null;
+            if (!btn) return;
+            e.preventDefault();
+            insertSnippet(btn.getAttribute('data-snip'));
+        });
+
+        // ---- Render bản nhạc ----
+        function render() {
+            var abc = input.value;
+            try {
+                var visual = ABCJS.renderAbc(paper, abc, {
+                    responsive: "resize",
+                    add_classes: true,
+                    paddingtop: 6, paddingbottom: 12, paddingright: 10, paddingleft: 10
+                });
+                currentVisual = (visual && visual.length) ? visual[0] : null;
+                statusEl.textContent = '';
+                loadAudio();
+            } catch (e) {
+                statusEl.innerHTML = '<span class="err">Lỗi cú pháp: ' + (e.message || e) + '</span>';
+            }
+        }
+
+        function loadAudio() {
+            if (!audioSupported || !currentVisual) return;
+            // Dừng tiếng bản cũ nếu đang phát.
+            try { if (synthControl && synthControl.isStarted && typeof synthControl.pause === 'function') synthControl.pause(); } catch (e) { }
+            // Tạo lại thanh điều khiển để buffer âm thanh luôn khớp đúng bản nhạc đang hiển thị
+            // (setTune trên control cũ không nạp lại buffer một cách đáng tin cậy).
+            audioEl.innerHTML = '';
+            synthControl = new ABCJS.synth.SynthController();
+            synthControl.load("#audio", null, {
+                displayLoop: true, displayRestart: true, displayPlay: true,
+                displayProgress: true, displayWarp: true
+            });
+            synthControl.setTune(currentVisual, false, { chordsOff: false })
+                .catch(function (e) { statusEl.innerHTML = '<span class="err">Âm thanh: ' + (e.message || e) + '</span>'; });
+        }
+
+        var timer = null;
+        input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(render, 250); });
+
+        // ---- Copy toàn bộ bản nhạc thành 1 ảnh PNG ----
+        document.getElementById('copyBtn').addEventListener('click', copyImage);
+
+        function svgToImage(svg) {
+            return new Promise(function (resolve, reject) {
+                var bb = svg.getBoundingClientRect();
+                var w = (svg.width && svg.width.baseVal && svg.width.baseVal.value) || bb.width || 400;
+                var h = (svg.height && svg.height.baseVal && svg.height.baseVal.value) || bb.height || 100;
+                var clone = svg.cloneNode(true);
+                clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+                clone.setAttribute('width', w);
+                clone.setAttribute('height', h);
+                var s = new XMLSerializer().serializeToString(clone);
+                var url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(s)));
+                var img = new Image();
+                img.onload = function () { resolve({ img: img, w: w, h: h }); };
+                img.onerror = function () { reject(new Error('không rasterize được 1 dòng nhạc')); };
+                img.src = url;
+            });
+        }
+
+        function copyImage() {
+            var svgs = paper.querySelectorAll('svg');
+            if (!svgs.length) { statusEl.innerHTML = '<span class="err">Chưa có bản nhạc để copy</span>'; return; }
+            statusEl.textContent = 'Đang tạo ảnh...';
+            Promise.all(Array.prototype.map.call(svgs, svgToImage)).then(function (items) {
+                var r = 2;
+                var maxW = 0, totalH = 0;
+                items.forEach(function (it) { if (it.w > maxW) maxW = it.w; totalH += it.h; });
+                var canvas = document.createElement('canvas');
+                canvas.width = Math.round(maxW * r);
+                canvas.height = Math.round(totalH * r);
+                var ctx = canvas.getContext('2d');
+                ctx.setTransform(r, 0, 0, r, 0, 0);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, maxW, totalH);
+                var y = 0;
+                items.forEach(function (it) { ctx.drawImage(it.img, 0, y, it.w, it.h); y += it.h; });
+                var png = canvas.toDataURL('image/png');
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({
+                        type: 'copy', png: png, source: input.value
+                    }));
+                }
+                statusEl.textContent = 'Đã copy! Dán vào Word/Docs (Ctrl+V).';
+            }).catch(function (e) {
+                statusEl.innerHTML = '<span class="err">Lỗi copy: ' + (e.message || e) + '</span>';
+            });
+        }
+
+        // ---- Khởi tạo ----
+        input.value = DEFAULT_ABC;
+        if (!audioSupported) {
+            audioEl.innerHTML = '<span class="err">Trình duyệt không hỗ trợ phát âm thanh.</span>';
+        }
+        render();
+    </script>
+</body>
+
+</html>
