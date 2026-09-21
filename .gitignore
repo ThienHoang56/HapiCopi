@@ -29,3 +29,7 @@ diagnostic_clipboard.html
 
 # Local test scripts
 test_*.js
+
+# Publish / installer artifacts (không commit)
+dist/
+artifacts/

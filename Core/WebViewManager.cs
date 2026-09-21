@@ -67,28 +67,14 @@ namespace HapiCopi
             {
                 if (_webView == null) return;
 
-                // Tạo thư mục cache chứa dữ liệu người dùng của WebView2
-                string cacheDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
-                    "HapiCopiWebViewCache"
-                );
-                
-                if (!Directory.Exists(cacheDir))
-                {
-                    Directory.CreateDirectory(cacheDir);
-                }
+                string cacheDir = ResourcePaths.WebViewCacheDir;
+                Directory.CreateDirectory(cacheDir);
 
                 var env = await CoreWebView2Environment.CreateAsync(null, cacheDir);
                 await _webView.EnsureCoreWebView2Async(env);
 
                 // Ánh xạ thư mục ảo hapicopi.local để nạp tài nguyên cục bộ bảo mật (tránh CORS/File scheme restrictions)
-                string localFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebViewResources");
-                
-                if (!Directory.Exists(localFolder))
-                {
-                    // Đề phòng nếu chạy trực tiếp debug mà chưa copy resources
-                    localFolder = Path.Combine(Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory)?.Parent?.Parent?.FullName ?? "", "WebViewResources");
-                }
+                string localFolder = ResourcePaths.GetWebViewResourcesFolder();
 
                 Program.Log($"[WebViewManager] Trỏ virtual host vào thư mục: {localFolder}");
                 _webView.CoreWebView2.SetVirtualHostNameToFolderMapping(

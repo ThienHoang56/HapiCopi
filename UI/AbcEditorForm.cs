@@ -36,21 +36,13 @@ namespace HapiCopi
         {
             try
             {
-                string cacheDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "HapiCopiWebViewCache");
+                string cacheDir = ResourcePaths.WebViewCacheDir;
+                Directory.CreateDirectory(cacheDir);
 
                 var env = await CoreWebView2Environment.CreateAsync(null, cacheDir);
                 await _web.EnsureCoreWebView2Async(env);
 
-                string localFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebViewResources");
-                if (!Directory.Exists(localFolder))
-                {
-                    localFolder = Path.Combine(
-                        Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory)?.Parent?.Parent?.FullName ?? "",
-                        "WebViewResources");
-                }
-
+                string localFolder = ResourcePaths.GetWebViewResourcesFolder();
                 _web.CoreWebView2.SetVirtualHostNameToFolderMapping(
                     "hapicopi.local", localFolder, CoreWebView2HostResourceAccessKind.Allow);
 

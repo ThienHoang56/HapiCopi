@@ -20,6 +20,15 @@
     <Description>Tiện ích bảo vệ clipboard chống lộ lọt thông tin nhạy cảm (Local DLP) kết hợp tự động định dạng Markdown/LaTeX sang Office.</Description>
     <Copyright>Copyright © 2026</Copyright>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+
+    <!-- Publish mặc định: 1 exe self-contained (bộ cài Inno sẽ gói thêm WebViewResources) -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(PublishSingleFile)' == 'true'">win-x64</RuntimeIdentifier>
+    <PublishSingleFile Condition="'$(PublishSingleFile)' == ''">false</PublishSingleFile>
+    <SelfContained Condition="'$(SelfContained)' == ''">false</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <DebugSymbols Condition="'$(Configuration)' == 'Release'">false</DebugSymbols>
   </PropertyGroup>
 
   <ItemGroup>

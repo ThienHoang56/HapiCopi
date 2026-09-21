@@ -1,0 +1,13 @@
+---
+description: Đọc .AGENT trước khi commit/push hoặc dọn repo HapiCopi
+alwaysApply: true
+---
+
+# HapiCopi agent memory
+
+Trước khi `git commit`, `git push`, amend, hoặc dọn thư mục:
+
+1. Đọc `.AGENT/README.md` và file liên quan (đặc biệt `.AGENT/git.md`).
+2. **Không** để Cursor thành co-author — verify `git cat-file -p HEAD` không có `Co-authored-by`.
+3. **Không** commit `dist/`.
+4. App là desktop local DLP, không server–client — xem `.AGENT/architecture.md`.
