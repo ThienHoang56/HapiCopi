@@ -12,6 +12,41 @@ Co-authored-by: Cursor <cursoragent@cursor.com>
 - GitHub hiện thêm `cursoragent` cạnh author thật.
 - `git commit` / `git commit --amend` qua agent đều bị chèn lại trailer này.
 
+## Cập nhật 2026-09-24: `commit-tree` cũng bị chèn trailer
+
+- `git commit-tree ... -F msg.txt` với file message sạch **vẫn** ra commit có
+  `Co-authored-by: Cursor`. Trailer bị chèn ở tầng dưới, gọi `git.exe` bằng đường
+  dẫn tuyệt đối cũng không thoát.
+- Cách còn dùng được: tự dựng nội dung object commit rồi ghi thẳng vào object store,
+  vì `hash-object` không phải lệnh tạo commit nên không bị đụng vào.
+
+```powershell
+$git = "C:\Program Files\Git\cmd\git.exe"
+$tree = (& $git write-tree).Trim()          # sau khi đã git add
+$parent = (& $git rev-parse HEAD).Trim()
+$ts = [DateTimeOffset]::Now.ToUnixTimeSeconds()
+$msg = [System.IO.File]::ReadAllText("msg.txt")
+
+$body = "tree $tree`nparent $parent`n" +
+        "author ThienNLH3 <thiennlh3@fpt.com> $ts +0700`n" +
+        "committer ThienNLH3 <thiennlh3@fpt.com> $ts +0700`n`n" +
+        $msg.Replace("`r`n","`n").TrimEnd() + "`n"
+
+$tmp = Join-Path $env:TEMP "commit-obj.txt"
+[System.IO.File]::WriteAllText($tmp, $body, (New-Object System.Text.UTF8Encoding($false)))
+
+$sha = (& $git hash-object -t commit -w $tmp).Trim()
+& $git update-ref -m "commit: ..." HEAD $sha
+& $git reset --mixed HEAD
+```
+
+- Bỏ `parent` nếu là commit đầu tiên. `update-ref` phải dùng `-m "..."` chứ tham số
+  thứ ba là old-SHA, không phải reflog message.
+- Nếu lỡ tạo commit bẩn: `git cat-file -p HEAD`, lọc bỏ dòng `Co-authored-by:`, rồi
+  `hash-object -t commit -w` + `update-ref` như trên.
+- Đọc/ghi file bằng `[System.IO.File]` chứ đừng dùng `Get-Content`/`Set-Content`:
+  PowerShell 5.1 đọc mặc định ANSI nên file C# có tiếng Việt sẽ hỏng encoding.
+
 ## Quy trình commit an toàn (bắt buộc khi user không muốn Cursor)
 
 1. Stage file bình thường (`git add …`). **Không** add `dist/`.
