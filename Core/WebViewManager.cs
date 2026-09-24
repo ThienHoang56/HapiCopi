@@ -330,16 +330,37 @@ namespace HapiCopi
             return "ERROR: Render timeout";
         }
 
-        public static async Task<string> RenderSvgToPngAsync(string svg, int id)
+        public static Task<string> RenderSvgToPngAsync(string svg, int id)
         {
-            if (!_isInitialized) return "";
-            string escaped = EscapeJsString(svg);
+            return RenderSvgToPngAsync(svg, id, null);
+        }
+
+        public static async Task<string> RenderSvgToPngAsync(string svg, int id, SvgRasterOptions? options)
+        {
+            SvgRasterResult result = await RenderSvgDetailedAsync(svg, id, options);
+            return result.Success ? result.DataUri : result.Error;
+        }
+
+        /// <summary>
+        /// Như <see cref="RenderSvgToPngAsync(string, int, SvgRasterOptions?)"/> nhưng trả kèm kích thước
+        /// nội tại của SVG, để nơi gọi biết nên hiển thị ảnh to bằng nào.
+        /// </summary>
+        public static async Task<SvgRasterResult> RenderSvgDetailedAsync(string svg, int id, SvgRasterOptions? options)
+        {
+            if (!_isInitialized)
+            {
+                return new SvgRasterResult { Error = "ERROR: WebView2 chưa sẵn sàng" };
+            }
 
             // 1. Khởi chạy tác vụ rasterize SVG -> PNG trong WebView2
-            await ExecuteScriptAsync($"startRenderSvg('{escaped}', {id})");
+            bool started = await PostSvgJobAsync(svg, id, options ?? new SvgRasterOptions());
+            if (!started)
+            {
+                return new SvgRasterResult { Error = "ERROR: Không gửi được SVG sang WebView2" };
+            }
 
             // 2. Vòng lặp chờ kết quả (polling)
-            int timeoutMs = 8000;
+            int timeoutMs = options?.TimeoutMs ?? 8000;
             int elapsedMs = 0;
             while (elapsedMs < timeoutMs)
             {
@@ -359,15 +380,23 @@ namespace HapiCopi
                                 string status = statusProp.GetString() ?? "";
                                 if (status == "success")
                                 {
-                                    if (root.TryGetProperty("result", out var resultProp))
-                                        return resultProp.GetString() ?? "";
-                                    return "";
+                                    _ = ExecuteScriptAsync($"delete window.svgResults[{id}]");
+                                    return new SvgRasterResult
+                                    {
+                                        DataUri = root.TryGetProperty("result", out var resultProp)
+                                            ? resultProp.GetString() ?? ""
+                                            : "",
+                                        IntrinsicWidth = ReadIntProperty(root, "width"),
+                                        IntrinsicHeight = ReadIntProperty(root, "height")
+                                    };
                                 }
                                 else if (status == "error")
                                 {
-                                    if (root.TryGetProperty("result", out var resultProp))
-                                        return resultProp.GetString() ?? "";
-                                    return "ERROR: Unknown JavaScript error";
+                                    string error = root.TryGetProperty("result", out var errorProp)
+                                        ? errorProp.GetString() ?? "ERROR: Unknown JavaScript error"
+                                        : "ERROR: Unknown JavaScript error";
+                                    _ = ExecuteScriptAsync($"delete window.svgResults[{id}]");
+                                    return new SvgRasterResult { Error = error };
                                 }
                             }
                         }
@@ -379,7 +408,99 @@ namespace HapiCopi
                 }
             }
 
-            return "ERROR: Render timeout";
+            return new SvgRasterResult { Error = "ERROR: Render timeout" };
         }
+
+        private static int ReadIntProperty(JsonElement root, string name)
+        {
+            return root.TryGetProperty(name, out var prop) && prop.TryGetInt32(out int value) ? value : 0;
+        }
+
+        /// <summary>
+        /// Gửi SVG sang WebView2 bằng PostWebMessage thay vì nội suy vào chuỗi ExecuteScript,
+        /// vì file .svg thật có thể nặng vài MB.
+        /// </summary>
+        private static Task<bool> PostSvgJobAsync(string svg, int id, SvgRasterOptions options)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            if (_hiddenForm == null || _webView == null || !_isInitialized)
+            {
+                tcs.SetResult(false);
+                return tcs.Task;
+            }
+
+            string message = JsonSerializer.Serialize(new
+            {
+                kind = "svg-render",
+                id,
+                svg,
+                options = new
+                {
+                    background = options.Background,
+                    minWidth = options.MinWidth,
+                    maxScale = options.MaxScale,
+                    maxPixels = options.MaxPixels
+                }
+            });
+
+            void Post()
+            {
+                try
+                {
+                    _webView!.CoreWebView2.PostWebMessageAsString(message);
+                    tcs.TrySetResult(true);
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"[WebViewManager LỖI] Không gửi được SVG job: {ex.Message}");
+                    tcs.TrySetResult(false);
+                }
+            }
+
+            if (_syncContext != null)
+            {
+                _syncContext.Post(_ => Post(), null);
+            }
+            else
+            {
+                _hiddenForm.BeginInvoke(new Action(Post));
+            }
+
+            return tcs.Task;
+        }
+    }
+
+    /// <summary>
+    /// Kết quả rasterize: ảnh PNG (độ phân giải cao) kèm kích thước nội tại của SVG (cỡ hiển thị đúng).
+    /// </summary>
+    public sealed class SvgRasterResult
+    {
+        public string DataUri { get; init; } = "";
+        public int IntrinsicWidth { get; init; }
+        public int IntrinsicHeight { get; init; }
+        public string Error { get; init; } = "";
+
+        public bool Success => !string.IsNullOrEmpty(DataUri) && !DataUri.StartsWith("ERROR", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Tham số rasterize SVG sang PNG.
+    /// </summary>
+    public sealed class SvgRasterOptions
+    {
+        /// <summary>Màu nền dạng CSS, hoặc null để giữ nền trong suốt (logo, icon).</summary>
+        public string? Background { get; set; } = "#ffffff";
+
+        /// <summary>Bề rộng tối thiểu của PNG đầu ra, để icon nhỏ không bị vỡ khi phóng to trong Word.</summary>
+        public int MinWidth { get; set; } = 0;
+
+        /// <summary>Hệ số phóng tối thiểu áp dụng cho mọi ảnh.</summary>
+        public double MaxScale { get; set; } = 2;
+
+        /// <summary>Trần tổng số điểm ảnh, chặn SVG khổ lớn làm cạn bộ nhớ.</summary>
+        public long MaxPixels { get; set; } = 24_000_000;
+
+        public int TimeoutMs { get; set; } = 8000;
     }
 }

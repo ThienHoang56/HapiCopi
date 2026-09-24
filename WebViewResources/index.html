@@ -1261,22 +1261,66 @@
         window.svgResults = window.svgResults || {};
 
         function startRenderSvg(svgString, id) {
+            return startSvgJob(id, svgString, {});
+        }
+
+        function startSvgJob(id, svgString, options) {
             window.svgResults[id] = { status: 'pending', result: null };
-            renderSvgToPng(svgString, id).then(res => {
-                window.svgResults[id] = { status: 'success', result: res };
+            renderSvgToPng(svgString, options || {}).then(res => {
+                if (res && typeof res === 'object') {
+                    // width/height là kích thước nội tại của SVG, không phải số điểm ảnh của PNG:
+                    // PNG được render dư độ phân giải cho nét, còn cỡ hiển thị phải giữ như bản vector.
+                    window.svgResults[id] = { status: 'success', result: res.data, width: res.width, height: res.height };
+                } else {
+                    window.svgResults[id] = { status: 'error', result: String(res) };
+                }
             }).catch(err => {
                 window.svgResults[id] = { status: 'error', result: 'ERROR: ' + err.toString() };
             });
             return 'started';
         }
 
-        async function renderSvgToPng(svgString, id) {
+        // File .svg thật (Illustrator, Figma) có thể nặng vài MB — nhúng vào chuỗi ExecuteScript sẽ vỡ,
+        // nên nhận qua postMessage. C# vẫn đọc kết quả ở window.svgResults như cũ.
+        if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.addEventListener('message', (event) => {
+                let job = null;
+                try {
+                    job = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                } catch (e) {
+                    return;
+                }
+                if (!job || job.kind !== 'svg-render') return;
+                startSvgJob(job.id, job.svg, job.options);
+            });
+        }
+
+        function readSvgLength(value) {
+            if (!value) return 0;
+            const text = String(value).trim();
+            // "100%" co giãn theo khung chứa, không nói lên kích thước nội tại.
+            if (text.endsWith('%')) return 0;
+            const parsed = parseFloat(text);
+            return isFinite(parsed) && parsed > 0 ? parsed : 0;
+        }
+
+        async function renderSvgToPng(svgString, options) {
+            const opts = options || {};
+            const background = opts.background === undefined ? '#ffffff' : opts.background;
+            const minWidth = opts.minWidth > 0 ? opts.minWidth : 0;
+            const maxScale = opts.maxScale > 0 ? opts.maxScale : 2;
+            const maxPixels = opts.maxPixels > 0 ? opts.maxPixels : 24000000;
+
             return new Promise((resolve) => {
                 try {
                     const parser = new DOMParser();
                     const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
-                    const svgElement = svgDoc.querySelector('svg');
+                    if (svgDoc.querySelector('parsererror')) {
+                        resolve("ERROR: SVG không hợp lệ");
+                        return;
+                    }
 
+                    const svgElement = svgDoc.querySelector('svg');
                     if (!svgElement) {
                         resolve("ERROR: No SVG element found");
                         return;
@@ -1288,8 +1332,8 @@
                         vbW = svgElement.viewBox.baseVal.width;
                         vbH = svgElement.viewBox.baseVal.height;
                     }
-                    let attrW = parseFloat(svgElement.getAttribute('width')) || 0;
-                    let attrH = parseFloat(svgElement.getAttribute('height')) || 0;
+                    const attrW = readSvgLength(svgElement.getAttribute('width'));
+                    const attrH = readSvgLength(svgElement.getAttribute('height'));
 
                     let width = vbW || attrW || 800;
                     let height = vbH || attrH || 600;
@@ -1305,23 +1349,33 @@
                     const image = new Image();
                     image.onload = () => {
                         try {
-                            let natW = image.naturalWidth || width;
-                            let natH = image.naturalHeight || height;
+                            const natW = image.naturalWidth || width;
+                            const natH = image.naturalHeight || height;
 
-                            // Phóng đại để ảnh nét hơn khi in/zoom trong Word
-                            const scale = 2;
+                            // Icon 24x24 nhân đôi vẫn vỡ khi kéo to trong Word, nên nâng theo bề rộng đích.
+                            let scale = maxScale;
+                            if (minWidth > 0) {
+                                scale = Math.max(scale, minWidth / natW);
+                            }
+                            const pixelCap = Math.sqrt(maxPixels / (natW * natH));
+                            scale = Math.max(1, Math.min(scale, pixelCap));
 
                             const canvas = document.createElement('canvas');
                             canvas.width = Math.max(1, Math.round(natW * scale));
                             canvas.height = Math.max(1, Math.round(natH * scale));
 
                             const context = canvas.getContext('2d');
-                            // Nền trắng để tránh nền trong suốt bị đen khi dán vào Word
-                            context.fillStyle = '#ffffff';
-                            context.fillRect(0, 0, canvas.width, canvas.height);
+                            if (background) {
+                                context.fillStyle = background;
+                                context.fillRect(0, 0, canvas.width, canvas.height);
+                            }
                             context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-                            resolve(canvas.toDataURL('image/png'));
+                            resolve({
+                                data: canvas.toDataURL('image/png'),
+                                width: Math.max(1, Math.round(natW)),
+                                height: Math.max(1, Math.round(natH))
+                            });
                         } catch (canvasErr) {
                             resolve("ERROR: Canvas drawing failed: " + canvasErr.toString());
                         }
@@ -1329,6 +1383,8 @@
                     image.onerror = (e) => {
                         resolve("ERROR: SVG Image loading failed");
                     };
+                    // Nạp qua <img> + data URL giữ SVG ở chế độ tĩnh: script bên trong không chạy và
+                    // tài nguyên ngoài không được tải. Không bao giờ đổi sang innerHTML để đo kích thước.
                     image.src = dataURL;
                 } catch (err) {
                     console.error("Lỗi render SVG: ", err);

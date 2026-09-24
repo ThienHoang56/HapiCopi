@@ -36,6 +36,7 @@ namespace HapiCopi
         private DateTime _lastPasteTime = DateTime.MinValue;
         private bool _isLastPasteTerminal = false;
         private long _currentClipboardSeq = 0; // Mã tuần tự clipboard cho AI ngầm bất đồng bộ
+        private readonly HashSet<string> _svgJobsInFlight = new HashSet<string>();
 
         public HapiCopiApplicationContext()
         {
@@ -494,6 +495,93 @@ namespace HapiCopi
         // CORE: PROCESS CLIPBOARD
         // ============================
 
+        /// <summary>
+        /// Nếu clipboard đang giữ SVG (file, markup, tệp ảo…), rasterize offline sang PNG rồi bổ sung
+        /// vào clipboard. Trả về true khi đã tiếp quản lượt copy này.
+        /// </summary>
+        private bool TryHandleSvgOnClipboard(string activeProcessName)
+        {
+            if (!SvgPasteService.IsEnabled)
+            {
+                return false;
+            }
+
+            IDataObject? clipboardData;
+            try
+            {
+                clipboardData = Clipboard.GetDataObject();
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[SVG] Không đọc được clipboard: {ex.Message}");
+                return false;
+            }
+
+            if (!SvgClipboardSource.TryExtract(clipboardData, activeProcessName, out SvgPayload? payload) || payload == null)
+            {
+                return false;
+            }
+
+            string[]? originalFiles = null;
+            try
+            {
+                if (clipboardData!.GetDataPresent(DataFormats.FileDrop))
+                {
+                    originalFiles = clipboardData.GetData(DataFormats.FileDrop) as string[];
+                }
+            }
+            catch { }
+
+            // Một lượt copy có thể bắn WM_CLIPBOARDUPDATE nhiều lần. Marker chống đệ quy chỉ có tác dụng
+            // sau khi render xong, nên cần chặn trùng trong lúc render còn đang chạy.
+            string jobKey = ComputeSvgKey(payload.Markup);
+            if (!_svgJobsInFlight.Add(jobKey))
+            {
+                Program.Log("[SVG] Bỏ qua: SVG này đang được chuyển đổi.");
+                return true;
+            }
+
+            Program.Log($"[SVG] Phát hiện SVG ({payload.SourceLabel}). Rasterize offline sang PNG...");
+            RunSvgConversion(payload, originalFiles, jobKey);
+            return true;
+        }
+
+        private static string ComputeSvgKey(string markup)
+        {
+            byte[] hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(markup));
+            return Convert.ToHexString(hash);
+        }
+
+        private void RunSvgConversion(SvgPayload payload, string[]? originalFiles, string jobKey)
+        {
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                SvgPasteResult result;
+                try
+                {
+                    result = await SvgPasteService.ConvertAndPublishAsync(payload, originalFiles);
+                }
+                catch (Exception ex)
+                {
+                    result = new SvgPasteResult { Success = false, Message = ex.Message };
+                }
+
+                _syncContext.Post(_ =>
+                {
+                    _svgJobsInFlight.Remove(jobKey);
+
+                    if (result.Success)
+                    {
+                        _notifyIcon.ShowBalloonTip(2500, "HapiCopi — SVG đã thành ảnh", result.Message, ToolTipIcon.Info);
+                    }
+                    else
+                    {
+                        Program.Log($"[SVG] {result.Message}");
+                    }
+                }, null);
+            });
+        }
+
         private void ProcessClipboard(bool isStartup)
         {
             if (_isPaused)
@@ -528,17 +616,23 @@ namespace HapiCopi
                     hasHtml = !string.IsNullOrEmpty(originalHtml);
                 }
 
+                ActiveAppInfo sourceApp = ActiveWindowHelper.GetActiveAppInfo();
+                string appName = sourceApp.ProcessName ?? "Unknown";
+
+                // SVG phải được xét trước khi bỏ qua clipboard "trống": copy một file .svg trong Explorer
+                // không để lại chữ nào trên clipboard.
+                if (!isStartup && TryHandleSvgOnClipboard(appName))
+                {
+                    return;
+                }
+
                 if (string.IsNullOrEmpty(originalText) && !hasHtml)
                 {
                     Program.Log("Bỏ qua: Clipboard trống.");
                     return;
                 }
 
-
-
                 // 2. Xác định các cờ phân tích định dạng
-                ActiveAppInfo sourceApp = ActiveWindowHelper.GetActiveAppInfo();
-                string appName = sourceApp.ProcessName ?? "Unknown";
 
                 bool mlFormatEnabled = (AppConfig.Get("ML_FORMAT_ENABLED") ?? "true").ToLower() != "false";
                 bool isUnstructured = mlFormatEnabled && !isStartup && !string.IsNullOrEmpty(originalText) && AutoFormatter.IsUnstructuredRawText(originalText);

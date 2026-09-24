@@ -15,6 +15,9 @@ namespace HapiCopi
         private readonly CheckBox _piiToastCheck;
         private readonly CheckBox _piiMaskHistoryCheck;
         private readonly CheckBox _mlFormatCheck;
+        private readonly CheckBox _svgToPngCheck;
+        private readonly CheckBox _svgTransparentCheck;
+        private readonly CheckBox _svgReplaceCheck;
         private readonly TextBox _customKeywordsBox;
         private readonly CheckBox _enableHistoryCheck;
         private readonly CheckBox _saveToDiskCheck;
@@ -29,7 +32,7 @@ namespace HapiCopi
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(520, 640);
+            ClientSize = new Size(520, 800);
             Font = new Font("Segoe UI", 9F);
             BackColor = Color.White;
 
@@ -104,6 +107,66 @@ namespace HapiCopi
                 Font = new Font("Segoe UI", 9.5f)
             };
             Controls.Add(_mlFormatCheck);
+            y += 40;
+
+            // ============================
+            // SVG → PNG
+            // ============================
+            var svgHeader = new Label
+            {
+                Text = "🖼️ Chuyển SVG sang PNG khi copy",
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(155, 89, 182),
+                AutoSize = true,
+                Location = new Point(labelX, y)
+            };
+            Controls.Add(svgHeader);
+            y += 26;
+
+            var svgDesc = new Label
+            {
+                Text = "Copy file .svg hoặc markup SVG là HapiCopi rasterize ngay trên máy, dán thẳng vào Word/Google Docs/Slack ra ảnh. Không cần tải file lên web convert — tránh lộ sơ đồ, logo, bản vẽ nội bộ.",
+                ForeColor = Color.FromArgb(100, 100, 100),
+                Font = new Font("Segoe UI", 8.5f),
+                Location = new Point(labelX, y),
+                Size = new Size(inputWidth, 46)
+            };
+            Controls.Add(svgDesc);
+            y += 50;
+
+            _svgToPngCheck = new CheckBox
+            {
+                Text = "Bật tự động chuyển SVG sang PNG",
+                AutoSize = true,
+                Location = new Point(inputX, y),
+                Font = new Font("Segoe UI", 9.5f)
+            };
+            _svgToPngCheck.CheckedChanged += (s, e) =>
+            {
+                _svgTransparentCheck.Enabled = _svgToPngCheck.Checked;
+                _svgReplaceCheck.Enabled = _svgToPngCheck.Checked;
+            };
+            Controls.Add(_svgToPngCheck);
+            y += 30;
+
+            _svgTransparentCheck = new CheckBox
+            {
+                Text = "Giữ nền trong suốt (bỏ chọn = nền trắng)",
+                AutoSize = true,
+                Location = new Point(inputX, y),
+                Font = new Font("Segoe UI", 9.5f)
+            };
+            Controls.Add(_svgTransparentCheck);
+            y += 30;
+
+            _svgReplaceCheck = new CheckBox
+            {
+                Text = "Thay hẳn clipboard bằng PNG (bỏ chọn = giữ cả bản SVG gốc)",
+                AutoSize = true,
+                Location = new Point(inputX, y),
+                Font = new Font("Segoe UI", 9.5f)
+            };
+            Controls.Add(_svgReplaceCheck);
             y += 40;
 
             // ============================
@@ -237,6 +300,12 @@ namespace HapiCopi
             _mlFormatCheck.Checked = (AppConfig.Get("ML_FORMAT_ENABLED") ?? "true").ToLower() != "false";
             _customKeywordsBox.Text = (AppConfig.Get("PII_CUSTOM_KEYWORDS") ?? "").Replace("|", "\r\n");
 
+            _svgToPngCheck.Checked = SvgPasteService.IsEnabled;
+            _svgTransparentCheck.Checked = (AppConfig.Get("SVG_PNG_BACKGROUND") ?? "transparent").ToLower() != "white";
+            _svgReplaceCheck.Checked = SvgPasteService.ReplaceOriginal;
+            _svgTransparentCheck.Enabled = _svgToPngCheck.Checked;
+            _svgReplaceCheck.Enabled = _svgToPngCheck.Checked;
+
             _enableHistoryCheck.Checked = (AppConfig.Get("HISTORY_ENABLED") ?? "true").ToLower() != "false";
             _saveToDiskCheck.Checked = (AppConfig.Get("SAVE_HISTORY_TO_DISK") ?? "true").ToLower() != "false";
             _encryptHistoryCheck.Checked = (AppConfig.Get("ENCRYPT_HISTORY_DATA") ?? "true").ToLower() != "false";
@@ -253,6 +322,10 @@ namespace HapiCopi
                 AppConfig.Set("PII_TOAST_ENABLED", _piiToastCheck.Checked ? "true" : "false");
                 AppConfig.Set("PII_MASK_HISTORY", _piiMaskHistoryCheck.Checked ? "true" : "false");
                 AppConfig.Set("ML_FORMAT_ENABLED", _mlFormatCheck.Checked ? "true" : "false");
+
+                AppConfig.Set("SVG_TO_PNG_ENABLED", _svgToPngCheck.Checked ? "true" : "false");
+                AppConfig.Set("SVG_PNG_BACKGROUND", _svgTransparentCheck.Checked ? "transparent" : "white");
+                AppConfig.Set("SVG_PASTE_MODE", _svgReplaceCheck.Checked ? "replace" : "augment");
 
                 AppConfig.Set("HISTORY_ENABLED", _enableHistoryCheck.Checked ? "true" : "false");
                 AppConfig.Set("SAVE_HISTORY_TO_DISK", _saveToDiskCheck.Checked ? "true" : "false");

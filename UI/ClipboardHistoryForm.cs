@@ -579,6 +579,89 @@ namespace HapiCopi
 
             // Nạp dữ liệu mặc định
             RefreshHistoryList();
+
+            EnableSvgDrop(this);
+        }
+
+        // ============================
+        // KÉO-THẢ SVG → PNG
+        // ============================
+
+        /// <summary>
+        /// Các control con phủ kín form nên sự kiện kéo-thả phải gắn lên từng control, không chỉ form.
+        /// RichTextBox bị bỏ qua vì tự xử lý OLE drag-drop theo cách riêng.
+        /// </summary>
+        private void EnableSvgDrop(Control control)
+        {
+            if (control is not RichTextBox)
+            {
+                control.AllowDrop = true;
+                control.DragEnter += SvgDrop_DragEnter;
+                control.DragDrop += SvgDrop_DragDrop;
+            }
+
+            foreach (Control child in control.Controls)
+            {
+                EnableSvgDrop(child);
+            }
+        }
+
+        private static bool TryGetDraggedSvgPaths(IDataObject? data, out string[] paths)
+        {
+            paths = Array.Empty<string>();
+            if (data == null || !data.GetDataPresent(DataFormats.FileDrop))
+            {
+                return false;
+            }
+
+            if (data.GetData(DataFormats.FileDrop) is not string[] dropped)
+            {
+                return false;
+            }
+
+            paths = dropped.Where(SvgClipboardSource.IsSvgPath).ToArray();
+            return paths.Length > 0;
+        }
+
+        private void SvgDrop_DragEnter(object? sender, DragEventArgs e)
+        {
+            e.Effect = TryGetDraggedSvgPaths(e.Data, out _) ? DragDropEffects.Copy : DragDropEffects.None;
+        }
+
+        private async void SvgDrop_DragDrop(object? sender, DragEventArgs e)
+        {
+            if (!TryGetDraggedSvgPaths(e.Data, out string[] paths))
+            {
+                return;
+            }
+
+            string path = paths[0];
+            string fileName = System.IO.Path.GetFileName(path);
+
+            string? markup = SvgClipboardSource.ReadSvgFile(path);
+            if (markup == null)
+            {
+                _statusLabel.Text = $"⚠️ Không đọc được {fileName}";
+                return;
+            }
+
+            _statusLabel.Text = $"⏳ Đang chuyển {fileName} sang PNG...";
+
+            var payload = new SvgPayload
+            {
+                Markup = markup,
+                SourceLabel = $"file {fileName}",
+                SuggestedName = System.IO.Path.GetFileNameWithoutExtension(path)
+            };
+
+            SvgPasteResult result = await SvgPasteService.ConvertAndPublishAsync(payload, new[] { path });
+
+            if (IsDisposed || Disposing)
+            {
+                return;
+            }
+
+            _statusLabel.Text = result.Success ? $"✅ {result.Message}" : $"⚠️ {result.Message}";
         }
 
         private void DrawCardBorder(Panel p, Graphics g, Color accentColor)
