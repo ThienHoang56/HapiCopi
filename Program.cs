@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace HapiCopi
@@ -8,8 +9,12 @@ namespace HapiCopi
         private static System.Threading.Mutex? _mutex;
 
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
+            bool openUpdateWindow = args.Any(a =>
+                a.Equals("--update", StringComparison.OrdinalIgnoreCase) ||
+                a.Equals("/update", StringComparison.OrdinalIgnoreCase));
+
             // Sử dụng Mutex với tên duy nhất để kiểm tra Single Instance
             bool isNewInstance;
             _mutex = new System.Threading.Mutex(true, "Global\\HapiCopi_SingleInstance_Mutex_9912", out isNewInstance);
@@ -33,7 +38,7 @@ namespace HapiCopi
                 Log("HapiCopi bắt đầu khởi chạy...");
                 
                 // Chạy ứng dụng thông qua ApplicationContext tùy biến để chạy ngầm không cần Form chính hiển thị
-                Application.Run(new HapiCopiApplicationContext());
+                Application.Run(new HapiCopiApplicationContext(openUpdateWindow));
             }
             finally
             {

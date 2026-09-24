@@ -3,7 +3,10 @@
 ; Output: artifacts\installer\HapiCopi-Setup.exe
 
 #define MyAppName "HapiCopi"
-#define MyAppVersion "1.0.0"
+; build.ps1 truyền phiên bản qua /DMyAppVersion; giá trị dưới chỉ dùng khi chạy ISCC bằng tay.
+#ifndef MyAppVersion
+  #define MyAppVersion "1.0.0"
+#endif
 #define MyAppPublisher "HapiCopi"
 #define MyAppURL "https://github.com/ThienHoang56/HapiCopi"
 #define MyAppExeName "HapiCopi.exe"
@@ -21,7 +24,8 @@ DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\artifacts\installer
-OutputBaseFilename=HapiCopi-Setup
+; Tên có phiên bản để nguồn cập nhật giữ được nhiều bản cạnh nhau (phục vụ quay lui).
+OutputBaseFilename=HapiCopi-Setup-{#MyAppVersion}
 SetupIconFile=..\Assets\hapicopi.ico
 Compression=lzma2/max
 SolidCompression=yes

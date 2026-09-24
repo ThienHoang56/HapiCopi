@@ -13,6 +13,8 @@ namespace HapiCopi
         private readonly ClipboardListener _listener;
         private readonly KeyboardHook _keyboardHook;
         private readonly ToolStripMenuItem _pauseMenuItem;
+        private readonly ToolStripMenuItem _updateMenuItem;
+        private UpdateForm? _updateForm;
         private bool _isPaused = false;
         private bool _hasShownWelcome = false;
         private bool _isSimulatingClipboard = false;
@@ -38,7 +40,11 @@ namespace HapiCopi
         private long _currentClipboardSeq = 0; // Mã tuần tự clipboard cho AI ngầm bất đồng bộ
         private readonly HashSet<string> _svgJobsInFlight = new HashSet<string>();
 
-        public HapiCopiApplicationContext()
+        public HapiCopiApplicationContext() : this(false)
+        {
+        }
+
+        public HapiCopiApplicationContext(bool openUpdateWindow)
         {
             _syncContext = System.Threading.SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
             // 0. Khởi tạo trình duyệt WebView2 ngầm
@@ -55,6 +61,7 @@ namespace HapiCopi
             var mathEditorMenuItem = new ToolStripMenuItem("Soạn công thức toán...", null, OnMathEditorClicked);
             var abcEditorMenuItem = new ToolStripMenuItem("Soạn bản nhạc (ABC)...", null, OnAbcEditorClicked);
             var settingsMenuItem = new ToolStripMenuItem("Cài đặt...", null, OnSettingsClicked);
+            _updateMenuItem = new ToolStripMenuItem("Phiên bản & Cập nhật...", null, OnUpdateClicked);
             var exitMenuItem = new ToolStripMenuItem("Thoát", null, OnExitClicked);
 
             contextMenu.Items.Add(titleItem);
@@ -63,6 +70,7 @@ namespace HapiCopi
             contextMenu.Items.Add(abcEditorMenuItem);
             contextMenu.Items.Add(historyMenuItem);
             contextMenu.Items.Add(settingsMenuItem);
+            contextMenu.Items.Add(_updateMenuItem);
             contextMenu.Items.Add(_pauseMenuItem);
             contextMenu.Items.Add(exitMenuItem);
 
@@ -102,6 +110,16 @@ namespace HapiCopi
 
             // 5. Thực hiện xử lý clipboard đang có sẵn ngay khi khởi động
             ProcessClipboard(isStartup: true);
+
+            // 6. Dò bản cập nhật ở chế độ nền
+            if (openUpdateWindow)
+            {
+                OnUpdateClicked(this, EventArgs.Empty);
+            }
+            else
+            {
+                StartUpdateCheck();
+            }
         }
 
         // ============================
@@ -186,6 +204,75 @@ namespace HapiCopi
             {
                 Program.Log($"[UI] Lỗi mở cửa sổ Cài đặt: {ex.Message}");
             }
+        }
+
+        private void OnUpdateClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (_updateForm != null && !_updateForm.IsDisposed)
+                {
+                    _updateForm.WindowState = FormWindowState.Normal;
+                    _updateForm.BringToFront();
+                    _updateForm.Activate();
+                    return;
+                }
+
+                _updateForm = new UpdateForm();
+                _updateForm.FormClosed += (s, args) => _updateForm = null;
+                _updateForm.Show();
+                _updateForm.BringToFront();
+                _updateForm.Activate();
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[UI] Lỗi mở cửa sổ Cập nhật: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Xem nguồn cập nhật có bản nào mới hơn không rồi báo nhẹ ở khay hệ thống.
+        /// Chỉ thông báo, không tự cài — người dùng quyết định lúc nào đổi phiên bản.
+        /// </summary>
+        private void StartUpdateCheck()
+        {
+            if (!UpdateManager.CheckOnStartup)
+            {
+                return;
+            }
+
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                await System.Threading.Tasks.Task.Delay(8000);
+                UpdateCheckResult result = await UpdateManager.CheckAsync();
+
+                if (!result.Success)
+                {
+                    Program.Log($"[Update] Bỏ qua kiểm tra: {result.Error.Replace("\n", " ")}");
+                    return;
+                }
+
+                Program.Log($"[Update] Đang dùng v{UpdateManager.CurrentVersionText}; " +
+                            $"khuyến nghị v{result.Recommended?.Version ?? "—"}, " +
+                            $"thử nghiệm v{result.Experimental?.Version ?? "—"}.");
+
+                if (!result.HasNewer)
+                {
+                    return;
+                }
+
+                ReleaseInfo newest = result.Releases[0];
+                _syncContext.Post(_ =>
+                {
+                    _updateMenuItem.Text = $"Phiên bản & Cập nhật... (có v{newest.Version})";
+                    _notifyIcon.ShowBalloonTip(
+                        4000,
+                        $"HapiCopi có bản {newest.ChannelLabel.ToLowerInvariant()} v{newest.Version}",
+                        $"Bạn đang dùng v{UpdateManager.CurrentVersionText}. " +
+                        "Mở menu khay hệ thống → Phiên bản & Cập nhật để xem.",
+                        ToolTipIcon.Info);
+                }, null);
+            });
         }
 
         // ============================
