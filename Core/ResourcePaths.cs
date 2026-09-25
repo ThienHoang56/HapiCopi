@@ -19,6 +19,13 @@ namespace HapiCopi
         public static string WebViewCacheDir =>
             Path.Combine(AppDataRoot, "WebViewCache");
 
+        /// <summary>Nhật ký chạy: %LocalAppData%\HapiCopi\Logs</summary>
+        public static string LogDirectory => Path.Combine(AppDataRoot, "Logs");
+
+        /// <summary>Cấu hình, lịch sử, danh sách loại trừ: %AppData%\HapiCopi</summary>
+        public static string RoamingDataRoot =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppDataFolderName);
+
         /// <summary>
         /// Thư mục chứa index.html / matheditor / abceditor…
         /// Ưu tiên: cạnh exe (bộ cài) → AppData → thư mục source khi debug.

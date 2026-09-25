@@ -1,5 +1,5 @@
 using System;
-using System.IO;
+using System.Drawing;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 
@@ -12,48 +12,68 @@ namespace HapiCopi
     {
         private readonly Microsoft.Web.WebView2.WinForms.WebView2 _web;
         private readonly Action<string, string> _setClipboard;
+        private bool _ready;
+        private bool _attaching;
 
-        /// <param name="setClipboard">Callback đặt clipboard (plainText, cfHtml) — dùng lại cơ chế STA + chống tự xử lý lại của app.</param>
         public MathEditorForm(Action<string, string> setClipboard)
         {
             _setClipboard = setClipboard;
 
             Text = "HapiCopi - Soạn công thức toán";
+            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleDimensions = new SizeF(7F, 17F);
             Width = 940;
             Height = 580;
             StartPosition = FormStartPosition.CenterScreen;
 
-            try { Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+            try { Icon = UiTheme.AppIcon; } catch { }
 
             _web = new Microsoft.Web.WebView2.WinForms.WebView2 { Dock = DockStyle.Fill };
             Controls.Add(_web);
 
-            InitAsync();
+            FormClosing += OnFormClosing;
+            VisibleChanged += (_, _) =>
+            {
+                if (Visible)
+                {
+                    RequestReady();
+                }
+            };
         }
 
-        private async void InitAsync()
+        public void RequestReady() => _ = EnsureReadyAsync();
+
+        private async Task EnsureReadyAsync()
         {
+            if (_ready || _attaching)
+            {
+                return;
+            }
+
+            _attaching = true;
             try
             {
-                string cacheDir = ResourcePaths.WebViewCacheDir;
-                Directory.CreateDirectory(cacheDir);
-
-                var env = await CoreWebView2Environment.CreateAsync(null, cacheDir);
-                await _web.EnsureCoreWebView2Async(env);
-
-                string localFolder = ResourcePaths.GetWebViewResourcesFolder();
-                _web.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                    "hapicopi.local", localFolder, CoreWebView2HostResourceAccessKind.Allow);
-
-                _web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
-                _web.CoreWebView2.Settings.AreDevToolsEnabled = false;
-
-                _web.CoreWebView2.WebMessageReceived += OnWebMessage;
-                _web.Source = new Uri("http://hapicopi.local/matheditor.html");
+                await WebViewManager.AttachEditorAsync(_web, "matheditor.html", OnWebMessage);
+                _ready = true;
             }
             catch (Exception ex)
             {
+                _attaching = false;
                 Program.Log($"[MathEditor LỖI] Khởi tạo WebView2 thất bại: {ex.Message}");
+                if (Visible && Opacity > 0)
+                {
+                    MessageBox.Show("Không mở được soạn công thức:\n" + ex.Message, "HapiCopi",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+        }
+
+        private void OnFormClosing(object? sender, FormClosingEventArgs e)
+        {
+            if (e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                Hide();
             }
         }
 

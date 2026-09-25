@@ -13,7 +13,6 @@ namespace HapiCopi
     public class UpdateForm : Form
     {
         private readonly Label _currentLabel;
-        private readonly Label _feedLabel;
         private readonly TextBox _feedBox;
         private readonly Label _warningLabel;
         private readonly ListView _releaseList;
@@ -27,204 +26,210 @@ namespace HapiCopi
         private UpdateCheckResult? _result;
         private bool _isBusy;
 
-        private static readonly Color ColorRecommended = Color.FromArgb(39, 174, 96);
-        private static readonly Color ColorExperimental = Color.FromArgb(230, 126, 34);
-
         public UpdateForm()
         {
-            Text = "HapiCopi - Phiên bản & Cập nhật";
-            FormBorderStyle = FormBorderStyle.FixedDialog;
+            UiTheme.ApplyDialog(this, "HapiCopi — Phiên bản và cập nhật");
+            FormBorderStyle = FormBorderStyle.Sizable;
             MaximizeBox = false;
             MinimizeBox = false;
-            StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(620, 580);
-            Font = new Font("Segoe UI", 9F);
-            BackColor = Color.White;
 
-            int margin = 20;
-            int width = ClientSize.Width - (margin * 2);
-            int y = 18;
-
-            var header = new Label
+            var root = new TableLayoutPanel
             {
-                Text = "🔄 Phiên bản & Cập nhật",
-                Font = new Font("Segoe UI", 12F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(52, 152, 219),
-                AutoSize = true,
-                Location = new Point(margin, y)
+                ColumnCount = 1,
+                Dock = DockStyle.Fill,
+                Padding = new Padding(LogicalToDeviceUnits(22), LogicalToDeviceUnits(18),
+                                      LogicalToDeviceUnits(22), LogicalToDeviceUnits(10)),
+                BackColor = UiTheme.Background
             };
-            Controls.Add(header);
-            y += 34;
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+            int row = 0;
+            void AddAuto(Control control, int bottomGap = 8)
+            {
+                control.Margin = new Padding(0, 0, 0, LogicalToDeviceUnits(bottomGap));
+                root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                root.Controls.Add(control, 0, row++);
+            }
+
+            AddAuto(UiTheme.PageTitleLabel("Phiên bản và cập nhật"), 10);
 
             _currentLabel = new Label
             {
                 Text = $"Đang dùng: v{UpdateManager.CurrentVersionText}",
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                Font = UiTheme.BodyStrong,
+                ForeColor = UiTheme.TextPrimary,
                 AutoSize = true,
-                Location = new Point(margin, y)
+                UseMnemonic = false
             };
-            Controls.Add(_currentLabel);
-            y += 24;
+            AddAuto(_currentLabel, 12);
 
-            _feedLabel = new Label
+            AddAuto(UiTheme.Description(
+                "Nguồn cập nhật: thư mục trên máy, thư mục mạng LAN, hoặc URL https."), 6);
+
+            var feedRow = new TableLayoutPanel
             {
-                Text = "Nguồn cập nhật (thư mục trên máy, thư mục mạng LAN, hoặc URL https):",
-                ForeColor = Color.FromArgb(120, 120, 120),
-                Font = new Font("Segoe UI", 8.5f),
-                Location = new Point(margin, y),
-                Size = new Size(width, 16)
+                ColumnCount = 2,
+                AutoSize = true,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 0, LogicalToDeviceUnits(8))
             };
-            Controls.Add(_feedLabel);
-            y += 18;
+            feedRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            feedRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
             _feedBox = new TextBox
             {
-                Location = new Point(margin, y),
-                Width = width - 96,
-                Font = new Font("Segoe UI", 8.5f)
+                Dock = DockStyle.Fill,
+                Font = UiTheme.Small
             };
-            Controls.Add(_feedBox);
+            feedRow.Controls.Add(_feedBox, 0, 0);
 
-            var saveFeedButton = new Button
-            {
-                Text = "Lưu nguồn",
-                Width = 90,
-                Height = 24,
-                Location = new Point(margin + width - 90, y - 1),
-                FlatStyle = FlatStyle.Flat
-            };
+            Button saveFeedButton = UiTheme.SecondaryButton("Lưu nguồn");
+            saveFeedButton.Margin = new Padding(LogicalToDeviceUnits(8), 0, 0, 0);
             saveFeedButton.Click += async (s, e) =>
             {
                 AppConfig.Set("UPDATE_FEED", _feedBox.Text.Trim());
                 await RefreshAsync();
             };
-            Controls.Add(saveFeedButton);
-            y += 30;
+            feedRow.Controls.Add(saveFeedButton, 1, 0);
+            AddAuto(feedRow, 8);
 
-            _warningLabel = new Label
-            {
-                Text = "",
-                ForeColor = Color.FromArgb(192, 57, 43),
-                Font = new Font("Segoe UI", 8.5f),
-                Location = new Point(margin, y),
-                Size = new Size(width, 30),
-                Visible = false
-            };
-            Controls.Add(_warningLabel);
-            y += 34;
+            _warningLabel = UiTheme.Hint("", UiTheme.Danger);
+            _warningLabel.Visible = false;
+            AddAuto(_warningLabel, 8);
 
             _releaseList = new ListView
             {
-                Location = new Point(margin, y),
-                Size = new Size(width, 210),
+                Dock = DockStyle.Fill,
                 View = View.Details,
                 FullRowSelect = true,
                 MultiSelect = false,
                 HideSelection = false,
-                GridLines = false
+                GridLines = false,
+                Font = UiTheme.Body
             };
             _releaseList.Columns.Add("Phiên bản", 110);
             _releaseList.Columns.Add("Kênh", 110);
             _releaseList.Columns.Add("Ngày phát hành", 130);
             _releaseList.Columns.Add("Trạng thái", 210);
             _releaseList.SelectedIndexChanged += (s, e) => UpdateActionButton();
-            Controls.Add(_releaseList);
-            y += 220;
+            _releaseList.Margin = new Padding(0, 0, 0, LogicalToDeviceUnits(8));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            root.Controls.Add(_releaseList, 0, row++);
 
-            _notesLabel = new Label
-            {
-                Text = "",
-                ForeColor = Color.FromArgb(90, 90, 90),
-                Font = new Font("Segoe UI", 8.5f),
-                Location = new Point(margin, y),
-                Size = new Size(width, 46)
-            };
-            Controls.Add(_notesLabel);
-            y += 52;
+            _notesLabel = UiTheme.Description("");
+            AddAuto(_notesLabel, 6);
 
             _progress = new ProgressBar
             {
-                Location = new Point(margin, y),
-                Size = new Size(width, 14),
+                Dock = DockStyle.Fill,
+                Height = LogicalToDeviceUnits(14),
                 Visible = false
             };
-            Controls.Add(_progress);
-            y += 20;
+            AddAuto(_progress, 6);
 
-            _statusLabel = new Label
-            {
-                Text = "Đang đọc danh sách phiên bản...",
-                ForeColor = Color.FromArgb(90, 90, 90),
-                Location = new Point(margin, y),
-                Size = new Size(width, 34)
-            };
-            Controls.Add(_statusLabel);
+            _statusLabel = UiTheme.Description("Đang đọc danh sách phiên bản...");
+            AddAuto(_statusLabel, 4);
 
-            int buttonY = ClientSize.Height - 46;
-
-            _actionButton = new Button
-            {
-                Text = "Cài bản này",
-                Width = 170,
-                Height = 32,
-                Location = new Point(margin, buttonY),
-                BackColor = Color.FromArgb(52, 152, 219),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Enabled = false
-            };
-            _actionButton.FlatAppearance.BorderSize = 0;
+            _actionButton = UiTheme.PrimaryButton("Cài bản này");
+            _actionButton.Enabled = false;
             _actionButton.Click += OnActionClicked;
-            Controls.Add(_actionButton);
 
-            _rollbackButton = new Button
-            {
-                Text = "Quay về bản khuyến nghị",
-                Width = 180,
-                Height = 32,
-                Location = new Point(margin + 180, buttonY),
-                FlatStyle = FlatStyle.Flat,
-                Enabled = false
-            };
+            _rollbackButton = UiTheme.SecondaryButton("Quay về bản khuyến nghị");
+            _rollbackButton.Enabled = false;
             _rollbackButton.Click += OnRollbackClicked;
-            Controls.Add(_rollbackButton);
 
-            _refreshButton = new Button
-            {
-                Text = "Kiểm tra lại",
-                Width = 100,
-                Height = 32,
-                Location = new Point(ClientSize.Width - margin - 210, buttonY),
-                FlatStyle = FlatStyle.Flat
-            };
+            _refreshButton = UiTheme.SecondaryButton("Kiểm tra lại");
             _refreshButton.Click += async (s, e) => await RefreshAsync();
-            Controls.Add(_refreshButton);
 
-            var closeButton = new Button
-            {
-                Text = "Đóng",
-                Width = 100,
-                Height = 32,
-                Location = new Point(ClientSize.Width - margin - 100, buttonY),
-                FlatStyle = FlatStyle.Flat
-            };
+            Button closeButton = UiTheme.SecondaryButton("Đóng");
             closeButton.Click += (s, e) => Close();
-            Controls.Add(closeButton);
+
+            var footer = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = UiTheme.Surface,
+                Padding = new Padding(LogicalToDeviceUnits(22), LogicalToDeviceUnits(12),
+                                      LogicalToDeviceUnits(22), LogicalToDeviceUnits(12))
+            };
+
+            var footerInner = new TableLayoutPanel
+            {
+                ColumnCount = 2,
+                AutoSize = true,
+                Dock = DockStyle.Fill
+            };
+            footerInner.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            footerInner.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+            var leftButtons = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.LeftToRight,
+                AutoSize = true,
+                WrapContents = true,
+                BackColor = Color.Transparent
+            };
+            _actionButton.Margin = new Padding(0, 0, LogicalToDeviceUnits(8), LogicalToDeviceUnits(4));
+            _rollbackButton.Margin = new Padding(0, 0, 0, LogicalToDeviceUnits(4));
+            leftButtons.Controls.Add(_actionButton);
+            leftButtons.Controls.Add(_rollbackButton);
+
+            footerInner.Controls.Add(leftButtons, 0, 0);
+            footerInner.Controls.Add(UiTheme.ButtonRow(closeButton, _refreshButton), 1, 0);
+            footer.Controls.Add(footerInner);
+
+            var footerBorder = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = Math.Max(1, LogicalToDeviceUnits(1)),
+                BackColor = UiTheme.Border
+            };
+
+            Controls.Add(root);
+            Controls.Add(footerBorder);
+            Controls.Add(footer);
 
             CancelButton = closeButton;
 
+            MinimumSize = new Size(LogicalToDeviceUnits(640), LogicalToDeviceUnits(480));
+            Size = new Size(LogicalToDeviceUnits(720), LogicalToDeviceUnits(560));
+
+            void ApplyWrap()
+            {
+                int available = root.ClientSize.Width - root.Padding.Horizontal;
+                UiTheme.ApplyWrapWidth(root, available);
+                SizeColumns();
+            }
+
             Shown += async (s, e) =>
             {
-                // Nút cài là control đầu tiên trong Controls nên mặc định được focus; đẩy focus sang
-                // danh sách để một phím Enter lạc không khởi động luôn việc đổi phiên bản.
+                ApplyWrap();
                 _releaseList.Select();
                 await RefreshAsync();
             };
+            root.ClientSizeChanged += (s, e) => ApplyWrap();
         }
 
-        // ============================
-        // NẠP DANH SÁCH
-        // ============================
+        private void SizeColumns()
+        {
+            if (_releaseList.Width < 80)
+            {
+                return;
+            }
+
+            int inner = _releaseList.ClientSize.Width - SystemInformation.VerticalScrollBarWidth;
+            if (inner < 80)
+            {
+                inner = _releaseList.ClientSize.Width;
+            }
+
+            _releaseList.Columns[0].Width = Math.Max(90, inner * 18 / 100);
+            _releaseList.Columns[1].Width = Math.Max(90, inner * 20 / 100);
+            _releaseList.Columns[2].Width = Math.Max(100, inner * 22 / 100);
+            _releaseList.Columns[3].Width = Math.Max(120, inner - _releaseList.Columns[0].Width
+                - _releaseList.Columns[1].Width - _releaseList.Columns[2].Width);
+        }
 
         private async Task RefreshAsync()
         {
@@ -263,11 +268,11 @@ namespace HapiCopi
 
                 if (release.Channel == ReleaseChannel.Recommended)
                 {
-                    item.ForeColor = ColorRecommended;
+                    item.ForeColor = UiTheme.Success;
                 }
                 else if (release.Channel == ReleaseChannel.Experimental)
                 {
-                    item.ForeColor = ColorExperimental;
+                    item.ForeColor = UiTheme.Warning;
                 }
 
                 if (release.IsCurrent)
@@ -279,11 +284,10 @@ namespace HapiCopi
             }
 
             _warningLabel.Visible = !UpdateManager.IsRunningInstalledCopy;
-            if (_warningLabel.Visible)
-            {
-                _warningLabel.Text = "⚠ Bản đang chạy không phải bản cài đặt (chạy từ thư mục build). " +
-                                     "Cài đặt sẽ tạo bản cài riêng chứ không thay thế thư mục này.";
-            }
+            _warningLabel.Text = _warningLabel.Visible
+                ? "Bản đang chạy không phải bản cài đặt (chạy từ thư mục build). " +
+                  "Cài đặt sẽ tạo bản cài riêng chứ không thay thế thư mục này."
+                : "";
 
             _statusLabel.Text = _result.HasNewer
                 ? $"Có bản mới hơn bản đang dùng (v{UpdateManager.CurrentVersionText})."
@@ -310,14 +314,15 @@ namespace HapiCopi
                 return;
             }
 
-            // Ưu tiên gợi ý bản mới hơn bản đang chạy; nếu không có thì trỏ về bản khuyến nghị.
+            // Chỉ tự chọn bản mới hơn khi thật sự có bản mới. Không có thì trỏ về bản đang dùng,
+            // tránh mặc định mời người dùng quay lui.
             ListViewItem? target = _releaseList.Items
                 .Cast<ListViewItem>()
                 .FirstOrDefault(i => i.Tag is ReleaseInfo r && r.ParsedVersion > UpdateManager.CurrentVersion);
 
             target ??= _releaseList.Items
                 .Cast<ListViewItem>()
-                .FirstOrDefault(i => i.Tag is ReleaseInfo r && r.Channel == ReleaseChannel.Recommended);
+                .FirstOrDefault(i => i.Tag is ReleaseInfo r && r.IsCurrent);
 
             target ??= _releaseList.Items[0];
             target.Selected = true;
@@ -358,10 +363,6 @@ namespace HapiCopi
                 : $"Quay về v{release.Version}";
         }
 
-        // ============================
-        // CÀI ĐẶT
-        // ============================
-
         private async void OnActionClicked(object? sender, EventArgs e)
         {
             ReleaseInfo? release = SelectedRelease;
@@ -389,7 +390,6 @@ namespace HapiCopi
                 : $"Cài phiên bản {release.Version} ({release.ChannelLabel})?\n\n" +
                   "HapiCopi sẽ thoát, cài bản mới rồi tự khởi động lại.";
 
-            // Mặc định chọn Hủy: đổi phiên bản là việc nặng, không nên chỉ cách một phím Enter.
             if (MessageBox.Show(question, "HapiCopi", MessageBoxButtons.OKCancel, MessageBoxIcon.Question,
                     MessageBoxDefaultButton.Button2) != DialogResult.OK)
             {
@@ -432,7 +432,6 @@ namespace HapiCopi
 
             _statusLabel.Text = message;
 
-            // Bộ cài đang chờ tiến trình này thoát mới ghi đè được file thực thi.
             MessageBox.Show(
                 message + "\n\nNhấn OK để thoát HapiCopi và bắt đầu cài.",
                 "HapiCopi",

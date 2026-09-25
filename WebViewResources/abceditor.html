@@ -5,10 +5,6 @@
     <meta charset="utf-8" />
     <title>HapiCopi - Soạn bản nhạc (ABC)</title>
     <link rel="stylesheet" href="abcjs-audio.css" />
-    <script src="abcjs-basic-min.js?v=1"></script>
-    <script src="jquery.min.js?v=1"></script>
-    <script src="xml2abc.js?v=1"></script>
-    <script src="jszip.min.js?v=1"></script>
     <style>
         * { box-sizing: border-box; }
         html, body { height: 100%; margin: 0; }
@@ -140,6 +136,7 @@
         </div>
     </div>
 
+    <script src="abcjs-basic-min.js?v=1"></script>
     <script>
         var DEFAULT_ABC =
             "X:1\n" +
@@ -178,10 +175,10 @@
         var statusEl = document.getElementById('status');
         var templateSel = document.getElementById('template');
         var audioEl = document.getElementById('audio');
-        var audioSupported = ABCJS.synth.supportsAudio();
-
+        var audioSupported = false;
         var synthControl = null;
         var currentVisual = null;
+        var abcReady = false;
 
         // Nạp danh sách template vào combobox
         Object.keys(TEMPLATES).forEach(function (name) {
@@ -227,9 +224,40 @@
             }
         }
 
+        function loadScript(src) {
+            return new Promise(function (resolve, reject) {
+                var s = document.createElement('script');
+                s.src = src;
+                s.onload = resolve;
+                s.onerror = function () { reject(new Error('Không nạp được ' + src)); };
+                document.body.appendChild(s);
+            });
+        }
+
+        var importLibsPromise = null;
+        function ensureImportLibs() {
+            if (window.jQuery && typeof JSZip !== 'undefined' && typeof vertaal === 'function') {
+                return Promise.resolve();
+            }
+            if (!importLibsPromise) {
+                importLibsPromise = loadScript('jquery.min.js?v=1')
+                    .then(function () { return loadScript('xml2abc.js?v=1'); })
+                    .then(function () { return loadScript('jszip.min.js?v=1'); });
+            }
+            return importLibsPromise;
+        }
+
         function importFile(file) {
             var name = (file.name || '').toLowerCase();
             statusEl.textContent = 'Đang đọc "' + file.name + '"...';
+            var needLibs = name.endsWith('.xml') || name.endsWith('.musicxml') || name.endsWith('.mxl');
+            var start = needLibs ? ensureImportLibs() : Promise.resolve();
+            start.then(function () { importFileAfterLibs(file, name); }).catch(function (e) {
+                statusEl.innerHTML = '<span class="err">' + (e.message || e) + '</span>';
+            });
+        }
+
+        function importFileAfterLibs(file, name) {
             if (name.endsWith('.abc') || name.endsWith('.txt')) {
                 var r = new FileReader();
                 r.onload = function () { loadAbcText(String(r.result), 'Đã nạp file ABC'); };
@@ -321,6 +349,7 @@
 
         // ---- Render bản nhạc ----
         function render() {
+            if (!abcReady || typeof ABCJS === 'undefined') return;
             var abc = input.value;
             try {
                 var visual = ABCJS.renderAbc(paper, abc, {
@@ -405,12 +434,38 @@
             });
         }
 
-        // ---- Khởi tạo ----
+        // ---- Khởi tạo: chờ ABCJS (không throw — script nạp chậm vẫn sống) ----
         input.value = DEFAULT_ABC;
-        if (!audioSupported) {
-            audioEl.innerHTML = '<span class="err">Trình duyệt không hỗ trợ phát âm thanh.</span>';
+        statusEl.textContent = 'Đang nạp công cụ nhạc…';
+
+        function startAbc() {
+            if (typeof ABCJS === 'undefined') {
+                return false;
+            }
+            abcReady = true;
+            audioSupported = ABCJS.synth && typeof ABCJS.synth.supportsAudio === 'function'
+                && ABCJS.synth.supportsAudio();
+            if (!audioSupported) {
+                audioEl.innerHTML = '<span class="err">Trình duyệt không hỗ trợ phát âm thanh.</span>';
+            }
+            render();
+            setTimeout(function () {
+                ensureImportLibs().catch(function () { /* nhập file vẫn báo lỗi lúc bấm */ });
+            }, 1500);
+            return true;
         }
-        render();
+
+        if (!startAbc()) {
+            var abcPolls = 0;
+            var abcPoll = setInterval(function () {
+                if (startAbc() || ++abcPolls > 50) {
+                    clearInterval(abcPoll);
+                    if (!abcReady) {
+                        statusEl.innerHTML = '<span class="err">Không nạp được ABCJS. Đóng cửa sổ rồi mở lại.</span>';
+                    }
+                }
+            }, 80);
+        }
     </script>
 </body>
 

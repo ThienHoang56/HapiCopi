@@ -8,6 +8,8 @@ alwaysApply: true
 Trước khi `git commit`, `git push`, amend, hoặc dọn thư mục:
 
 1. Đọc `.AGENT/README.md` và file liên quan (đặc biệt `.AGENT/git.md`).
-2. **Không** để Cursor thành co-author — verify `git cat-file -p HEAD` không có `Co-authored-by`.
-3. **Không** commit `dist/`.
-4. App là desktop local DLP, không server–client — xem `.AGENT/architecture.md`.
+2. Trước khi sửa `UI/`, `Program.cs`, `installer/`, hoặc vòng đời app: đọc `.AGENT/handoff-ui-va-vong-doi.md`.
+3. **Không** để Cursor thành co-author — verify `git cat-file -p HEAD` không có `Co-authored-by`.
+4. **Không** commit `dist/`.
+5. App là desktop local DLP, không server–client — xem `.AGENT/architecture.md`.
+6. Không chụp toàn màn hình để verify UI — dùng `tools/capture-window.ps1`.

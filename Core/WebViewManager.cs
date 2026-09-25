@@ -1,4 +1,5 @@
 using System;
+using System.Drawing;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -11,12 +12,22 @@ namespace HapiCopi
     {
         private static Form? _hiddenForm;
         private static Microsoft.Web.WebView2.WinForms.WebView2? _webView;
+        private static CoreWebView2Environment? _environment;
         private static bool _isInitialized = false;
         private static readonly TaskCompletionSource<bool> _initTcs = new TaskCompletionSource<bool>();
+        private static readonly TaskCompletionSource<CoreWebView2Environment?> _envTcs =
+            new TaskCompletionSource<CoreWebView2Environment?>();
         private static System.Threading.SynchronizationContext? _syncContext;
 
         public static bool IsInitialized => _isInitialized;
         public static Task<bool> InitializationTask => _initTcs.Task;
+        public static Task<CoreWebView2Environment?> EnvironmentTask => _envTcs.Task;
+
+        /// <summary>
+        /// Môi trường Chromium đã khởi động cùng app. Soạn toán/nhạc phải dùng lại cái này,
+        /// không CreateAsync lần nữa — tạo environment mới mỗi lần mở cửa sổ mất vài giây.
+        /// </summary>
+        public static CoreWebView2Environment? SharedEnvironment => _environment;
 
         public static void Initialize()
         {
@@ -58,6 +69,7 @@ namespace HapiCopi
             {
                 Program.Log($"[WebViewManager LỖI] Khởi tạo thất bại: {ex.Message}");
                 _initTcs.TrySetResult(false);
+                _envTcs.TrySetResult(null);
             }
         }
 
@@ -65,13 +77,21 @@ namespace HapiCopi
         {
             try
             {
-                if (_webView == null) return;
+                if (_webView == null)
+                {
+                    _initTcs.TrySetResult(false);
+                    _envTcs.TrySetResult(null);
+                    return;
+                }
 
                 string cacheDir = ResourcePaths.WebViewCacheDir;
                 Directory.CreateDirectory(cacheDir);
 
-                var env = await CoreWebView2Environment.CreateAsync(null, cacheDir);
-                await _webView.EnsureCoreWebView2Async(env);
+                _environment = await CoreWebView2Environment.CreateAsync(null, cacheDir);
+                await _webView.EnsureCoreWebView2Async(_environment);
+                // Chromium đã sống — cửa sổ soạn được phép gắn ngay, không chờ index.html
+                // (trang đó còn kéo MathJax + Mermaid, chậm hơn nhiều soạn toán/nhạc).
+                _envTcs.TrySetResult(_environment);
 
                 // Ánh xạ thư mục ảo hapicopi.local để nạp tài nguyên cục bộ bảo mật (tránh CORS/File scheme restrictions)
                 string localFolder = ResourcePaths.GetWebViewResourcesFolder();
@@ -113,7 +133,73 @@ namespace HapiCopi
             {
                 Program.Log($"[WebViewManager LỖI] Lỗi tiến trình khởi động: {ex.Message}\n{ex.StackTrace}");
                 _initTcs.TrySetResult(false);
+                _envTcs.TrySetResult(null);
             }
+        }
+
+        /// <summary>
+        /// Đóng WebView2 khi thoát app. Tiến trình msedgewebview2.exe giữ khoá thư mục cache, còn
+        /// sống thì bộ gỡ cài đặt không xoá được %LocalAppData%\HapiCopi.
+        /// </summary>
+        public static void Shutdown()
+        {
+            _isInitialized = false;
+
+            try
+            {
+                _webView?.Dispose();
+            }
+            catch { }
+
+            try
+            {
+                _hiddenForm?.Dispose();
+            }
+            catch { }
+
+            _webView = null;
+            _hiddenForm = null;
+            _environment = null;
+        }
+
+        /// <summary>
+        /// Gắn WebView2 cửa sổ soạn vào environment đã ấm rồi điều hướng ngay.
+        /// Không chờ trang tải xong — để khung soạn hiện như các bản trước.
+        /// </summary>
+        public static async Task AttachEditorAsync(
+            Microsoft.Web.WebView2.WinForms.WebView2 web,
+            string pageFileName,
+            EventHandler<CoreWebView2WebMessageReceivedEventArgs> onMessage)
+        {
+            CoreWebView2Environment? env = await _envTcs.Task;
+            if (env == null)
+            {
+                string cacheDir = ResourcePaths.WebViewCacheDir;
+                Directory.CreateDirectory(cacheDir);
+                env = await CoreWebView2Environment.CreateAsync(null, cacheDir);
+                _environment = env;
+            }
+
+            if (web.CoreWebView2 != null)
+            {
+                return;
+            }
+
+            await web.EnsureCoreWebView2Async(env);
+
+            string localFolder = ResourcePaths.GetWebViewResourcesFolder();
+            if (!File.Exists(Path.Combine(localFolder, pageFileName)))
+            {
+                throw new FileNotFoundException("Thiếu " + pageFileName + " trong " + localFolder);
+            }
+
+            web.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                "hapicopi.local", localFolder, CoreWebView2HostResourceAccessKind.Allow);
+            web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+            web.CoreWebView2.Settings.AreDevToolsEnabled = false;
+            web.DefaultBackgroundColor = Color.White;
+            web.CoreWebView2.WebMessageReceived += onMessage;
+            web.Source = new Uri("http://hapicopi.local/" + pageFileName + "?v=3");
         }
 
         // Helper để gọi lệnh script JS từ bất kỳ Thread nào và trả về kết quả

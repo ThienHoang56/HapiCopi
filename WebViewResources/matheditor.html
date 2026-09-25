@@ -7,13 +7,16 @@
     <script>
         // Nạp thêm input AsciiMath bên cạnh tex-svg để có MathJax.asciimath2svg().
         window.MathJax = {
-            loader: { load: ['input/asciimath'] },
+            loader: {
+                load: ['input/asciimath'],
+                // Mặc định MathJax kéo component từ CDN — offline thì startup.promise không bao giờ xong.
+                paths: { mathjax: '.' }
+            },
             svg: { fontCache: 'local' },
             options: { enableAssistiveMml: false },
             startup: { typeset: false }
         };
     </script>
-    <script src="mathjax-tex-svg.js?v=1"></script>
     <style>
         * { box-sizing: border-box; }
         html, body { height: 100%; margin: 0; }
@@ -155,12 +158,14 @@
         <div class="preview" id="preview"></div>
     </div>
 
+    <script src="mathjax-tex-svg.js?v=1"></script>
     <script>
         var ready = false;
         var currentSvg = null;
         var input = document.getElementById('input');
         var preview = document.getElementById('preview');
         var statusEl = document.getElementById('status');
+        statusEl.textContent = 'Đang nạp công cụ công thức…';
 
         function getMode() { return document.querySelector('input[name=mode]:checked').value; }
         function isDisplay() { return document.getElementById('displayMode').checked; }
@@ -173,7 +178,12 @@
             if (!src.trim()) { statusEl.textContent = ''; return; }
             try {
                 var opts = { display: isDisplay() };
-                var node = (getMode() === 'asciimath')
+                var useAscii = getMode() === 'asciimath';
+                if (useAscii && typeof MathJax.asciimath2svg !== 'function') {
+                    statusEl.textContent = 'Đang nạp AsciiMath…';
+                    return;
+                }
+                var node = useAscii
                     ? MathJax.asciimath2svg(src, opts)
                     : MathJax.tex2svg(src, opts);
                 var svg = node.querySelector('svg');
@@ -231,10 +241,17 @@
             try {
                 var svg = currentSvg;
                 var exToPx = 11;
-                var wEx = parseFloat(svg.getAttribute('width')) || 2;
-                var hEx = parseFloat(svg.getAttribute('height')) || 2;
-                var W = Math.max(1, wEx * exToPx);
-                var H = Math.max(1, hEx * exToPx);
+                var wEx = parseFloat(svg.getAttribute('width')) || 0;
+                var hEx = parseFloat(svg.getAttribute('height')) || 0;
+                var W = wEx > 0 ? wEx * exToPx : 0;
+                var H = hEx > 0 ? hEx * exToPx : 0;
+                try {
+                    var box = svg.getBBox();
+                    if (!W) W = box.width;
+                    if (!H) H = box.height;
+                } catch (ignore) { }
+                W = Math.max(8, W || 80);
+                H = Math.max(8, H || 32);
 
                 var clone = svg.cloneNode(true);
                 clone.setAttribute('width', W);
@@ -266,9 +283,39 @@
             }
         }
 
-        if (window.MathJax && MathJax.startup && MathJax.startup.promise) {
-            MathJax.startup.promise.then(function () { ready = true; render(); });
+        function markReady() {
+            if (ready) return;
+            ready = true;
+            render();
         }
+
+        function tryMarkReady() {
+            if (ready) return true;
+            if (window.MathJax && typeof MathJax.tex2svg === 'function') {
+                markReady();
+                return true;
+            }
+            return false;
+        }
+
+        if (window.MathJax && MathJax.startup && MathJax.startup.promise) {
+            MathJax.startup.promise.then(markReady).catch(function (err) {
+                if (!tryMarkReady()) {
+                    statusEl.innerHTML = '<span class="err">MathJax lỗi: ' + (err && err.message ? err.message : err) + '</span>';
+                }
+            });
+        }
+
+        tryMarkReady();
+        var polls = 0;
+        var poll = setInterval(function () {
+            if (tryMarkReady() || ++polls > 50) {
+                clearInterval(poll);
+                if (!ready) {
+                    statusEl.innerHTML = '<span class="err">Không nạp được MathJax. Đóng cửa sổ rồi mở lại.</span>';
+                }
+            }
+        }, 80);
     </script>
 </body>
 

@@ -33,6 +33,32 @@ Mục tiêu: user thấy **tiện và sướng** — không phải thư mục DL
 - Phát hành zip cả folder `dist/` cho end-user  
 - Commit `artifacts/` / `dist/` (đã có trong `.gitignore`)
 
+## Vòng đời app (2026-09-24)
+
+App chạy ẩn ở khay nên **không có cửa sổ để Windows gửi `WM_CLOSE`**. Mọi thao tác
+cài đè / gỡ đều phải đi qua kênh lệnh của chính app:
+
+- `Core/AppInstanceChannel.cs` — named pipe `HapiCopi.Command.<user>`.
+- `HapiCopi.exe --quit` tắt êm app đang chạy rồi chờ tới khi tiến trình biến mất.
+- `HapiCopi.exe --show | --settings | --update` chuyển lệnh cho instance đang chạy
+  thay vì thoát im lặng (bấm shortcut lúc app đang chạy phải thấy cửa sổ hiện lên).
+- `HapiCopi.iss` mục `[Code]` gọi `--quit` ở `PrepareToInstall` và `InitializeUninstall`,
+  kiểm tra bằng `tasklist`, hết 10s mới `taskkill /F`.
+
+Dữ liệu trên đĩa, để bộ gỡ dọn đúng chỗ:
+
+| Đường dẫn | Nội dung | Khi gỡ |
+|-----------|----------|--------|
+| `%LocalAppData%\Programs\HapiCopi` | exe + WebViewResources | xoá cả thư mục |
+| `%LocalAppData%\HapiCopi\Logs` | `hapicopi.log`, dump chẩn đoán | xoá |
+| `%LocalAppData%\HapiCopi\WebViewCache` | cache Chromium | xoá |
+| `%LocalAppData%\HapiCopi\Releases`, `\Updates` | nguồn + bộ cài đã tải | xoá |
+| `%AppData%\HapiCopi` | lịch sử clipboard, config, loại trừ | **hỏi user**, mặc định xoá |
+
+Không bao giờ ghi file lúc chạy vào thư mục cài đặt: bộ gỡ chỉ xoá file nó đã cài,
+file lạ sẽ giữ cả thư mục lại.
+
 ## Trạng thái
 
-Đã implement bộ khung (2026-09-21). Chạy `build.ps1` để ra file setup.
+Bộ khung 2026-09-21. Vòng đời + gỡ sạch 2026-09-24 (đã thử thật, xem
+[handoff-ui-va-vong-doi.md](./handoff-ui-va-vong-doi.md)). Chạy `build.ps1` để ra file setup.

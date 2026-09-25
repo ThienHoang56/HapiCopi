@@ -39,12 +39,14 @@ namespace HapiCopi
         private bool _isLastPasteTerminal = false;
         private long _currentClipboardSeq = 0; // Mã tuần tự clipboard cho AI ngầm bất đồng bộ
         private readonly HashSet<string> _svgJobsInFlight = new HashSet<string>();
+        private bool _hasCleanedUp = false;
 
-        public HapiCopiApplicationContext() : this(false)
+        public HapiCopiApplicationContext() : this(AppInstanceChannel.CommandShow)
         {
         }
 
-        public HapiCopiApplicationContext(bool openUpdateWindow)
+        /// <param name="startupCommand">Lệnh kèm theo lúc khởi chạy, xem <see cref="AppInstanceChannel"/>.</param>
+        public HapiCopiApplicationContext(string startupCommand)
         {
             _syncContext = System.Threading.SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
             // 0. Khởi tạo trình duyệt WebView2 ngầm
@@ -53,7 +55,7 @@ namespace HapiCopi
             // 1. Thiết lập Menu chuột phải cho System Tray Icon
             var contextMenu = new ContextMenuStrip();
 
-            var titleItem = new ToolStripMenuItem("HapiCopi v2.0 - Clipboard DLP & Auto-Format") { Enabled = false };
+            var titleItem = new ToolStripMenuItem($"HapiCopi v{UpdateManager.CurrentVersionText}") { Enabled = false };
             titleItem.Font = new Font(titleItem.Font, FontStyle.Bold);
 
             _pauseMenuItem = new ToolStripMenuItem("Tạm dừng", null, OnPauseClicked);
@@ -77,9 +79,9 @@ namespace HapiCopi
             // 2. Tạo System Tray Icon
             _notifyIcon = new NotifyIcon()
             {
-                Icon = CreateAppIcon(),
+                Icon = UiTheme.AppIcon,
                 ContextMenuStrip = contextMenu,
-                Text = "HapiCopi - Clipboard DLP & Auto-Format",
+                Text = $"HapiCopi v{UpdateManager.CurrentVersionText}",
                 Visible = true
             };
 
@@ -108,18 +110,80 @@ namespace HapiCopi
                 Program.Log($"[Startup LỖI] Lỗi nạp lịch sử clipboard: {ex.Message}");
             }
 
-            // 5. Thực hiện xử lý clipboard đang có sẵn ngay khi khởi động
+            // 5. Mở kênh nhận lệnh từ instance thứ hai (shortcut, bộ cài, bộ gỡ cài đặt)
+            Application.ApplicationExit += OnApplicationExit;
+            AppInstanceChannel.StartServer(HandleRemoteCommand);
+
+            // 6. Thực hiện xử lý clipboard đang có sẵn ngay khi khởi động
             ProcessClipboard(isStartup: true);
 
-            // 6. Dò bản cập nhật ở chế độ nền
-            if (openUpdateWindow)
+            // 7. Mở cửa sổ theo lệnh khởi chạy, rồi dò bản cập nhật ở chế độ nền
+            if (startupCommand == AppInstanceChannel.CommandUpdate)
             {
                 OnUpdateClicked(this, EventArgs.Empty);
+                return;
             }
-            else
+
+            if (startupCommand == AppInstanceChannel.CommandSettings)
             {
-                StartUpdateCheck();
+                OnSettingsClicked(this, EventArgs.Empty);
             }
+
+            if (startupCommand == AppInstanceChannel.CommandMath)
+            {
+                OnMathEditorClicked(this, EventArgs.Empty);
+            }
+
+            if (startupCommand == AppInstanceChannel.CommandAbc)
+            {
+                OnAbcEditorClicked(this, EventArgs.Empty);
+            }
+
+            StartUpdateCheck();
+            StartEditorWarmup();
+        }
+
+        /// <summary>
+        /// Nạp sẵn hai cửa sổ soạn ngoài màn hình ngay khi Chromium sống,
+        /// để lần bấm menu không phải chờ MathJax/ABCJS.
+        /// </summary>
+        private void StartEditorWarmup()
+        {
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    await WebViewManager.EnvironmentTask;
+                }
+                catch
+                {
+                    return;
+                }
+
+                _syncContext.Post(_ =>
+                {
+                    try
+                    {
+                        if (_mathEditorForm == null || _mathEditorForm.IsDisposed)
+                        {
+                            _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                            EditorWindow.PrepareOffscreen(_mathEditorForm);
+                        }
+
+                        if (_abcEditorForm == null || _abcEditorForm.IsDisposed)
+                        {
+                            _abcEditorForm = new AbcEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                            EditorWindow.PrepareOffscreen(_abcEditorForm);
+                        }
+
+                        Program.Log("[Editor] Đã nạp sẵn soạn công thức và soạn bản nhạc.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Program.Log($"[Editor] Không nạp sẵn được: {ex.Message}");
+                    }
+                }, null);
+            });
         }
 
         // ============================
@@ -132,16 +196,14 @@ namespace HapiCopi
         {
             try
             {
-                if (_mathEditorForm != null && !_mathEditorForm.IsDisposed)
+                _mathEditorForm ??= new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                if (_mathEditorForm.IsDisposed)
                 {
-                    _mathEditorForm.WindowState = FormWindowState.Normal;
-                    _mathEditorForm.BringToFront();
-                    _mathEditorForm.Activate();
-                    return;
+                    _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
                 }
 
-                _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
-                _mathEditorForm.Show();
+                EditorWindow.Present(_mathEditorForm);
+                _mathEditorForm.RequestReady();
             }
             catch (Exception ex)
             {
@@ -159,16 +221,14 @@ namespace HapiCopi
         {
             try
             {
-                if (_abcEditorForm != null && !_abcEditorForm.IsDisposed)
+                _abcEditorForm ??= new AbcEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                if (_abcEditorForm.IsDisposed)
                 {
-                    _abcEditorForm.WindowState = FormWindowState.Normal;
-                    _abcEditorForm.BringToFront();
-                    _abcEditorForm.Activate();
-                    return;
+                    _abcEditorForm = new AbcEditorForm((text, html) => SetClipboardOnStaThread(text, html));
                 }
 
-                _abcEditorForm = new AbcEditorForm((text, html) => SetClipboardOnStaThread(text, html));
-                _abcEditorForm.Show();
+                EditorWindow.Present(_abcEditorForm);
+                _abcEditorForm.RequestReady();
             }
             catch (Exception ex)
             {
@@ -1427,34 +1487,6 @@ namespace HapiCopi
         // TRAY ICON
         // ============================
 
-        private Icon CreateAppIcon()
-        {
-            try
-            {
-                using (Bitmap bmp = new Bitmap(16, 16))
-                {
-                    using (Graphics g = Graphics.FromImage(bmp))
-                    {
-                        g.Clear(Color.Transparent);
-                        using (Brush brush = new SolidBrush(Color.FromArgb(46, 204, 113)))
-                        {
-                            g.FillEllipse(brush, 0, 0, 15, 15);
-                        }
-                        using (Font font = new Font("Arial", 7, FontStyle.Bold))
-                        {
-                            g.DrawString("HC", font, Brushes.White, 0, 2);
-                        }
-                    }
-                    IntPtr hIcon = bmp.GetHicon();
-                    return Icon.FromHandle(hIcon);
-                }
-            }
-            catch
-            {
-                return SystemIcons.Application;
-            }
-        }
-
         private void PlayGentleAlert()
         {
             try
@@ -1484,11 +1516,71 @@ namespace HapiCopi
 
         private void OnExitClicked(object? sender, EventArgs e)
         {
-            _notifyIcon.Visible = false;
-            _notifyIcon.Dispose();
-            _listener.Dispose();
-            _keyboardHook.Dispose();
             Application.Exit();
+        }
+
+        /// <summary>
+        /// Xử lý lệnh từ instance thứ hai. Chạy trên thread nền nên chỉ đẩy việc về UI thread rồi
+        /// trả lời ngay; bên gửi tự chờ app thoát nếu cần.
+        /// </summary>
+        private bool HandleRemoteCommand(string command)
+        {
+            switch (command)
+            {
+                case AppInstanceChannel.CommandPing:
+                    return true;
+
+                case AppInstanceChannel.CommandShow:
+                    _syncContext.Post(_ => OnHistoryClicked(this, EventArgs.Empty), null);
+                    return true;
+
+                case AppInstanceChannel.CommandSettings:
+                    _syncContext.Post(_ => OnSettingsClicked(this, EventArgs.Empty), null);
+                    return true;
+
+                case AppInstanceChannel.CommandUpdate:
+                    _syncContext.Post(_ => OnUpdateClicked(this, EventArgs.Empty), null);
+                    return true;
+
+                case AppInstanceChannel.CommandMath:
+                    _syncContext.Post(_ => OnMathEditorClicked(this, EventArgs.Empty), null);
+                    return true;
+
+                case AppInstanceChannel.CommandAbc:
+                    _syncContext.Post(_ => OnAbcEditorClicked(this, EventArgs.Empty), null);
+                    return true;
+
+                case AppInstanceChannel.CommandQuit:
+                    _syncContext.Post(_ => Application.Exit(), null);
+                    return true;
+
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// Dọn dẹp cho mọi lối thoát, kể cả khi tự cập nhật gọi Application.Exit từ nơi khác.
+        /// Thiếu bước này thì icon khay vẫn nằm lại tới khi người dùng rê chuột qua, và WebView2 còn
+        /// giữ khoá thư mục cache khiến bộ gỡ cài đặt không xoá sạch được.
+        /// </summary>
+        private void OnApplicationExit(object? sender, EventArgs e)
+        {
+            if (_hasCleanedUp)
+            {
+                return;
+            }
+
+            _hasCleanedUp = true;
+            Program.Log("[Shutdown] Đang dọn dẹp trước khi thoát...");
+
+            try { AppInstanceChannel.StopServer(); } catch { }
+            try { _notifyIcon.Visible = false; _notifyIcon.Dispose(); } catch { }
+            try { _listener.Dispose(); } catch { }
+            try { _keyboardHook.Dispose(); } catch { }
+            try { WebViewManager.Shutdown(); } catch { }
+
+            Program.Log("[Shutdown] Đã thoát sạch.");
         }
     }
 }

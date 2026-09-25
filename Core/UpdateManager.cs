@@ -47,7 +47,7 @@ namespace HapiCopi
             (AppConfig.Get("UPDATE_CHECK_ON_START") ?? "true").Trim().ToLowerInvariant() != "false";
 
         public static Version CurrentVersion =>
-            Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0);
+            Normalize(Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0));
 
         public static string CurrentVersionText => FormatVersion(CurrentVersion);
 
@@ -130,8 +130,17 @@ namespace HapiCopi
             }
 
             string cleaned = text.Trim().TrimStart('v', 'V');
-            return Version.TryParse(cleaned, out Version? parsed) ? parsed : new Version(0, 0, 0);
+            return Version.TryParse(cleaned, out Version? parsed)
+                ? Normalize(parsed)
+                : new Version(0, 0, 0);
         }
+
+        /// <summary>
+        /// Assembly là 1.2.0.0 còn versions.json là 1.2.0. Hai Version đó không bằng nhau
+        /// (Revision 0 khác -1) nên phải về ba thành phần trước khi so.
+        /// </summary>
+        public static Version Normalize(Version version) =>
+            new Version(version.Major, version.Minor, Math.Max(version.Build, 0));
 
         public static string FormatVersion(Version version) =>
             $"{version.Major}.{version.Minor}.{Math.Max(version.Build, 0)}";

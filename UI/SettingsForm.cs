@@ -22,275 +22,175 @@ namespace HapiCopi
         private readonly CheckBox _enableHistoryCheck;
         private readonly CheckBox _saveToDiskCheck;
         private readonly CheckBox _encryptHistoryCheck;
+        private readonly CheckBox _startWithWindowsCheck;
         private readonly System.Collections.Generic.List<ClipboardHistoryItem> _historyList;
 
         public SettingsForm(System.Collections.Generic.List<ClipboardHistoryItem> history)
         {
             _historyList = history;
-            Text = "HapiCopi - Cài đặt";
-            FormBorderStyle = FormBorderStyle.FixedDialog;
+
+            UiTheme.ApplyDialog(this, "HapiCopi — Cài đặt");
+            FormBorderStyle = FormBorderStyle.Sizable;
             MaximizeBox = false;
             MinimizeBox = false;
-            StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(520, 800);
-            Font = new Font("Segoe UI", 9F);
-            BackColor = Color.White;
 
-            int labelX = 20;
-            int inputX = 20;
-            int inputWidth = 480;
-            int y = 18;
+            // Nội dung dài hơn màn hình thì cuộn, chứ không cắt cụt.
+            var scrollHost = new Panel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                BackColor = UiTheme.Background,
+                Padding = new Padding(LogicalToDeviceUnits(22), LogicalToDeviceUnits(18),
+                                      LogicalToDeviceUnits(22), LogicalToDeviceUnits(10))
+            };
+
+            TableLayoutPanel content = UiTheme.Column();
+
+            content.AddRow(UiTheme.PageTitleLabel("Cài đặt"), 16);
 
             // ============================
-            // HEADER: Bảo mật Clipboard
+            // BẢO MẬT CLIPBOARD (DLP)
             // ============================
-            var header = new Label
-            {
-                Text = "🛡️ Bảo mật Clipboard (DLP)",
-                Font = new Font("Segoe UI", 12F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(46, 204, 113),
-                AutoSize = true,
-                Location = new Point(labelX, y)
-            };
-            Controls.Add(header);
-            y += 36;
+            content.AddRow(UiTheme.SectionHeader("Bảo mật Clipboard (DLP)", UiTheme.Success), 4);
+            content.AddRow(UiTheme.Description(
+                "HapiCopi tự động quét thông tin nhạy cảm (API Key, mật khẩu, số điện thoại, email, " +
+                "số thẻ tín dụng, CCCD) trong clipboard để bảo vệ bạn khỏi rò rỉ dữ liệu."), 12);
 
-            var descLabel = new Label
-            {
-                Text = "HapiCopi tự động quét thông tin nhạy cảm (API Key, mật khẩu, số điện thoại, email, số thẻ tín dụng, CCCD) trong clipboard để bảo vệ bạn khỏi rò rỉ dữ liệu.",
-                ForeColor = Color.FromArgb(100, 100, 100),
-                Font = new Font("Segoe UI", 8.5f),
-                Location = new Point(labelX, y),
-                Size = new Size(inputWidth, 38)
-            };
-            Controls.Add(descLabel);
-            y += 44;
+            _piiScanCheck = content.AddRow(UiTheme.Option("Bật quét thông tin nhạy cảm (PII Scanner)"), 6);
+            _piiToastCheck = content.AddRow(UiTheme.Option("Hiển thị cảnh báo Toast khi phát hiện thông tin nhạy cảm"), 6);
+            _piiMaskHistoryCheck = content.AddRow(UiTheme.Option("Tự động che thông tin nhạy cảm trong Lịch sử Clipboard"), 6);
+            _mlFormatCheck = content.AddRow(UiTheme.Option("Tự động cấu trúc văn bản thô bằng mô hình học máy (ML)"), 18);
 
-            // ============================
-            // CHECKBOXES
-            // ============================
-            _piiScanCheck = new CheckBox
-            {
-                Text = "Bật quét thông tin nhạy cảm (PII Scanner)",
-                AutoSize = true,
-                Location = new Point(inputX, y),
-                Font = new Font("Segoe UI", 9.5f)
-            };
-            Controls.Add(_piiScanCheck);
-            y += 30;
-
-            _piiToastCheck = new CheckBox
-            {
-                Text = "Hiển thị cảnh báo Toast khi phát hiện thông tin nhạy cảm",
-                AutoSize = true,
-                Location = new Point(inputX, y),
-                Font = new Font("Segoe UI", 9.5f)
-            };
-            Controls.Add(_piiToastCheck);
-            y += 30;
-
-            _piiMaskHistoryCheck = new CheckBox
-            {
-                Text = "Tự động che thông tin nhạy cảm trong Lịch sử Clipboard",
-                AutoSize = true,
-                Location = new Point(inputX, y),
-                Font = new Font("Segoe UI", 9.5f)
-            };
-            Controls.Add(_piiMaskHistoryCheck);
-            y += 30;
-
-            _mlFormatCheck = new CheckBox
-            {
-                Text = "Tự động cấu trúc văn bản thô bằng mô hình học máy (ML)",
-                AutoSize = true,
-                Location = new Point(inputX, y),
-                Font = new Font("Segoe UI", 9.5f)
-            };
-            Controls.Add(_mlFormatCheck);
-            y += 40;
+            content.AddRow(UiTheme.Separator(this), 18);
 
             // ============================
             // SVG → PNG
             // ============================
-            var svgHeader = new Label
-            {
-                Text = "🖼️ Chuyển SVG sang PNG khi copy",
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(155, 89, 182),
-                AutoSize = true,
-                Location = new Point(labelX, y)
-            };
-            Controls.Add(svgHeader);
-            y += 26;
+            content.AddRow(UiTheme.SectionHeader("Chuyển SVG sang PNG khi copy", UiTheme.Accent), 4);
+            content.AddRow(UiTheme.Description(
+                "Copy file .svg hoặc markup SVG là HapiCopi rasterize ngay trên máy, dán thẳng vào " +
+                "Word/Google Docs/Slack ra ảnh. Không cần tải file lên web convert — tránh lộ sơ đồ, " +
+                "logo, bản vẽ nội bộ."), 12);
 
-            var svgDesc = new Label
-            {
-                Text = "Copy file .svg hoặc markup SVG là HapiCopi rasterize ngay trên máy, dán thẳng vào Word/Google Docs/Slack ra ảnh. Không cần tải file lên web convert — tránh lộ sơ đồ, logo, bản vẽ nội bộ.",
-                ForeColor = Color.FromArgb(100, 100, 100),
-                Font = new Font("Segoe UI", 8.5f),
-                Location = new Point(labelX, y),
-                Size = new Size(inputWidth, 46)
-            };
-            Controls.Add(svgDesc);
-            y += 50;
+            _svgToPngCheck = content.AddRow(UiTheme.Option("Bật tự động chuyển SVG sang PNG"), 6);
+            _svgTransparentCheck = content.AddRow(UiTheme.Option("Giữ nền trong suốt (bỏ chọn = nền trắng)"), 6);
+            _svgReplaceCheck = content.AddRow(UiTheme.Option("Thay hẳn clipboard bằng PNG (bỏ chọn = giữ cả bản SVG gốc)"), 18);
 
-            _svgToPngCheck = new CheckBox
-            {
-                Text = "Bật tự động chuyển SVG sang PNG",
-                AutoSize = true,
-                Location = new Point(inputX, y),
-                Font = new Font("Segoe UI", 9.5f)
-            };
             _svgToPngCheck.CheckedChanged += (s, e) =>
             {
                 _svgTransparentCheck.Enabled = _svgToPngCheck.Checked;
                 _svgReplaceCheck.Enabled = _svgToPngCheck.Checked;
             };
-            Controls.Add(_svgToPngCheck);
-            y += 30;
 
-            _svgTransparentCheck = new CheckBox
-            {
-                Text = "Giữ nền trong suốt (bỏ chọn = nền trắng)",
-                AutoSize = true,
-                Location = new Point(inputX, y),
-                Font = new Font("Segoe UI", 9.5f)
-            };
-            Controls.Add(_svgTransparentCheck);
-            y += 30;
-
-            _svgReplaceCheck = new CheckBox
-            {
-                Text = "Thay hẳn clipboard bằng PNG (bỏ chọn = giữ cả bản SVG gốc)",
-                AutoSize = true,
-                Location = new Point(inputX, y),
-                Font = new Font("Segoe UI", 9.5f)
-            };
-            Controls.Add(_svgReplaceCheck);
-            y += 40;
+            content.AddRow(UiTheme.Separator(this), 18);
 
             // ============================
-            // CUSTOM KEYWORDS
+            // TỪ KHÓA NHẠY CẢM TÙY CHỈNH
             // ============================
-            var keywordsHeader = new Label
-            {
-                Text = "Từ khóa nhạy cảm tùy chỉnh",
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(230, 126, 34),
-                AutoSize = true,
-                Location = new Point(labelX, y)
-            };
-            Controls.Add(keywordsHeader);
-            y += 26;
+            content.AddRow(UiTheme.SectionHeader("Từ khóa nhạy cảm tùy chỉnh", UiTheme.Warning), 4);
+            content.AddRow(UiTheme.Description(
+                "Nhập các từ khóa mà bạn muốn HapiCopi cảnh báo khi phát hiện trong clipboard, " +
+                "mỗi từ một dòng. Ví dụ: tên dự án bí mật, mã nội bộ..."), 10);
 
-            var keywordsDesc = new Label
+            _customKeywordsBox = content.AddRow(new TextBox
             {
-                Text = "Nhập các từ khóa mà bạn muốn HapiCopi cảnh báo khi phát hiện trong clipboard, mỗi từ một dòng. Ví dụ: tên dự án bí mật, mã nội bộ...",
-                ForeColor = Color.FromArgb(100, 100, 100),
-                Font = new Font("Segoe UI", 8.5f),
-                Location = new Point(labelX, y),
-                Size = new Size(inputWidth, 30)
-            };
-            Controls.Add(keywordsDesc);
-            y += 34;
-
-            _customKeywordsBox = new TextBox
-            {
-                Location = new Point(inputX, y),
-                Width = inputWidth,
-                Height = 80,
                 Multiline = true,
                 ScrollBars = ScrollBars.Vertical,
+                Dock = DockStyle.Fill,
+                Font = UiTheme.Body,
+                // Chiều cao tính theo chiều cao dòng chữ thật nên không bị cụt khi Windows phóng to chữ.
+                Height = LogicalToDeviceUnits(72),
                 PlaceholderText = "Ví dụ:\nProject Phoenix\nKH-VIP-2026\nmật khẩu wifi công ty"
-            };
-            Controls.Add(_customKeywordsBox);
-            y += 90;
+            }, 18);
+
+            content.AddRow(UiTheme.Separator(this), 18);
 
             // ============================
-            // HEADER: Cấu hình Lịch sử Clipboard
+            // KHỞI ĐỘNG
             // ============================
-            y += 10;
-            var historyHeader = new Label
-            {
-                Text = "📋 Cấu hình Lịch sử Clipboard",
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(52, 152, 219),
-                AutoSize = true,
-                Location = new Point(labelX, y)
-            };
-            Controls.Add(historyHeader);
-            y += 26;
+            content.AddRow(UiTheme.SectionHeader("Khởi động", UiTheme.Accent), 10);
+            _startWithWindowsCheck = content.AddRow(UiTheme.Option("Chạy HapiCopi cùng Windows"), 4);
+            content.AddRow(UiTheme.Description(
+                "App chạy ẩn ở khay hệ thống. Tắt mục này thì mỗi lần bật máy bạn phải tự mở HapiCopi."), 12);
 
-            _enableHistoryCheck = new CheckBox
+            content.AddRow(UiTheme.Separator(this), 18);
+
+            // ============================
+            // LỊCH SỬ CLIPBOARD
+            // ============================
+            content.AddRow(UiTheme.SectionHeader("Lịch sử Clipboard", UiTheme.Accent), 10);
+
+            _enableHistoryCheck = content.AddRow(UiTheme.Option("Ghi nhớ lịch sử clipboard (tối đa 30 mục)"), 6);
+            _saveToDiskCheck = content.AddRow(UiTheme.Option("Lưu lịch sử vào ổ đĩa để không bị mất khi khởi động lại"), 6);
+            _encryptHistoryCheck = content.AddRow(UiTheme.Option("Mã hóa dữ liệu lịch sử trên ổ đĩa (khuyên dùng)"), 8);
+
+            _enableHistoryCheck.CheckedChanged += (s, e) =>
             {
-                Text = "Ghi nhớ lịch sử clipboard (Tối đa 30 mục)",
-                AutoSize = true,
-                Location = new Point(inputX, y),
-                Font = new Font("Segoe UI", 9.5f)
-            };
-            _enableHistoryCheck.CheckedChanged += (s, e) => {
                 _saveToDiskCheck.Enabled = _enableHistoryCheck.Checked;
                 _encryptHistoryCheck.Enabled = _enableHistoryCheck.Checked && _saveToDiskCheck.Checked;
             };
-            Controls.Add(_enableHistoryCheck);
-            y += 30;
-
-            _saveToDiskCheck = new CheckBox
+            _saveToDiskCheck.CheckedChanged += (s, e) =>
             {
-                Text = "Lưu lịch sử vào ổ đĩa để không bị mất khi khởi động lại",
-                AutoSize = true,
-                Location = new Point(inputX, y),
-                Font = new Font("Segoe UI", 9.5f)
-            };
-            _saveToDiskCheck.CheckedChanged += (s, e) => {
                 _encryptHistoryCheck.Enabled = _enableHistoryCheck.Checked && _saveToDiskCheck.Checked;
             };
-            Controls.Add(_saveToDiskCheck);
-            y += 30;
 
-            _encryptHistoryCheck = new CheckBox
-            {
-                Text = "Mã hóa dữ liệu lịch sử trên ổ đĩa (Khuyên dùng) 🛡️",
-                AutoSize = true,
-                Location = new Point(inputX, y),
-                Font = new Font("Segoe UI", 9.5f)
-            };
-            Controls.Add(_encryptHistoryCheck);
-            y += 40;
+            scrollHost.Controls.Add(content);
 
             // ============================
-            // BUTTONS
+            // HÀNG NÚT
             // ============================
-            var saveButton = new Button
-            {
-                Text = "Lưu",
-                Width = 110,
-                Height = 32,
-                Location = new Point(ClientSize.Width - 250, ClientSize.Height - 46),
-                BackColor = Color.FromArgb(46, 204, 113),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat
-            };
-            saveButton.FlatAppearance.BorderSize = 0;
+            Button saveButton = UiTheme.PrimaryButton("Lưu");
             saveButton.Click += OnSaveClicked;
-            Controls.Add(saveButton);
 
-            var cancelButton = new Button
+            Button closeButton = UiTheme.SecondaryButton("Đóng");
+            closeButton.Click += (s, e) => Close();
+
+            var footer = new Panel
             {
-                Text = "Đóng",
-                Width = 110,
-                Height = 32,
-                Location = new Point(ClientSize.Width - 130, ClientSize.Height - 46),
-                FlatStyle = FlatStyle.Flat
+                Dock = DockStyle.Bottom,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = UiTheme.Surface,
+                Padding = new Padding(LogicalToDeviceUnits(22), LogicalToDeviceUnits(12),
+                                      LogicalToDeviceUnits(22), LogicalToDeviceUnits(12))
             };
-            cancelButton.Click += (s, e) => Close();
-            Controls.Add(cancelButton);
+            footer.Controls.Add(UiTheme.ButtonRow(closeButton, saveButton));
+
+            var footerBorder = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = Math.Max(1, LogicalToDeviceUnits(1)),
+                BackColor = UiTheme.Border
+            };
+
+            Controls.Add(scrollHost);
+            Controls.Add(footerBorder);
+            Controls.Add(footer);
 
             AcceptButton = saveButton;
-            CancelButton = cancelButton;
+            CancelButton = closeButton;
 
             LoadCurrentValues();
+
+            // Chốt bề rộng chữ trước khi đo, rồi bám theo mỗi lần người dùng kéo giãn cửa sổ.
+            int contentWidth = LogicalToDeviceUnits(DesignWidthDip) - scrollHost.Padding.Horizontal;
+            content.MaximumSize = new Size(contentWidth, 0);
+            UiTheme.ApplyWrapWidth(content, contentWidth);
+            UiTheme.FitToContent(this, content, minWidthDip: DesignWidthDip, minHeightDip: 480);
+            // FitToContent chỉ đo cột nội dung; cộng thêm footer kẻ không bị che mất dòng cuối.
+            int extra = footer.PreferredSize.Height + footerBorder.Height;
+            Rectangle work = Screen.FromControl(this).WorkingArea;
+            Height = Math.Min(Height + extra, work.Height - LogicalToDeviceUnits(40));
+
+            scrollHost.ClientSizeChanged += (s, e) =>
+            {
+                int available = scrollHost.ClientSize.Width - scrollHost.Padding.Horizontal;
+                UiTheme.ApplyWrapWidth(content, available);
+            };
         }
+
+        /// <summary>Bề rộng thiết kế tính theo đơn vị 96 DPI; Windows tự nhân lên khi phóng to chữ.</summary>
+        private const int DesignWidthDip = 560;
 
         private void LoadCurrentValues()
         {
@@ -312,6 +212,8 @@ namespace HapiCopi
 
             _saveToDiskCheck.Enabled = _enableHistoryCheck.Checked;
             _encryptHistoryCheck.Enabled = _enableHistoryCheck.Checked && _saveToDiskCheck.Checked;
+
+            _startWithWindowsCheck.Checked = StartupManager.IsEnabled;
         }
 
         private void OnSaveClicked(object? sender, EventArgs e)
@@ -343,6 +245,16 @@ namespace HapiCopi
                 while (keywords.Contains("||")) keywords = keywords.Replace("||", "|");
                 keywords = keywords.Trim('|');
                 AppConfig.Set("PII_CUSTOM_KEYWORDS", keywords);
+
+                if (_startWithWindowsCheck.Checked != StartupManager.IsEnabled &&
+                    !StartupManager.TrySet(_startWithWindowsCheck.Checked, out string startupError))
+                {
+                    MessageBox.Show(
+                        "Đã lưu cấu hình, nhưng không đổi được mục chạy cùng Windows:\n" + startupError,
+                        "HapiCopi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    Close();
+                    return;
+                }
 
                 MessageBox.Show("Đã lưu cấu hình thành công!", "HapiCopi",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);

@@ -61,7 +61,9 @@ namespace HapiCopi
             // --- Form Properties ---
             this.FormBorderStyle = FormBorderStyle.None;
             this.StartPosition = FormStartPosition.Manual;
-            this.Size = new Size(380, 110);
+            this.AutoScaleMode = AutoScaleMode.Font;
+            this.AutoScaleDimensions = new SizeF(7F, 17F);
+            this.Size = new Size(LogicalToDeviceUnits(380), LogicalToDeviceUnits(110));
             this.BackColor = Color.FromArgb(25, 25, 25);
             this.ShowInTaskbar = false;
             this.TopMost = true;

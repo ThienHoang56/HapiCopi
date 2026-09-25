@@ -77,7 +77,8 @@ namespace HapiCopi
                 
                 try
                 {
-                    string diagPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "diagnostic_clipboard.html");
+                    string diagPath = Path.Combine(ResourcePaths.LogDirectory, "diagnostic_clipboard.html");
+                    Directory.CreateDirectory(ResourcePaths.LogDirectory);
                     File.WriteAllText(diagPath, htmlFragment, Encoding.UTF8);
                     Program.Log($"[DEBUG] Da ghi HTML fragment ra: {diagPath}");
                 }
