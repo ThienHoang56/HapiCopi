@@ -856,6 +856,52 @@
             }
         }
 
+        function unwrapOfficeNode(el) {
+            if (!el || !el.parentNode) return;
+            while (el.firstChild) {
+                el.parentNode.insertBefore(el.firstChild, el);
+            }
+            el.parentNode.removeChild(el);
+        }
+
+        function unwrapOfficeChrome(doc) {
+            var nodes = Array.from(doc.body.querySelectorAll('*'));
+            for (var i = 0; i < nodes.length; i++) {
+                var tag = nodes[i].tagName || '';
+                if (/^(O:|V:|W:)/i.test(tag) || tag.toLowerCase() === 'o:p') {
+                    unwrapOfficeNode(nodes[i]);
+                }
+            }
+        }
+
+        // Word copy dùng <p class=MsoHeading1>, không phải <h1>. Phải nâng cấp trước khi lột class.
+        function promoteOfficeHeadings(doc) {
+            var candidates = Array.from(doc.body.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6'));
+            for (var i = 0; i < candidates.length; i++) {
+                var el = candidates[i];
+                if (!el.parentNode) continue;
+                var cls = (el.className || '').toString();
+                var style = el.getAttribute('style') || '';
+                var level = 0;
+                var m = cls.match(/MsoHeading(\d)/i) || cls.match(/(?:^|\s)Heading(\d)(?:\s|$)/i);
+                if (m) level = parseInt(m[1], 10);
+                if (!level) {
+                    var outline = style.match(/mso-outline-level\s*:\s*(\d)/i);
+                    if (outline) level = parseInt(outline[1], 10);
+                }
+                if (!level) {
+                    var named = style.match(/mso-style-name\s*:\s*['"]?Heading\s*(\d)/i);
+                    if (named) level = parseInt(named[1], 10);
+                }
+                if (!level && /MsoTitle\b/i.test(cls)) level = 1;
+                if (!level && /MsoSubtitle\b/i.test(cls)) level = 2;
+                if (level < 1 || level > 9) continue;
+                var h = doc.createElement('h' + Math.min(6, level));
+                while (el.firstChild) h.appendChild(el.firstChild);
+                el.parentNode.replaceChild(h, el);
+            }
+        }
+
         // 4. Hàm làm sạch HTML rác bằng DOM Parser của trình duyệt và tịnh tiến Heading
         async function doCleanHtmlAsync(html, fontName, fontSize, lineSpacing, parentHeadingLevel, isWordTarget, mermaidCacheJson) {
             if (!html) return "";
@@ -879,6 +925,9 @@
 
                 let parser = new DOMParser();
                 let doc = parser.parseFromString(parsedHtml, 'text/html');
+
+                unwrapOfficeChrome(doc);
+                promoteOfficeHeadings(doc);
 
                 // Thay thế tất cả các container KaTeX/MathJax bằng MathML hoặc PNG tương ứng để hiển thị mượt mà trên Word/Docs
                 await convertMathContainersAsync(doc, isWordTarget);

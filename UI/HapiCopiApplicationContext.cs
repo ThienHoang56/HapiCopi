@@ -784,14 +784,15 @@ namespace HapiCopi
                 bool mlFormatEnabled = (AppConfig.Get("ML_FORMAT_ENABLED") ?? "true").ToLower() != "false";
                 bool isUnstructured = mlFormatEnabled && !isStartup && !string.IsNullOrEmpty(originalText) && AutoFormatter.IsUnstructuredRawText(originalText);
                 bool isMarkdownOrAi = IsMarkdownOrAiHtml(originalText, originalHtml);
-                bool isPdfText = !isStartup && PdfHeuristicCleaner.IsLikelyPdfText(originalText, originalHtml);
+                bool isPdfText = !isStartup && PdfHeuristicCleaner.LooksLikePdfCopy(originalText, originalHtml, sourceApp);
+                bool isOfficeOrDocsCopy = ClipboardSource.IsOfficeOrDocsHtml(originalHtml);
 
                 // Phát hiện mã sơ đồ (Mermaid/Kroki) SỚM: mã sơ đồ cực nhạy với xuống dòng và fence ```,
                 // nên phải bỏ qua AutoFormatter (vốn nối dòng/dọn rác) để không phá hỏng cú pháp sơ đồ.
                 bool containsDiagram = (!string.IsNullOrEmpty(originalText) && KrokiRenderer.ContainsAnyDiagram(originalText)) ||
                                        KrokiRenderer.ContainsAnyDiagramHtml(originalHtml);
 
-                bool shouldFormat = isMarkdownOrAi || isUnstructured || isPdfText || containsDiagram;
+                bool shouldFormat = isMarkdownOrAi || isUnstructured || isPdfText || containsDiagram || isOfficeOrDocsCopy;
 
                 // Cache dữ liệu gốc để xử lý dán động
                 _lastRawText = originalText;
@@ -879,6 +880,19 @@ namespace HapiCopi
                                 Program.Log("Phát hiện mã sơ đồ (Mermaid/Kroki). Bỏ qua AutoFormatter, giữ nguyên mã nguồn sơ đồ.");
                                 status = "Đã xử lý (Sơ đồ)";
                             }
+                            else if (isPdfText)
+                            {
+                                Program.Log("Phát hiện copy từ PDF. Nối dòng bị bẻ, giữ ngắt đoạn.");
+                                formattedText = PdfHeuristicCleaner.Repair(originalText);
+                                _lastRawText = formattedText;
+                                _lastRawHtml = "";
+                                status = "PDF";
+                            }
+                            else if (isOfficeOrDocsCopy)
+                            {
+                                Program.Log("Copy từ Word/Docs: lột font/nền nguồn, giữ heading/list/bảng.");
+                                status = "Office/Docs";
+                            }
                             else if (isUnstructured && !htmlHasRichStructure)
                             {
                                 Program.Log("Phát hiện văn bản thô phi cấu trúc. Chạy AutoFormatter.FormatTextSmart...");
@@ -889,12 +903,6 @@ namespace HapiCopi
                             {
                                 Program.Log("Văn bản thô phi cấu trúc nhưng HTML gốc có bảng/danh sách. Ưu tiên giữ cấu trúc HTML.");
                                 status = "Đã xử lý (HTML ưu tiên)";
-                            }
-                            else if (isPdfText)
-                            {
-                                Program.Log("Phát hiện văn bản PDF đứt gãy. Chạy AutoFormatter.FormatTextSmart...");
-                                formattedText = AutoFormatter.FormatTextSmart(originalText);
-                                status = "PDF Heuristic";
                             }
                             else
                             {
@@ -915,7 +923,8 @@ namespace HapiCopi
                             //   để bảo toàn cấu trúc từ web nguồn (Kaggle, Wikipedia, v.v.)
                             // - Nếu không có HTML hoặc là text thuần, dùng nhánh convert từ Markdown/plain text
                             bool hasMermaid = (formattedText != null && KrokiRenderer.ContainsAnyDiagram(formattedText)) || KrokiRenderer.ContainsAnyDiagramHtml(_lastRawHtml);
-                            bool shouldUseHtmlCleanPath = hasHtml && (!isUnstructured || htmlHasRichStructure) && !isPdfText;
+                            bool shouldUseHtmlCleanPath = hasHtml && !isPdfText &&
+                                (isOfficeOrDocsCopy || !isUnstructured || htmlHasRichStructure);
 
                             if (shouldUseHtmlCleanPath)
                             {
@@ -1406,11 +1415,7 @@ namespace HapiCopi
             {
                 string htmlLower = html.ToLowerInvariant();
 
-                bool isOfficeCopy = htmlLower.Contains("microsoft word") ||
-                                    htmlLower.Contains("xmlns:o=\"urn:schemas-microsoft-com:office:office\"");
-                bool isGoogleDocsCopy = htmlLower.Contains("id=\"docs-internal-guid") || htmlLower.Contains("id=docs-internal-guid");
-
-                if (!isOfficeCopy && !isGoogleDocsCopy)
+                if (!ClipboardSource.IsOfficeOrDocsHtml(html))
                 {
                     bool isBrowserCopy = htmlLower.Contains("sourceurl:");
 

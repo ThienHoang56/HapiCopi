@@ -111,7 +111,7 @@ namespace HapiCopi
                 _webView.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
 
                 // Nạp trang index.html điều khiển
-                _webView.Source = new Uri("http://hapicopi.local/index.html");
+                _webView.Source = new Uri("http://hapicopi.local/index.html?v=4");
 
                 // Đợi trang HTML nạp xong hoàn toàn
                 _webView.NavigationCompleted += (s, e) =>

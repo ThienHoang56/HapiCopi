@@ -15,6 +15,23 @@ namespace HapiCopi
         [STAThread]
         static int Main(string[] args)
         {
+            if (args.Any(a => a.Equals("--selfcheck-pdf", StringComparison.OrdinalIgnoreCase)))
+            {
+                string result = PdfHeuristicCleaner.SelfCheck();
+                if (string.IsNullOrEmpty(result))
+                {
+                    string office = ClipboardSource.PrepareOfficeFragment(
+                        "<!--[if gte mso 9]><xml>x</xml><![endif]--><p class=MsoNormal>Hi<o:p>&nbsp;</o:p></p>");
+                    if (office.Contains("[if") || office.Contains("<o:p") || !office.Contains("Hi"))
+                    {
+                        result = "office prepare failed: " + office;
+                    }
+                }
+                string path = Path.Combine(Path.GetTempPath(), "hapicopi-pdf-selfcheck.txt");
+                File.WriteAllText(path, string.IsNullOrEmpty(result) ? "OK" : result);
+                return string.IsNullOrEmpty(result) ? 0 : 1;
+            }
+
             string command = ParseCommand(args);
 
             _mutex = new System.Threading.Mutex(true, AppInstanceChannel.MutexName, out bool isNewInstance);

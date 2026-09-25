@@ -87,6 +87,8 @@ namespace HapiCopi
                     Program.Log($"[DEBUG LỖI] Khong the ghi file chan doan: {ex.Message}");
                 }
                 
+                htmlFragment = ClipboardSource.PrepareOfficeFragment(htmlFragment);
+
                 string cacheJson = System.Text.Json.JsonSerializer.Serialize(formatInfo.MermaidImageCache);
                 return await WebViewManager.CleanHtmlAsync(htmlFragment, formatInfo.FontName, formatInfo.FontSize, formatInfo.LineSpacing, formatInfo.ParentHeadingLevel, formatInfo.IsWordTarget, cacheJson);
             }
