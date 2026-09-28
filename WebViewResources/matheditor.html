@@ -467,6 +467,11 @@
                             <rect x="5.5" y="11.5" width="7" height="4" rx="0.8" stroke-width="1" stroke-dasharray="1.5 1"/>
                         </svg>
                     </button>
+                    <!-- Matrix Controls: +Col, +Row, -Col, -Row -->
+                    <button data-cmd="addColumnAfter" title="Thêm cột bên phải vào ma trận (Alt+C)" style="font-size:11.5px; font-weight:600; padding:0 6px; color:#2563eb; background:#f0f7ff;">+Cột</button>
+                    <button data-cmd="addRowAfter" title="Thêm dòng bên dưới vào ma trận (Shift+Enter hoặc Alt+R)" style="font-size:11.5px; font-weight:600; padding:0 6px; color:#2563eb; background:#f0f7ff;">+Dòng</button>
+                    <button data-cmd="removeColumn" title="Xóa cột hiện tại trong ma trận" style="font-size:11.5px; font-weight:600; padding:0 5px; color:#dc2626;">-Cột</button>
+                    <button data-cmd="removeRow" title="Xóa dòng hiện tại trong ma trận" style="font-size:11.5px; font-weight:600; padding:0 5px; color:#dc2626;">-Dòng</button>
                 </div>
 
                 <!-- Quan hệ -->
@@ -714,9 +719,35 @@
                     return;
                 }
 
-                // Alt Hotkeys: Alt+V (Vector), Alt+F (Fraction), Alt+S (Sqrt), Alt+I (Integral)
+                // Shift+Enter inside matrix adds a new row below
+                if (e.shiftKey && e.key === 'Enter') {
+                    e.preventDefault();
+                    mathField.executeCommand('addRowAfter');
+                    keyBuffer = '';
+                    input.value = mathField.getValue('latex');
+                    scheduleRender();
+                    return;
+                }
+
+                // Alt Hotkeys: Alt+V (Vector), Alt+F (Fraction), Alt+S (Sqrt), Alt+I (Integral), Alt+C (+Col), Alt+R (+Row)
                 if (e.altKey && !e.ctrlKey && !e.metaKey) {
                     var altKey = e.key.toLowerCase();
+                    if (altKey === 'c') {
+                        e.preventDefault();
+                        mathField.executeCommand('addColumnAfter');
+                        keyBuffer = '';
+                        input.value = mathField.getValue('latex');
+                        scheduleRender();
+                        return;
+                    }
+                    if (altKey === 'r') {
+                        e.preventDefault();
+                        mathField.executeCommand('addRowAfter');
+                        keyBuffer = '';
+                        input.value = mathField.getValue('latex');
+                        scheduleRender();
+                        return;
+                    }
                     var altSnips = {
                         'v': '\\vec{#@}',
                         'f': '\\frac{#@}{#?}',
@@ -910,6 +941,14 @@
             e.preventDefault();
 
             if (activeMode === 'wysiwyg') {
+                var cmd = btn.getAttribute('data-cmd');
+                if (cmd) {
+                    mathField.focus();
+                    mathField.executeCommand(cmd);
+                    input.value = mathField.getValue('latex');
+                    scheduleRender();
+                    return;
+                }
                 var latexSnip = btn.getAttribute('data-latex');
                 if (latexSnip) {
                     mathField.focus();
