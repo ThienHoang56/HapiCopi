@@ -121,7 +121,6 @@ namespace HapiCopi
             if (startupCommand == AppInstanceChannel.CommandUpdate)
             {
                 OnUpdateClicked(this, EventArgs.Empty);
-                return;
             }
 
             if (startupCommand == AppInstanceChannel.CommandSettings)

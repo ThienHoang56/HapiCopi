@@ -3,184 +3,1022 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>HapiCopi - Soạn bản nhạc (ABC)</title>
+    <title>HapiCopi - Soạn bản nhạc (ABC notation)</title>
     <link rel="stylesheet" href="abcjs-audio.css" />
     <style>
-        * { box-sizing: border-box; }
-        html, body { height: 100%; margin: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; width: 100%; }
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Inter', Arial, sans-serif;
             display: flex; flex-direction: column;
-            background: #f5f6f8; color: #1f2328;
+            background: #f8fafc; color: #0f172a;
+            user-select: none; overflow: hidden;
+            -webkit-font-smoothing: antialiased;
         }
-        .toolbar {
-            display: flex; align-items: center; gap: 12px;
-            padding: 8px 12px; background: #ffffff; border-bottom: 1px solid #e1e4e8;
-            flex-wrap: wrap;
+
+        /* ==========================================================
+           1. UNIFIED STUDIO MASTER HEADER
+           ========================================================== */
+        .studio-header {
+            height: 48px; background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 14px; gap: 10px; flex-shrink: 0; z-index: 20;
         }
-        .toolbar label { font-size: 13px; color: #57606a; }
-        .toolbar select {
-            padding: 5px 8px; border: 1px solid #d0d7de; border-radius: 6px;
-            font-size: 13px; background: #fff; max-width: 240px;
+        .header-left, .header-center, .header-right {
+            display: flex; align-items: center; gap: 8px;
         }
-        #copyBtn {
-            margin-left: auto; padding: 7px 16px; border: none; border-radius: 6px;
-            background: #2563eb; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+
+        .brand-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 13px; font-weight: 700; color: #1e293b;
+            letter-spacing: -0.2px; padding-right: 8px;
+            border-right: 1px solid #e2e8f0;
         }
-        #copyBtn:hover { background: #1d4ed8; }
-        #importBtn {
-            padding: 6px 12px; border: 1px solid #d0d7de; border-radius: 6px;
-            background: #fff; color: #24292f; font-size: 13px; cursor: pointer;
+        .brand-icon {
+            font-size: 16px; color: #2563eb;
         }
-        #importBtn:hover { background: #eaf1ff; border-color: #2563eb; color: #1d4ed8; }
-        #status { font-size: 12px; color: #57606a; min-width: 120px; }
-        .main { flex: 1; display: flex; min-height: 0; }
-        .editor { width: 42%; display: flex; flex-direction: column; border-right: 1px solid #e1e4e8; }
+
+        /* Framework Selectors */
+        .ctrl-select, .ctrl-input {
+            height: 30px; padding: 0 10px; border: 1px solid #cbd5e1;
+            border-radius: 6px; font-size: 12.5px; background: #ffffff;
+            color: #334155; outline: none; transition: all 0.15s ease;
+        }
+        .ctrl-select:hover, .ctrl-input:hover { border-color: #94a3b8; }
+        .ctrl-select:focus, .ctrl-input:focus {
+            border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+        }
+
+        /* Musical Parameter Pill */
+        .param-cluster {
+            display: flex; align-items: center; background: #f1f5f9;
+            border: 1px solid #e2e8f0; border-radius: 7px; padding: 2px 4px; gap: 4px;
+        }
+        .param-cluster .ctrl-select {
+            height: 26px; border: none; background: transparent; font-size: 12px;
+            font-weight: 600; padding: 0 6px; border-radius: 4px;
+        }
+        .param-cluster .ctrl-select:hover { background: #ffffff; }
+
+        /* Tempo Slider */
+        .tempo-box {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 0 8px; height: 26px; border-radius: 5px; background: transparent;
+        }
+        .bpm-slider {
+            width: 70px; height: 4px; accent-color: #2563eb; cursor: pointer;
+        }
+        .bpm-badge {
+            font-size: 11.5px; font-weight: 600; color: #2563eb; min-width: 58px;
+        }
+
+        /* Syntax Status Indicator */
+        .status-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 4px 9px; border-radius: 20px; font-size: 11.5px; font-weight: 600;
+        }
+        .status-pill.success {
+            background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;
+        }
+        .status-pill.warning {
+            background: #fffbeb; color: #b45309; border: 1px solid #fde68a; cursor: pointer;
+        }
+        .status-pill.danger {
+            background: #fef2f2; color: #dc2626; border: 1px solid #fecaca;
+        }
+
+        /* Studio Buttons */
+        .studio-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+            height: 30px; padding: 0 11px; border: 1px solid #cbd5e1; border-radius: 6px;
+            background: #ffffff; color: #334155; font-size: 12.5px; font-weight: 600;
+            cursor: pointer; transition: all 0.12s ease; outline: none; white-space: nowrap;
+        }
+        .studio-btn:hover { background: #f8fafc; border-color: #94a3b8; color: #0f172a; }
+        .studio-btn:active { transform: translateY(1px); }
+        .studio-btn.active {
+            background: #eff6ff; border-color: #2563eb; color: #2563eb;
+        }
+
+        .studio-btn-primary {
+            background: #2563eb; color: #ffffff; border-color: #2563eb; font-weight: 600;
+            box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+        }
+        .studio-btn-primary:hover {
+            background: #1d4ed8; border-color: #1d4ed8; color: #ffffff;
+        }
+
+        /* ==========================================================
+           2. MAIN WORKSPACE (2-PANE STUDIO VIEW)
+           ========================================================== */
+        .studio-workspace {
+            flex: 1; display: flex; min-height: 0; overflow: hidden;
+            background: #f8fafc;
+        }
+
+        /* Left Pane: Code & Syntax */
+        .code-pane {
+            width: 38%; min-width: 320px; max-width: 520px;
+            display: flex; flex-direction: column;
+            border-right: 1px solid #e2e8f0; background: #ffffff;
+        }
+        .pane-header {
+            height: 34px; padding: 0 12px; background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0; display: flex; align-items: center;
+            justify-content: space-between; font-size: 11.5px; font-weight: 700;
+            color: #475569; letter-spacing: 0.2px; text-transform: uppercase;
+        }
+        .pane-stat { font-size: 11px; font-weight: 500; color: #64748b; text-transform: none; }
+
         #input {
-            flex: 1; border: none; resize: none; padding: 14px;
-            font-family: 'Consolas', 'Courier New', monospace; font-size: 14px; line-height: 1.5;
-            outline: none; background: #fff;
+            flex: 1; border: none; resize: none; padding: 12px 14px;
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', 'Courier New', monospace;
+            font-size: 13px; line-height: 1.6; outline: none; background: #ffffff;
+            color: #1e293b; user-select: text;
         }
-        .palette {
-            padding: 8px 10px; background: #fafbfc; border-top: 1px solid #e1e4e8;
-            max-height: 46%; overflow: auto;
+
+        /* Linter warning banner */
+        .linter-bar {
+            display: none; padding: 6px 12px; background: #fffbeb;
+            border-bottom: 1px solid #fef3c7; color: #92400e; font-size: 12px;
+            align-items: center; justify-content: space-between; flex-shrink: 0;
+            cursor: pointer; transition: background 0.15s ease;
         }
-        .pgroup { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
-        .plabel { font-size: 11px; color: #8a929b; flex: 0 0 66px; }
-        .palette button {
-            min-width: 32px; height: 30px; padding: 0 8px;
-            border: 1px solid #d0d7de; border-radius: 6px; background: #fff;
-            font-size: 14px; line-height: 1; cursor: pointer; color: #24292f;
+        .linter-bar.active { display: flex; }
+        .linter-bar:hover { background: #fef3c7; }
+        .linter-msg { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+
+        /* Right Pane: Visual Sheet Music */
+        .sheet-pane {
+            flex: 1; display: flex; flex-direction: column;
+            min-width: 0; background: #f1f5f9; position: relative;
         }
-        .palette button:hover { background: #eaf1ff; border-color: #2563eb; color: #1d4ed8; }
-        .phint { font-size: 11px; color: #8a929b; margin-top: 4px; }
-        .right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-        .preview { flex: 1; padding: 18px; overflow: auto; background: #fff; }
-        .preview svg { max-width: 100%; }
-        .audiobar { padding: 8px 12px; background: #fafbfc; border-top: 1px solid #e1e4e8; }
-        .err { color: #cf222e; font-size: 13px; font-family: monospace; white-space: pre-wrap; }
+        .sheet-viewport {
+            flex: 1; overflow: auto; padding: 20px 24px; display: flex;
+            justify-content: center; align-items: flex-start;
+        }
+
+        /* The Printed Sheet Music Manuscript Card */
+        .sheet-paper {
+            background: #ffffff; border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.03);
+            padding: 24px 32px; width: 100%; max-width: 860px; min-height: 320px;
+            transform-origin: top center; transition: transform 0.15s ease;
+        }
+        .sheet-paper svg { display: block; margin: 0 auto; max-width: 100%; }
+
+        /* Floating Sheet Controls (Zoom) */
+        .floating-controls {
+            position: absolute; top: 12px; right: 16px;
+            display: flex; align-items: center; gap: 4px;
+            background: rgba(255, 255, 255, 0.92); backdrop-filter: blur(8px);
+            padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 20px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06); z-index: 10;
+        }
+        .zoom-btn {
+            width: 22px; height: 22px; border: none; background: transparent;
+            color: #475569; font-size: 14px; font-weight: bold; cursor: pointer;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        }
+        .zoom-btn:hover { background: #e2e8f0; color: #0f172a; }
+        .zoom-label { font-size: 11px; font-weight: 700; color: #334155; min-width: 34px; text-align: center; }
+
+        /* Audio Playback Transport Bar */
+        .transport-bar {
+            height: 44px; background: #ffffff; border-top: 1px solid #e2e8f0;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 16px; flex-shrink: 0; z-index: 10;
+        }
+        #audio { flex: 1; max-width: 620px; }
+
+        /* Overriding ABCJS audio widget to look clean and modern */
+        .abcjs-inline-audio {
+            background-color: transparent !important; height: 32px !important;
+            padding: 0 !important;
+        }
+        .abcjs-inline-audio .abcjs-btn {
+            width: 28px !important; height: 28px !important; border-radius: 6px !important;
+            padding: 5px !important; margin-right: 4px !important;
+            background: #f1f5f9 !important; border: 1px solid #e2e8f0 !important;
+        }
+        .abcjs-inline-audio .abcjs-btn:hover {
+            background: #e2e8f0 !important; border-color: #cbd5e1 !important;
+        }
+        .abcjs-btn g { fill: #334155 !important; stroke: #334155 !important; }
+        .abcjs-inline-audio .abcjs-midi-progress-background {
+            background-color: #e2e8f0 !important; border: none !important;
+            height: 6px !important; border-radius: 3px !important; margin: 0 10px !important;
+        }
+        .abcjs-inline-audio .abcjs-midi-progress-indicator {
+            background-color: #2563eb !important; border-radius: 50% !important;
+            width: 14px !important; height: 14px !important; top: -4px !important;
+        }
+        .abcjs-inline-audio .abcjs-midi-clock {
+            color: #475569 !important; font-size: 11.5px !important; font-weight: 600 !important;
+        }
+
+        .export-hint {
+            font-size: 11px; color: #94a3b8; font-weight: 500;
+        }
+
+        /* Playhead Cursor on score */
+        .abcjs-highlight {
+            fill: #2563eb !important; stroke: #2563eb !important;
+        }
+        .abcjs-cursor {
+            stroke: #2563eb; stroke-width: 2.5px; stroke-linecap: round;
+            opacity: 0.85; pointer-events: none;
+        }
+
+        /* ==========================================================
+           3. FULL-WIDTH STUDIO COMPOSER DOCK (BOTTOM SHELF)
+           ========================================================== */
+        .composer-dock {
+            background: #ffffff; border-top: 1px solid #cbd5e1;
+            box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.03);
+            display: flex; flex-direction: column; flex-shrink: 0;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 15;
+        }
+        .composer-dock.collapsed .dock-body { display: none; }
+
+        /* Duration & Articulations Ribbon */
+        .dock-ribbon {
+            height: 38px; padding: 0 14px; background: #f8fafc;
+            border-bottom: 1px solid #e2e8f0; display: flex; align-items: center;
+            justify-content: space-between;
+        }
+        .ribbon-group { display: flex; align-items: center; gap: 4px; }
+        .ribbon-label {
+            font-size: 11px; font-weight: 700; color: #64748b;
+            text-transform: uppercase; margin-right: 4px;
+        }
+
+        .dur-btn {
+            height: 26px; padding: 0 7px; border: 1px solid #cbd5e1; border-radius: 5px;
+            background: #ffffff; color: #334155; font-size: 11.5px; font-weight: 600;
+            cursor: pointer; display: inline-flex; align-items: center; gap: 3px;
+            transition: all 0.1s ease; outline: none;
+        }
+        .dur-btn:hover { background: #f1f5f9; border-color: #94a3b8; color: #0f172a; }
+        .dur-btn.active {
+            background: #2563eb; border-color: #2563eb; color: #ffffff;
+            box-shadow: 0 1px 3px rgba(37, 99, 235, 0.25);
+        }
+        .dur-icon { font-size: 14px; line-height: 1; }
+
+        .ribbon-divider {
+            width: 1px; height: 16px; background: #cbd5e1; margin: 0 4px;
+        }
+
+        /* Dock Main Body: Harmony Palette (Left) + Virtual Piano (Right) */
+        .dock-body {
+            padding: 10px 14px 12px; display: flex; gap: 14px;
+            align-items: stretch; background: #ffffff;
+        }
+
+        /* Harmony & Emotions Column */
+        .harmony-column {
+            width: 32%; min-width: 290px; display: flex; flex-direction: column;
+            border-right: 1px solid #e2e8f0; padding-right: 14px;
+        }
+        .section-label {
+            font-size: 11px; font-weight: 700; color: #475569;
+            text-transform: uppercase; letter-spacing: 0.2px; margin-bottom: 7px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .chord-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 5px; flex: 1;
+        }
+        .chord-card {
+            height: 32px; padding: 0 8px; border: 1px solid #e2e8f0; border-radius: 6px;
+            background: #f8fafc; cursor: pointer; display: flex; align-items: center;
+            justify-content: space-between; transition: all 0.12s ease; outline: none;
+        }
+        .chord-card:hover {
+            background: #eff6ff; border-color: #93c5fd; transform: translateY(-1px);
+            box-shadow: 0 2px 5px rgba(37, 99, 235, 0.08);
+        }
+        .chord-card:active { transform: translateY(1px); }
+        .chord-name { font-size: 12.5px; font-weight: 700; color: #1e293b; }
+        .chord-mood { font-size: 10.5px; font-weight: 500; color: #64748b; }
+
+        /* Acoustic Piano Column */
+        .piano-column {
+            flex: 1; display: flex; flex-direction: column; min-width: 0;
+        }
+        .piano-chassis {
+            display: inline-flex; position: relative; height: 110px;
+            background: #1e293b; border-radius: 6px; padding: 3px 4px 0;
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.6), 0 3px 8px rgba(0,0,0,0.1);
+            align-self: flex-start;
+        }
+
+        /* Ivory White Keys */
+        .white-key {
+            width: 34px; height: 106px;
+            background: linear-gradient(180deg, #ffffff 0%, #fdfdfd 80%, #f0f0f2 100%);
+            border: 1px solid #cbd5e1; border-top: none; border-radius: 0 0 4px 4px;
+            display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+            padding-bottom: 6px; cursor: pointer; position: relative; z-index: 1;
+            box-shadow: inset 0 -3px 0 #cbd5e1, 0 2px 3px rgba(0,0,0,0.15);
+            transition: background 0.08s ease, transform 0.05s ease;
+        }
+        .white-key:hover { background: #f0f7ff; }
+        .white-key:active, .white-key.pressed {
+            background: #dbeafe; transform: translateY(2px);
+            box-shadow: inset 0 -1px 0 #93c5fd;
+        }
+        .white-key .k-note { font-size: 10.5px; font-weight: 700; color: #1e293b; }
+        .white-key .k-solfege { font-size: 9px; color: #64748b; margin-top: 1px; font-weight: 600; }
+
+        /* Obsidian Black Keys */
+        .black-key {
+            width: 22px; height: 68px;
+            background: linear-gradient(180deg, #334155 0%, #0f172a 100%);
+            position: absolute; top: 3px; z-index: 2; border-radius: 0 0 3px 3px;
+            cursor: pointer; box-shadow: inset 0 -2px 0 #475569, 1px 2px 5px rgba(0,0,0,0.5);
+            display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px;
+            transition: background 0.08s ease, transform 0.05s ease;
+        }
+        .black-key:hover { background: #475569; }
+        .black-key:active, .black-key.pressed {
+            background: #2563eb; transform: translateY(1px);
+        }
+        .black-key .k-note { font-size: 8.5px; font-weight: 700; color: #ffffff; }
     </style>
 </head>
 
 <body>
-    <div class="toolbar">
-        <button id="importBtn" title="Nhập file .abc hoặc MusicXML (.musicxml/.xml/.mxl)">Nhập file...</button>
-        <input type="file" id="fileInput" accept=".abc,.txt,.xml,.musicxml,.mxl" style="display:none" />
-        <label>Mẫu có sẵn:</label>
-        <select id="template">
-            <option value="">-- Chọn mẫu để chèn --</option>
-        </select>
-        <span id="status"></span>
-        <button id="copyBtn">Copy bản nhạc</button>
-    </div>
-    <div class="main">
-        <div class="editor">
-            <textarea id="input" spellcheck="false"></textarea>
-            <div class="palette" id="palette">
-                <div class="pgroup">
-                    <span class="plabel">Nốt thấp</span>
-                    <button data-snip="C ">C</button>
-                    <button data-snip="D ">D</button>
-                    <button data-snip="E ">E</button>
-                    <button data-snip="F ">F</button>
-                    <button data-snip="G ">G</button>
-                    <button data-snip="A ">A</button>
-                    <button data-snip="B ">B</button>
-                </div>
-                <div class="pgroup">
-                    <span class="plabel">Nốt cao</span>
-                    <button data-snip="c ">c</button>
-                    <button data-snip="d ">d</button>
-                    <button data-snip="e ">e</button>
-                    <button data-snip="f ">f</button>
-                    <button data-snip="g ">g</button>
-                    <button data-snip="a ">a</button>
-                    <button data-snip="b ">b</button>
-                </div>
-                <div class="pgroup">
-                    <span class="plabel">Cao độ</span>
-                    <button data-snip="^" title="Thăng (#)">♯</button>
-                    <button data-snip="_" title="Giáng (b)">♭</button>
-                    <button data-snip="=" title="Bình">♮</button>
-                    <button data-snip="'" title="Cao hơn 1 quãng 8">8va↑</button>
-                    <button data-snip="," title="Thấp hơn 1 quãng 8">8va↓</button>
-                    <button data-snip="z " title="Nốt lặng">lặng</button>
-                </div>
-                <div class="pgroup">
-                    <span class="plabel">Trường độ</span>
-                    <button data-snip="2" title="Gấp đôi">×2</button>
-                    <button data-snip="3" title="Gấp ba">×3</button>
-                    <button data-snip="/2" title="Nửa">÷2</button>
-                    <button data-snip="/" title="Nửa (ngắn gọn)">/</button>
-                    <button data-snip="-" title="Nối (tie)">‿</button>
-                    <button data-snip=">" title="Chấm dôi tới">&gt;</button>
-                </div>
-                <div class="pgroup">
-                    <span class="plabel">Cấu trúc</span>
-                    <button data-snip="| " title="Vạch nhịp">|</button>
-                    <button data-snip="|: " title="Bắt đầu lặp">|:</button>
-                    <button data-snip=":| " title="Kết thúc lặp">:|</button>
-                    <button data-snip="|] " title="Vạch kết">|]</button>
-                    <button data-snip="[‸]" title="Hợp âm">[hợp âm]</button>
-                    <button data-snip="(‸)" title="Luyến (slur)">( )</button>
-                    <button data-snip="&#10;w: " title="Dòng lời hát">lời</button>
-                </div>
-                <div class="phint">Bôi đen phần nhạc rồi bấm <b>[hợp âm]</b> hoặc <b>( )</b> để bọc quanh. Các nốt: chữ hoa = quãng thấp, chữ thường = quãng cao.</div>
+    <!-- 1. STUDIO MASTER COMMAND BAR -->
+    <header class="studio-header">
+        <div class="header-left">
+            <div class="brand-badge">
+                <span class="brand-icon">𝄞</span>
+                <span>HapiCopi Studio</span>
             </div>
-        </div>
-        <div class="right">
-            <div class="preview" id="paper"></div>
-            <div class="audiobar">
-                <div id="audio"></div>
-            </div>
-        </div>
-    </div>
 
-    <script src="abcjs-basic-min.js?v=1"></script>
+            <!-- Templates -->
+            <select id="template" class="ctrl-select" title="Tải bài mẫu tham khảo">
+                <option value="">Giai điệu mẫu ▾</option>
+            </select>
+
+            <button class="studio-btn" id="importBtn" title="Nhập file .abc, MusicXML (.xml, .musicxml, .mxl)">
+                Nhập file...
+            </button>
+            <input type="file" id="fileInput" accept=".abc,.txt,.xml,.musicxml,.mxl" style="display:none" />
+        </div>
+
+        <!-- Center: Musical Framework Quick Setup -->
+        <div class="header-center">
+            <div class="param-cluster">
+                <select id="clefSel" class="ctrl-select" title="Khóa nhạc">
+                    <option value="treble">Khóa Sol (𝄞)</option>
+                    <option value="bass">Khóa Fa (𝄢)</option>
+                </select>
+
+                <select id="keySel" class="ctrl-select" title="Điệu tính chính">
+                    <option value="C">Đô trưởng (C) / La thứ (Am)</option>
+                    <option value="G">Sol trưởng (G) / Mi thứ (Em) [1♯]</option>
+                    <option value="D">Rê trưởng (D) / Si thứ (Bm) [2♯]</option>
+                    <option value="A">La trưởng (A) / Fa# thứ (F#m) [3♯]</option>
+                    <option value="F">Fa trưởng (F) / Rê thứ (Dm) [1♭]</option>
+                    <option value="Bb">Si giáng (B♭) / Sol thứ (Gm) [2♭]</option>
+                    <option value="Eb">Mi giáng (E♭) / Đô thứ (Cm) [3♭]</option>
+                    <option value="Am">La thứ (Am - Tự nhiên)</option>
+                    <option value="Em">Mi thứ (Em - Tự nhiên)</option>
+                    <option value="Dm">Rê thứ (Dm - Tự nhiên)</option>
+                </select>
+
+                <select id="meterSel" class="ctrl-select" title="Số chỉ nhịp">
+                    <option value="4/4">4/4</option>
+                    <option value="3/4">3/4 (Valse)</option>
+                    <option value="2/4">2/4 (Hành khúc)</option>
+                    <option value="6/8">6/8 (Nhẹ nhàng)</option>
+                    <option value="C|">2/2</option>
+                </select>
+
+                <div class="tempo-box" title="Tốc độ diễn tấu (BPM)">
+                    <span style="font-size:11px; color:#64748b; font-weight:600;">♩</span>
+                    <input type="range" id="bpmSlider" class="bpm-slider" min="50" max="180" step="5" value="100" />
+                    <span id="bpmLabel" class="bpm-badge">100 BPM</span>
+                </div>
+            </div>
+
+            <!-- Syntax validation badge -->
+            <div id="status-area">
+                <span id="syntaxBadge" class="status-pill success">● Cú pháp chuẩn</span>
+            </div>
+        </div>
+
+        <!-- Right: Primary Actions & Export -->
+        <div class="header-right">
+            <button class="studio-btn" id="togglePianoBtn" title="Bật/tắt đàn Piano & Hợp âm">
+                🎹 Bàn phím
+            </button>
+            <button class="studio-btn studio-btn-primary" id="copyBtn" title="Copy ảnh chất lượng cao 300 DPI để dán vào Word/Docs (Ctrl+Enter)">
+                📷 Sao chép ảnh (300 DPI)
+            </button>
+        </div>
+    </header>
+
+    <!-- 2. STUDIO WORKSPACE (PROPORTIONAL 2-PANE VIEW) -->
+    <main class="studio-workspace">
+        <!-- Left: Code Editor -->
+        <section class="code-pane">
+            <div class="pane-header">
+                <span>Mã ký âm ABC</span>
+                <span class="pane-stat" id="codeStats">0 dòng • Tự động render</span>
+            </div>
+
+            <!-- Linter Alert Banner -->
+            <div class="linter-bar" id="linterBar" title="Click để nhảy tới vị trí cảnh báo">
+                <div class="linter-msg" id="linterMsg"></div>
+                <span style="font-size:11px; font-weight:600; text-decoration:underline;">Sửa ngay</span>
+            </div>
+
+            <textarea id="input" spellcheck="false" placeholder="Nhập mã ABC hoặc click bàn phím / hợp âm bên dưới để soạn giai điệu..."></textarea>
+        </section>
+
+        <!-- Right: Sheet Music Score Canvas -->
+        <section class="sheet-pane">
+            <!-- Floating Zoom Controls -->
+            <div class="floating-controls">
+                <button class="zoom-btn" id="zoomOutBtn" title="Thu nhỏ">−</button>
+                <span id="zoomLabel" class="zoom-label">100%</span>
+                <button class="zoom-btn" id="zoomInBtn" title="Phóng to">+</button>
+            </div>
+
+            <!-- Sheet Manuscript Canvas -->
+            <div class="sheet-viewport" id="paper">
+                <div class="sheet-paper" id="sheetWrapper"></div>
+            </div>
+
+            <!-- Audio Transport Bar -->
+            <footer class="transport-bar">
+                <div id="audio"></div>
+                <span class="export-hint">Độ phân giải xuất: 300 DPI (Chuẩn Word & In ấn)</span>
+            </footer>
+        </section>
+    </main>
+
+    <!-- 3. STUDIO COMPOSER DOCK (FULL-WIDTH BOTTOM SHELF) -->
+    <footer class="composer-dock" id="composerDock">
+        <!-- Note Palette Ribbon -->
+        <div class="dock-ribbon">
+            <div class="ribbon-group">
+                <span class="ribbon-label">Trường độ:</span>
+                <button class="dur-btn" data-dur="4" title="Nốt Tròn (4 phách)"><span class="dur-icon">𝅝</span> Tròn</button>
+                <button class="dur-btn" data-dur="2" title="Nốt Trắng (2 phách)"><span class="dur-icon">𝅗𝅥</span> Trắng</button>
+                <button class="dur-btn active" data-dur="1" title="Nốt Đen (1 phách)"><span class="dur-icon">𝅘𝅥</span> Đen</button>
+                <button class="dur-btn" data-dur="0.5" title="Nốt Móc đơn (1/2 phách)"><span class="dur-icon">𝅘𝅥𝅮</span> Đơn</button>
+                <button class="dur-btn" data-dur="0.25" title="Nốt Móc kép (1/4 phách)"><span class="dur-icon">𝅘𝅥𝅯</span> Kép</button>
+
+                <div class="ribbon-divider"></div>
+
+                <span class="ribbon-label">Bổ trợ:</span>
+                <button class="dur-btn" id="dotBtn" title="Chấm dôi (+50% ngân dài)">• Dôi</button>
+                <button class="dur-btn" id="accFlatBtn" title="Dấu Giáng (♭)">♭</button>
+                <button class="dur-btn" id="accSharpBtn" title="Dấu Thăng (♯)">♯</button>
+                <button class="dur-btn" id="restBtn" title="Chèn nốt Lặng">𝄽 Lặng</button>
+                <button class="dur-btn" id="barBtn" title="Vạch nhịp |">| Vạch</button>
+                <button class="dur-btn" id="repeatBtn" title="Vạch lặp |: :|">|: :|</button>
+            </div>
+
+            <!-- Octave and Collapse Controls -->
+            <div class="ribbon-group">
+                <button class="dur-btn" id="octDownBtn" title="Hạ 1 quãng tám">◀ 8va</button>
+                <span id="octLabel" style="font-size:11.5px; font-weight:700; color:#334155; min-width:68px; text-align:center;">Quãng 4-5</span>
+                <button class="dur-btn" id="octUpBtn" title="Tăng 1 quãng tám">8va ▶</button>
+                <div class="ribbon-divider"></div>
+                <button class="dur-btn" id="collapseDockBtn" title="Thu gọn/Mở rộng dock">▾ Thu gọn</button>
+            </div>
+        </div>
+
+        <!-- Dock Body: Harmony Palette (Left) + Virtual Piano (Right) -->
+        <div class="dock-body">
+            <!-- Left: Emotional Harmony Cards -->
+            <div class="harmony-column">
+                <div class="section-label">
+                    <span>Hợp âm cảm xúc</span>
+                    <span id="keyLabelNote" style="font-weight:600; color:#2563eb; text-transform:none;">Giọng Đô trưởng</span>
+                </div>
+                <div class="chord-grid" id="harmonyBar">
+                    <!-- Populated dynamically based on Key -->
+                </div>
+            </div>
+
+            <!-- Right: Virtual Piano Keyboard -->
+            <div class="piano-column">
+                <div class="section-label">
+                    <span>Bàn phím Piano ảo (Bấm để nghe & chèn nốt)</span>
+                    <span style="font-weight:normal; color:#64748b; text-transform:none;">Âm sắc mộc acoustic</span>
+                </div>
+                <div class="piano-chassis" id="pianoKeyboard">
+                    <!-- Keys rendered dynamically -->
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="abcjs-basic-min.js?v=2"></script>
     <script>
         var DEFAULT_ABC =
             "X:1\n" +
             "T:Bản nhạc mới\n" +
-            "C:HapiCopi\n" +
+            "C:HapiCopi Composer\n" +
             "M:4/4\n" +
             "L:1/4\n" +
             "Q:1/4=100\n" +
             "K:C\n" +
-            "C D E F | G A B c | c B A G | F E D C |]";
+            "\"C\"C D E F | \"G\"G A B c | \"Am\"c B A G | \"F\"F E \"C\"D C |]";
 
         var TEMPLATES = {
-            "Gam Đô trưởng (luyện tập)":
-                "X:1\nT:Gam Đô trưởng\nM:4/4\nL:1/4\nQ:1/4=100\nK:C\n" +
-                "C D E F | G A B c | c B A G | F E D C |]",
-            "Twinkle Twinkle Little Star":
-                "X:1\nT:Twinkle Twinkle Little Star\nM:4/4\nL:1/4\nQ:1/4=110\nK:C\n" +
-                "C C G G | A A G2 | F F E E | D D C2 |\n" +
-                "G G F F | E E D2 | G G F F | E E D2 |\n" +
-                "C C G G | A A G2 | F F E E | D D C2 |]",
-            "Ode to Joy - Beethoven":
+            "Gam Đô trưởng (C Major Scale)":
+                "X:1\nT:Gam Đô trưởng\nC:Luyện tập\nM:4/4\nL:1/4\nQ:1/4=100\nK:C\n" +
+                "\"C\"C D E F | \"G\"G A B c | \"C\"c B A G | \"G\"F E D C |]",
+            "Twinkle Twinkle Little Star (Vui tươi)":
+                "X:1\nT:Twinkle Twinkle Little Star\nC:Giai điệu thiếu nhi\nM:4/4\nL:1/4\nQ:1/4=110\nK:C\n" +
+                "\"C\"C C G G | \"F\"A A \"C\"G2 | \"F\"F F \"C\"E E | \"G\"D D \"C\"C2 |\n" +
+                "\"C\"G G \"F\"F F | \"C\"E E \"G\"D2 | \"C\"G G \"F\"F F | \"C\"E E \"G\"D2 |\n" +
+                "\"C\"C C G G | \"F\"A A \"C\"G2 | \"F\"F F \"C\"E E | \"G\"D D \"C\"C2 |]",
+            "Ode to Joy - Beethoven (Hùng tráng)":
                 "X:1\nT:Ode to Joy\nC:L. van Beethoven\nM:4/4\nL:1/4\nQ:1/4=120\nK:C\n" +
-                "E E F G | G F E D | C C D E | E3 D/2D/2 |\n" +
-                "E E F G | G F E D | C C D E | D3 C/2C/2 |]",
-            "Nhịp Jig 6/8":
-                "X:1\nT:Nhịp Jig\nM:6/8\nL:1/8\nQ:3/8=120\nK:G\n" +
-                "GAB d2d | edB dBA | GAB d2d | edB A2G |]",
-            "Hợp âm + lời hát":
-                "X:1\nT:Ví dụ hợp âm & lời\nM:4/4\nL:1/4\nQ:1/4=90\nK:C\n" +
-                "\"C\"C E G c | \"G\"B2 G2 | \"F\"A c A F | \"C\"G2 E2 |]\n" +
-                "w: Đô mi son đô | son mãi son | fa la fa | son mi vang"
+                "\"C\"E E F G | \"G\"G F E D | \"C\"C C D E | \"C\"E3 \"G\"D/2D/2 |\n" +
+                "\"C\"E E F G | \"G\"G F E D | \"C\"C C D E | \"G\"D3 \"C\"C/2C/2 |]",
+            "Dân ca êm dịu (La thứ - Man mác buồn)":
+                "X:1\nT:Giai điệu man mác buồn\nC:Dân ca biến tấu\nM:4/4\nL:1/4\nQ:1/4=75\nK:Am\n" +
+                "\"Am\"A B c d | \"Em\"e2 B2 | \"F\"c d e c | \"G\"d2 B2 |\n" +
+                "\"Dm\"d c B A | \"Am\"c2 A2 | \"E7\"B c B ^G | \"Am\"A4 |]",
+            "Nhịp Jig 6/8 (Rộn rã lắc lư)":
+                "X:1\nT:Khúc nhạc Jig 6/8\nC:Traditional\nM:6/8\nL:1/8\nQ:3/8=115\nK:G\n" +
+                "\"G\"GAB d2d | \"C\"edB \"G\"dBA | \"G\"GAB d2d | \"D\"edB A2G |]"
         };
 
+        // DOM Elements
         var input = document.getElementById('input');
-        var paper = document.getElementById('paper');
-        var statusEl = document.getElementById('status');
+        var sheetWrapper = document.getElementById('sheetWrapper');
+        var syntaxBadge = document.getElementById('syntaxBadge');
         var templateSel = document.getElementById('template');
         var audioEl = document.getElementById('audio');
+        var linterBar = document.getElementById('linterBar');
+        var linterMsg = document.getElementById('linterMsg');
+        var codeStats = document.getElementById('codeStats');
+
+        // Score Setup Controls
+        var clefSel = document.getElementById('clefSel');
+        var keySel = document.getElementById('keySel');
+        var meterSel = document.getElementById('meterSel');
+        var bpmSlider = document.getElementById('bpmSlider');
+        var bpmLabel = document.getElementById('bpmLabel');
+
+        // Composer Dock Toggle
+        var composerDock = document.getElementById('composerDock');
+        var collapseDockBtn = document.getElementById('collapseDockBtn');
+        var togglePianoBtn = document.getElementById('togglePianoBtn');
+
+        function toggleDock() {
+            var isCollapsed = composerDock.classList.toggle('collapsed');
+            collapseDockBtn.textContent = isCollapsed ? '▴ Mở rộng' : '▾ Thu gọn';
+            togglePianoBtn.classList.toggle('active', !isCollapsed);
+        }
+        collapseDockBtn.addEventListener('click', toggleDock);
+        togglePianoBtn.addEventListener('click', toggleDock);
+
+        // Zoom Controls
+        var zoomLevel = 1.0;
+        var zoomLabel = document.getElementById('zoomLabel');
+        document.getElementById('zoomInBtn').addEventListener('click', function() { setZoom(zoomLevel + 0.15); });
+        document.getElementById('zoomOutBtn').addEventListener('click', function() { setZoom(zoomLevel - 0.15); });
+
+        function setZoom(val) {
+            zoomLevel = Math.max(0.65, Math.min(1.8, val));
+            sheetWrapper.style.transform = 'scale(' + zoomLevel + ')';
+            zoomLabel.textContent = Math.round(zoomLevel * 100) + '%';
+        }
+
+        // State
         var audioSupported = false;
         var synthControl = null;
         var currentVisual = null;
         var abcReady = false;
+        var cursorControl = null;
+        var currentDuration = 1.0;
+        var currentDot = false;
+        var currentAccidental = "";
+        var baseOctave = 4;
 
-        // Nạp danh sách template vào combobox
+        // ---- 1. Web Audio Piano Synthesizer ----
+        var webAudioCtx = null;
+        function getWebAudioContext() {
+            if (!webAudioCtx) {
+                var AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+                webAudioCtx = new AudioCtxClass();
+            }
+            if (webAudioCtx.state === 'suspended') {
+                webAudioCtx.resume();
+            }
+            return webAudioCtx;
+        }
+
+        window.addEventListener('pointerdown', function() { getWebAudioContext(); }, { passive: true });
+        window.addEventListener('keydown', function() { getWebAudioContext(); }, { passive: true });
+
+        function playPianoTone(freq, dur) {
+            try {
+                var ctx = getWebAudioContext();
+                var now = ctx.currentTime;
+                var toneDur = dur || 0.65;
+
+                var osc1 = ctx.createOscillator();
+                var osc2 = ctx.createOscillator();
+                var gain = ctx.createGain();
+
+                osc1.type = 'triangle';
+                osc1.frequency.setValueAtTime(freq, now);
+
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(freq * 2, now);
+
+                var gain2 = ctx.createGain();
+                gain2.gain.setValueAtTime(0.2, now);
+                osc2.connect(gain2);
+                gain2.connect(gain);
+
+                osc1.connect(gain);
+                gain.connect(ctx.destination);
+
+                gain.gain.setValueAtTime(0.001, now);
+                gain.gain.linearRampToValueAtTime(0.35, now + 0.012);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + toneDur);
+
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + toneDur + 0.05);
+                osc2.stop(now + toneDur + 0.05);
+            } catch (e) { }
+        }
+
+        function playChordTones(freqs) {
+            if (!freqs || !freqs.length) return;
+            freqs.forEach(function(f) { playPianoTone(f, 0.9); });
+        }
+
+        // ---- 2. Virtual Piano Keyboard Generator ----
+        var PIANO_NOTES = [
+            { note: "C", solfege: "Đô", semi: 0 },
+            { note: "C#", isBlack: true, semi: 1 },
+            { note: "D", solfege: "Rê", semi: 2 },
+            { note: "D#", isBlack: true, semi: 3 },
+            { note: "E", solfege: "Mi", semi: 4 },
+            { note: "F", solfege: "Fa", semi: 5 },
+            { note: "F#", isBlack: true, semi: 6 },
+            { note: "G", solfege: "Sol", semi: 7 },
+            { note: "G#", isBlack: true, semi: 8 },
+            { note: "A", solfege: "La", semi: 9 },
+            { note: "A#", isBlack: true, semi: 10 },
+            { note: "B", solfege: "Si", semi: 11 }
+        ];
+
+        function midiToFreq(midi) {
+            return 440 * Math.pow(2, (midi - 69) / 12);
+        }
+
+        function getAbcNoteString(noteName, oct, accidentalOverride) {
+            var acc = accidentalOverride || currentAccidental;
+            var letter = noteName.charAt(0);
+            var isSharp = noteName.indexOf('#') !== -1;
+            if (isSharp && !acc) acc = "^";
+
+            var result = "";
+            if (acc) result += acc;
+
+            if (oct === 3) {
+                result += letter.toUpperCase() + ",";
+            } else if (oct === 4) {
+                result += letter.toUpperCase();
+            } else if (oct === 5) {
+                result += letter.toLowerCase();
+            } else if (oct === 6) {
+                result += letter.toLowerCase() + "'";
+            } else {
+                result += letter.toUpperCase();
+            }
+
+            var durStr = "";
+            if (currentDuration === 4) durStr = "4";
+            else if (currentDuration === 2) durStr = currentDot ? "3" : "2";
+            else if (currentDuration === 1) durStr = currentDot ? "3/2" : "";
+            else if (currentDuration === 0.5) durStr = currentDot ? "3/4" : "/";
+            else if (currentDuration === 0.25) durStr = "/4";
+
+            return result + durStr + " ";
+        }
+
+        function renderPianoKeyboard() {
+            var container = document.getElementById('pianoKeyboard');
+            container.innerHTML = '';
+            var oct1 = baseOctave;
+            var oct2 = baseOctave + 1;
+
+            var keys = [];
+            PIANO_NOTES.forEach(function(item) { keys.push({ item: item, oct: oct1 }); });
+            PIANO_NOTES.forEach(function(item) { keys.push({ item: item, oct: oct2 }); });
+            keys.push({ item: PIANO_NOTES[0], oct: oct2 + 1 });
+
+            var whiteKeyWidth = 34;
+
+            // Render white keys first
+            keys.forEach(function(k) {
+                if (!k.item.isBlack) {
+                    var el = document.createElement('div');
+                    el.className = 'white-key';
+                    el.setAttribute('data-oct', k.oct);
+                    el.setAttribute('data-note', k.item.note);
+                    el.innerHTML = '<span class="k-note">' + k.item.note + k.oct + '</span><span class="k-solfege">' + (k.item.solfege || '') + '</span>';
+                    
+                    var midi = (k.oct + 1) * 12 + k.item.semi;
+                    var freq = midiToFreq(midi);
+
+                    el.addEventListener('mousedown', function(e) {
+                        e.preventDefault();
+                        el.classList.add('pressed');
+                        playPianoTone(freq);
+                        insertSnippet(getAbcNoteString(k.item.note, k.oct));
+                    });
+                    el.addEventListener('mouseup', function() { el.classList.remove('pressed'); });
+                    el.addEventListener('mouseleave', function() { el.classList.remove('pressed'); });
+
+                    container.appendChild(el);
+                }
+            });
+
+            // Render black keys with precise offset
+            var currWhite = 0;
+            keys.forEach(function(k) {
+                if (!k.item.isBlack) {
+                    currWhite++;
+                } else {
+                    var el = document.createElement('div');
+                    el.className = 'black-key';
+                    el.setAttribute('data-oct', k.oct);
+                    el.setAttribute('data-note', k.item.note);
+                    
+                    var leftPos = (currWhite * whiteKeyWidth) - 11;
+                    el.style.left = leftPos + 'px';
+                    el.innerHTML = '<span class="k-note">' + k.item.note + '</span>';
+
+                    var midi = (k.oct + 1) * 12 + k.item.semi;
+                    var freq = midiToFreq(midi);
+
+                    el.addEventListener('mousedown', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        el.classList.add('pressed');
+                        playPianoTone(freq);
+                        insertSnippet(getAbcNoteString(k.item.note, k.oct));
+                    });
+                    el.addEventListener('mouseup', function() { el.classList.remove('pressed'); });
+                    el.addEventListener('mouseleave', function() { el.classList.remove('pressed'); });
+
+                    container.appendChild(el);
+                }
+            });
+
+            document.getElementById('octLabel').textContent = 'Quãng ' + baseOctave + '-' + (baseOctave + 1);
+        }
+
+        document.getElementById('octDownBtn').addEventListener('click', function() {
+            if (baseOctave > 2) { baseOctave--; renderPianoKeyboard(); }
+        });
+        document.getElementById('octUpBtn').addEventListener('click', function() {
+            if (baseOctave < 5) { baseOctave++; renderPianoKeyboard(); }
+        });
+
+        // ---- 3. Emotional Harmony Palette ----
+        var KEY_CHORDS = {
+            "C": [
+                { name: "C", mood: "Tươi sáng", freqs: [261.6, 329.6, 392.0] },
+                { name: "Dm", mood: "Trầm buồn", freqs: [293.7, 349.2, 440.0] },
+                { name: "Em", mood: "Sâu lắng", freqs: [329.6, 392.0, 493.9] },
+                { name: "F", mood: "Bay bổng", freqs: [349.2, 440.0, 523.3] },
+                { name: "G", mood: "Hùng tráng", freqs: [392.0, 493.9, 587.3] },
+                { name: "Am", mood: "Hoài niệm", freqs: [220.0, 261.6, 329.6] },
+                { name: "G7", mood: "Hút về C", freqs: [392.0, 493.9, 587.3, 698.5] }
+            ],
+            "G": [
+                { name: "G", mood: "Rạng rỡ", freqs: [392.0, 493.9, 587.3] },
+                { name: "Am", mood: "Dịu dàng", freqs: [220.0, 261.6, 329.6] },
+                { name: "Bm", mood: "Trầm u", freqs: [246.9, 293.7, 370.0] },
+                { name: "C", mood: "Thanh thản", freqs: [261.6, 329.6, 392.0] },
+                { name: "D", mood: "Mạnh mẽ", freqs: [293.7, 370.0, 440.0] },
+                { name: "Em", mood: "Lắng đọng", freqs: [329.6, 392.0, 493.9] },
+                { name: "D7", mood: "Về G", freqs: [293.7, 370.0, 440.0, 523.3] }
+            ],
+            "F": [
+                { name: "F", mood: "Ấm áp", freqs: [349.2, 440.0, 523.3] },
+                { name: "Gm", mood: "U sầu", freqs: [392.0, 466.2, 587.3] },
+                { name: "Am", mood: "Lắng đọng", freqs: [220.0, 261.6, 329.6] },
+                { name: "Bb", mood: "Khoáng đạt", freqs: [233.1, 293.7, 349.2] },
+                { name: "C", mood: "Mở sáng", freqs: [261.6, 329.6, 392.0] },
+                { name: "Dm", mood: "Hoài niệm", freqs: [293.7, 349.2, 440.0] },
+                { name: "C7", mood: "Về F", freqs: [261.6, 329.6, 392.0, 466.2] }
+            ],
+            "Am": [
+                { name: "Am", mood: "U buồn", freqs: [220.0, 261.6, 329.6] },
+                { name: "C", mood: "Ánh sáng", freqs: [261.6, 329.6, 392.0] },
+                { name: "Dm", mood: "Xót xa", freqs: [293.7, 349.2, 440.0] },
+                { name: "Em", mood: "Trầm u", freqs: [329.6, 392.0, 493.9] },
+                { name: "F", mood: "Lãng mạn", freqs: [349.2, 440.0, 523.3] },
+                { name: "G", mood: "Khoáng đạt", freqs: [392.0, 493.9, 587.3] },
+                { name: "E7", mood: "Kịch tính", freqs: [329.6, 415.3, 493.9, 587.3] }
+            ]
+        };
+
+        function updateHarmonyBar(currentKey) {
+            var bar = document.getElementById('harmonyBar');
+            var noteLabel = document.getElementById('keyLabelNote');
+            bar.innerHTML = '';
+            var cleanKey = currentKey.replace(/m.*/i, 'm').replace(/[^a-zA-Z#b]/g, '');
+            var list = KEY_CHORDS[cleanKey] || KEY_CHORDS["C"];
+            noteLabel.textContent = "Giọng " + currentKey;
+
+            list.forEach(function(c) {
+                var card = document.createElement('button');
+                card.className = 'chord-card';
+                card.innerHTML = '<span class="chord-name">' + c.name + '</span><span class="chord-mood">' + c.mood + '</span>';
+                card.addEventListener('click', function() {
+                    playChordTones(c.freqs);
+                    insertSnippet('"' + c.name + '"');
+                });
+                bar.appendChild(card);
+            });
+        }
+
+        // ---- 4. Duration Selector Actions ----
+        document.querySelectorAll('.dur-btn[data-dur]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.dur-btn[data-dur]').forEach(function(b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                currentDuration = parseFloat(btn.getAttribute('data-dur'));
+            });
+        });
+
+        document.getElementById('dotBtn').addEventListener('click', function() {
+            currentDot = !currentDot;
+            this.classList.toggle('active', currentDot);
+        });
+
+        document.getElementById('accFlatBtn').addEventListener('click', function() {
+            currentAccidental = (currentAccidental === "_") ? "" : "_";
+            this.classList.toggle('active', currentAccidental === "_");
+            document.getElementById('accSharpBtn').classList.remove('active');
+        });
+
+        document.getElementById('accSharpBtn').addEventListener('click', function() {
+            currentAccidental = (currentAccidental === "^") ? "" : "^";
+            this.classList.toggle('active', currentAccidental === "^");
+            document.getElementById('accFlatBtn').classList.remove('active');
+        });
+
+        document.getElementById('restBtn').addEventListener('click', function() {
+            var durStr = "";
+            if (currentDuration === 4) durStr = "4";
+            else if (currentDuration === 2) durStr = currentDot ? "3" : "2";
+            else if (currentDuration === 1) durStr = currentDot ? "3/2" : "";
+            else if (currentDuration === 0.5) durStr = "/";
+            else if (currentDuration === 0.25) durStr = "/4";
+            insertSnippet("z" + durStr + " ");
+        });
+
+        document.getElementById('barBtn').addEventListener('click', function() { insertSnippet("| "); });
+        document.getElementById('repeatBtn').addEventListener('click', function() { insertSnippet("|: ‸ :| "); });
+
+        // ---- 5. Playhead Cursor & Timing ----
+        function CursorControl(rootEl) {
+            this.root = rootEl;
+            this.cursor = null;
+        }
+        CursorControl.prototype.onStart = function() {
+            var svg = this.root.querySelector("svg");
+            if (!svg) return;
+            this.cursor = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            this.cursor.setAttribute("class", "abcjs-cursor");
+            svg.appendChild(this.cursor);
+        };
+        CursorControl.prototype.onEvent = function(ev) {
+            if (!ev) return;
+            var lastElems = this.root.querySelectorAll(".abcjs-highlight");
+            for (var i = 0; i < lastElems.length; i++) {
+                lastElems[i].classList.remove("abcjs-highlight");
+            }
+            if (ev.elements) {
+                for (var i = 0; i < ev.elements.length; i++) {
+                    for (var j = 0; j < ev.elements[i].length; j++) {
+                        ev.elements[i][j].classList.add("abcjs-highlight");
+                    }
+                }
+            }
+            if (this.cursor && ev.left !== null && typeof ev.left !== 'undefined') {
+                this.cursor.setAttribute("x1", ev.left - 2);
+                this.cursor.setAttribute("x2", ev.left - 2);
+                this.cursor.setAttribute("y1", ev.top);
+                this.cursor.setAttribute("y2", ev.top + ev.height);
+            }
+        };
+        CursorControl.prototype.onFinished = function() {
+            var lastElems = this.root.querySelectorAll(".abcjs-highlight");
+            for (var i = 0; i < lastElems.length; i++) {
+                lastElems[i].classList.remove("abcjs-highlight");
+            }
+            if (this.cursor && this.cursor.parentNode) {
+                this.cursor.parentNode.removeChild(this.cursor);
+                this.cursor = null;
+            }
+        };
+
+        // ---- 6. Setup Bar Sync with ABC Headers ----
+        function updateHeadersFromText(abc) {
+            var mKey = abc.match(/\nK:\s*([A-Za-z#b]+)/);
+            if (mKey) {
+                var kVal = mKey[1].trim();
+                for (var i = 0; i < keySel.options.length; i++) {
+                    if (keySel.options[i].value === kVal) {
+                        keySel.selectedIndex = i;
+                        break;
+                    }
+                }
+                updateHarmonyBar(kVal);
+            }
+            var mMeter = abc.match(/\nM:\s*([^\n]+)/);
+            if (mMeter) {
+                var mVal = mMeter[1].trim();
+                for (var j = 0; j < meterSel.options.length; j++) {
+                    if (meterSel.options[j].value === mVal) {
+                        meterSel.selectedIndex = j;
+                        break;
+                    }
+                }
+            }
+            var mBpm = abc.match(/\nQ:\s*.*=(\d+)/);
+            if (mBpm) {
+                var bpm = parseInt(mBpm[1], 10);
+                if (bpm >= 50 && bpm <= 180) {
+                    bpmSlider.value = bpm;
+                    updateBpmLabel(bpm);
+                }
+            }
+
+            // Update stats
+            var lines = abc.split('\n').filter(function(l) { return l.trim().length > 0; }).length;
+            codeStats.textContent = lines + " dòng • Tự động render";
+        }
+
+        function setHeaderField(tag, value) {
+            var text = input.value;
+            var reg = new RegExp("(^|\\n)(" + tag + ":[^\\n]*)", "m");
+            if (reg.test(text)) {
+                input.value = text.replace(reg, "$1" + tag + ":" + value);
+            } else {
+                input.value = tag + ":" + value + "\n" + text;
+            }
+            render();
+        }
+
+        keySel.addEventListener('change', function() {
+            var k = keySel.value;
+            setHeaderField("K", k);
+            updateHarmonyBar(k);
+        });
+
+        meterSel.addEventListener('change', function() {
+            setHeaderField("M", meterSel.value);
+        });
+
+        clefSel.addEventListener('change', function() {
+            var k = keySel.value;
+            if (clefSel.value === 'bass') {
+                setHeaderField("K", k + " clef=bass");
+            } else {
+                setHeaderField("K", k);
+            }
+        });
+
+        bpmSlider.addEventListener('input', function() {
+            var val = parseInt(bpmSlider.value, 10);
+            updateBpmLabel(val);
+            setHeaderField("Q", "1/4=" + val);
+        });
+
+        function updateBpmLabel(val) {
+            bpmLabel.textContent = val + " BPM";
+        }
+
+        // Templates selector
         Object.keys(TEMPLATES).forEach(function (name) {
             var opt = document.createElement('option');
             opt.value = name; opt.textContent = name;
@@ -190,12 +1028,13 @@
             var name = templateSel.value;
             if (name && TEMPLATES[name]) {
                 input.value = TEMPLATES[name];
+                updateHeadersFromText(input.value);
                 render();
             }
             templateSel.value = "";
         });
 
-        // ---- Nhập file (.abc / MusicXML) ----
+        // ---- 7. File Import ----
         var importBtn = document.getElementById('importBtn');
         var fileInput = document.getElementById('fileInput');
         importBtn.addEventListener('click', function () { fileInput.value = ''; fileInput.click(); });
@@ -206,121 +1045,97 @@
 
         function loadAbcText(abc, label) {
             input.value = abc;
+            updateHeadersFromText(abc);
             render();
-            statusEl.textContent = (label || 'Đã nạp') + ' (' + abc.split('\n').length + ' dòng).';
+            showStatus(label || 'Đã nạp bài hát', 'success');
         }
 
-        // Chuyển chuỗi MusicXML -> ABC bằng xml2abc (hàm vertaal toàn cục).
         function musicXmlToAbc(xmlString, label) {
             try {
-                // xml2abc (vertaal) dùng jQuery bên trong nên cần truyền document do $.parseXML tạo ra.
                 var xmldoc = jQuery.parseXML(xmlString);
-                var res = vertaal(xmldoc, { d: 4, p: 'f' });
-                var abc = (res && res[0]) ? res[0] : '';
-                if (!abc.trim()) throw new Error('không trích được nốt nhạc từ MusicXML');
-                loadAbcText(abc, label || 'Đã chuyển MusicXML sang ABC');
-            } catch (e) {
-                statusEl.innerHTML = '<span class="err">Lỗi chuyển MusicXML: ' + (e.message || e) + '</span>';
+                var res = vertxml(xmldoc);
+                var abc = res && res[0];
+                if (abc && abc.trim().length > 0) {
+                    loadAbcText(abc, label || 'Đã chuyển đổi MusicXML thành công');
+                } else {
+                    showStatus('Không trích xuất được nốt nhạc từ MusicXML', 'danger');
+                }
+            } catch (ex) {
+                showStatus('Lỗi đọc MusicXML: ' + ex.message, 'danger');
             }
         }
 
-        function loadScript(src) {
-            return new Promise(function (resolve, reject) {
-                var s = document.createElement('script');
-                s.src = src;
-                s.onload = resolve;
-                s.onerror = function () { reject(new Error('Không nạp được ' + src)); };
-                document.body.appendChild(s);
-            });
-        }
-
-        var importLibsPromise = null;
         function ensureImportLibs() {
-            if (window.jQuery && typeof JSZip !== 'undefined' && typeof vertaal === 'function') {
-                return Promise.resolve();
-            }
-            if (!importLibsPromise) {
-                importLibsPromise = loadScript('jquery.min.js?v=1')
-                    .then(function () { return loadScript('xml2abc.js?v=1'); })
-                    .then(function () { return loadScript('jszip.min.js?v=1'); });
-            }
-            return importLibsPromise;
+            return new Promise(function (resolve, reject) {
+                if (window.JSZip && window.vertxml) {
+                    resolve(); return;
+                }
+                var jq = document.createElement('script');
+                jq.src = 'jquery.min.js';
+                jq.onload = function () {
+                    var jsz = document.createElement('script');
+                    jsz.src = 'jszip.min.js';
+                    jsz.onload = function () {
+                        var x2a = document.createElement('script');
+                        x2a.src = 'xml2abc.js';
+                        x2a.onload = function () { resolve(); };
+                        x2a.onerror = reject;
+                        document.head.appendChild(x2a);
+                    };
+                    jsz.onerror = reject;
+                    document.head.appendChild(jsz);
+                };
+                jq.onerror = reject;
+                document.head.appendChild(jq);
+            });
         }
 
         function importFile(file) {
-            var name = (file.name || '').toLowerCase();
-            statusEl.textContent = 'Đang đọc "' + file.name + '"...';
-            var needLibs = name.endsWith('.xml') || name.endsWith('.musicxml') || name.endsWith('.mxl');
-            var start = needLibs ? ensureImportLibs() : Promise.resolve();
-            start.then(function () { importFileAfterLibs(file, name); }).catch(function (e) {
-                statusEl.innerHTML = '<span class="err">' + (e.message || e) + '</span>';
-            });
-        }
-
-        function importFileAfterLibs(file, name) {
-            if (name.endsWith('.abc') || name.endsWith('.txt')) {
-                var r = new FileReader();
-                r.onload = function () { loadAbcText(String(r.result), 'Đã nạp file ABC'); };
-                r.onerror = function () { statusEl.innerHTML = '<span class="err">Không đọc được file</span>'; };
-                r.readAsText(file);
-            } else if (name.endsWith('.xml') || name.endsWith('.musicxml')) {
-                var r2 = new FileReader();
-                r2.onload = function () { musicXmlToAbc(String(r2.result)); };
-                r2.onerror = function () { statusEl.innerHTML = '<span class="err">Không đọc được file</span>'; };
-                r2.readAsText(file);
-            } else if (name.endsWith('.mxl')) {
-                var r3 = new FileReader();
-                r3.onload = function () { unzipMxl(r3.result); };
-                r3.onerror = function () { statusEl.innerHTML = '<span class="err">Không đọc được file</span>'; };
-                r3.readAsArrayBuffer(file);
+            var ext = (file.name.split('.').pop() || '').toLowerCase();
+            if (ext === 'abc' || ext === 'txt') {
+                var reader = new FileReader();
+                reader.onload = function (e) { loadAbcText(e.target.result, 'Đã nhập: ' + file.name); };
+                reader.readAsText(file, 'utf-8');
+            } else if (ext === 'xml' || ext === 'musicxml') {
+                ensureImportLibs().then(function () {
+                    var reader = new FileReader();
+                    reader.onload = function (e) { musicXmlToAbc(e.target.result, 'Đã nhập MusicXML: ' + file.name); };
+                    reader.readAsText(file, 'utf-8');
+                }).catch(function (err) {
+                    showStatus('Không nạp được thư viện đọc MusicXML: ' + err, 'danger');
+                });
+            } else if (ext === 'mxl') {
+                ensureImportLibs().then(function () {
+                    var reader = new FileReader();
+                    reader.onload = function (e) {
+                        JSZip.loadAsync(e.target.result).then(function (zip) {
+                            var target = null;
+                            zip.forEach(function (path, entry) {
+                                if (!target && !entry.dir && path.indexOf('META-INF') === -1 && (path.endsWith('.xml') || path.endsWith('.musicxml'))) {
+                                    target = entry;
+                                }
+                            });
+                            if (target) {
+                                target.async('string').then(function (xml) {
+                                    musicXmlToAbc(xml, 'Đã nạp file nén .mxl: ' + file.name);
+                                });
+                            } else {
+                                showStatus('Không tìm thấy MusicXML trong file .mxl', 'danger');
+                            }
+                        }).catch(function (err) {
+                            showStatus('Lỗi giải nén .mxl: ' + err.message, 'danger');
+                        });
+                    };
+                    reader.readAsArrayBuffer(file);
+                }).catch(function (err) {
+                    showStatus('Không nạp được thư viện nén .mxl', 'danger');
+                });
             } else {
-                statusEl.innerHTML = '<span class="err">Định dạng chưa hỗ trợ (chỉ .abc, .xml, .musicxml, .mxl)</span>';
+                showStatus('Định dạng chưa hỗ trợ. Chọn file .abc, .xml, .musicxml, .mxl', 'danger');
             }
         }
 
-        // Giải nén .mxl (MusicXML nén = zip) và lấy file nhạc bên trong.
-        function unzipMxl(arrayBuffer) {
-            if (typeof JSZip === 'undefined') {
-                statusEl.innerHTML = '<span class="err">Thiếu thư viện giải nén (.mxl)</span>';
-                return;
-            }
-            JSZip.loadAsync(arrayBuffer).then(function (zip) {
-                // Ưu tiên rootfile khai báo trong META-INF/container.xml; nếu không có thì lấy .xml đầu tiên.
-                var container = zip.file('META-INF/container.xml');
-                function pickAndConvert(path) {
-                    zip.file(path).async('string').then(function (xml) { musicXmlToAbc(xml, 'Đã giải nén & chuyển .mxl'); });
-                }
-                if (container) {
-                    container.async('string').then(function (cxml) {
-                        var doc = new DOMParser().parseFromString(cxml, 'application/xml');
-                        var rf = doc.querySelector('rootfile');
-                        var path = rf && rf.getAttribute('full-path');
-                        if (path && zip.file(path)) { pickAndConvert(path); return; }
-                        fallbackFirstXml(zip);
-                    });
-                } else {
-                    fallbackFirstXml(zip);
-                }
-            }).catch(function (e) {
-                statusEl.innerHTML = '<span class="err">Lỗi giải nén .mxl: ' + (e.message || e) + '</span>';
-            });
-        }
-
-        function fallbackFirstXml(zip) {
-            var found = null;
-            zip.forEach(function (path, entry) {
-                if (!found && !entry.dir && /\.(xml|musicxml)$/i.test(path) && path.indexOf('META-INF/') !== 0) {
-                    found = path;
-                }
-            });
-            if (found) {
-                zip.file(found).async('string').then(function (xml) { musicXmlToAbc(xml, 'Đã giải nén & chuyển .mxl'); });
-            } else {
-                statusEl.innerHTML = '<span class="err">Không tìm thấy MusicXML trong file .mxl</span>';
-            }
-        }
-
-        // ---- Chèn nhanh từ palette ----
+        // Snippet Insertion
         var CARET = '\u2038';
         function insertSnippet(snip) {
             if (!snip) return;
@@ -340,118 +1155,234 @@
             input.focus();
             render();
         }
-        document.getElementById('palette').addEventListener('mousedown', function (e) {
-            var btn = e.target.closest ? e.target.closest('button') : null;
-            if (!btn) return;
-            e.preventDefault();
-            insertSnippet(btn.getAttribute('data-snip'));
-        });
 
-        // ---- Render bản nhạc ----
+        // ---- 8. Rendering & Linter ----
+        function showStatus(msg, type) {
+            if (type === 'danger') {
+                syntaxBadge.className = 'status-pill danger';
+                syntaxBadge.textContent = '✕ Lỗi cú pháp';
+            } else if (type === 'warning') {
+                syntaxBadge.className = 'status-pill warning';
+                syntaxBadge.textContent = '⚠ Nhạc lý cảnh báo';
+            } else {
+                syntaxBadge.className = 'status-pill success';
+                syntaxBadge.textContent = '● Cú pháp chuẩn';
+            }
+        }
+
+        function updateLinter(warnings) {
+            if (!warnings || warnings.length === 0) {
+                linterBar.classList.remove('active');
+                showStatus('', 'success');
+                return;
+            }
+
+            var first = warnings[0];
+            var match = first.match(/Music Line:(\d+):(\d+): (.*)/i);
+            if (match) {
+                var line = parseInt(match[1], 10);
+                var col = parseInt(match[2], 10);
+                var text = match[3];
+                linterMsg.textContent = '⚠ Dòng ' + line + ', cột ' + col + ': ' + text;
+                linterBar.onclick = function() { jumpToLineCol(line, col); };
+            } else {
+                linterMsg.textContent = '⚠ ' + first;
+                linterBar.onclick = null;
+            }
+            linterBar.classList.add('active');
+            showStatus(warnings.length + ' cảnh báo', 'warning');
+        }
+
+        function jumpToLineCol(lineNum, colNum) {
+            var lines = input.value.split('\n');
+            var pos = 0;
+            for (var i = 0; i < lineNum - 1 && i < lines.length; i++) {
+                pos += lines[i].length + 1;
+            }
+            pos += Math.max(0, colNum - 1);
+            input.focus();
+            input.setSelectionRange(pos, pos + 1);
+        }
+
         function render() {
             if (!abcReady || typeof ABCJS === 'undefined') return;
             var abc = input.value;
             try {
-                var visual = ABCJS.renderAbc(paper, abc, {
+                var visual = ABCJS.renderAbc(sheetWrapper, abc, {
                     responsive: "resize",
                     add_classes: true,
-                    paddingtop: 6, paddingbottom: 12, paddingright: 10, paddingleft: 10
+                    paddingtop: 14, paddingbottom: 20, paddingright: 18, paddingleft: 18,
+                    clickListener: function(abcelem) {
+                        if (abcelem && typeof abcelem.startChar === 'number' && typeof abcelem.endChar === 'number') {
+                            input.focus();
+                            input.setSelectionRange(abcelem.startChar, abcelem.endChar);
+                        }
+                    }
                 });
+
                 currentVisual = (visual && visual.length) ? visual[0] : null;
-                statusEl.textContent = '';
+
+                if (currentVisual && currentVisual.warnings && currentVisual.warnings.length > 0) {
+                    updateLinter(currentVisual.warnings);
+                } else {
+                    updateLinter(null);
+                }
+
                 loadAudio();
             } catch (e) {
-                statusEl.innerHTML = '<span class="err">Lỗi cú pháp: ' + (e.message || e) + '</span>';
+                showStatus('Lỗi: ' + (e.message || e), 'danger');
+                linterMsg.textContent = '✕ Lỗi phân tích: ' + (e.message || e);
+                linterBar.classList.add('active');
             }
         }
 
         function loadAudio() {
             if (!audioSupported || !currentVisual) return;
-            // Dừng tiếng bản cũ nếu đang phát.
-            try { if (synthControl && synthControl.isStarted && typeof synthControl.pause === 'function') synthControl.pause(); } catch (e) { }
-            // Tạo lại thanh điều khiển để buffer âm thanh luôn khớp đúng bản nhạc đang hiển thị
-            // (setTune trên control cũ không nạp lại buffer một cách đáng tin cậy).
+            try {
+                if (synthControl && synthControl.isStarted && typeof synthControl.pause === 'function') {
+                    synthControl.pause();
+                }
+            } catch (e) { }
+
             audioEl.innerHTML = '';
+            cursorControl = new CursorControl(sheetWrapper);
             synthControl = new ABCJS.synth.SynthController();
-            synthControl.load("#audio", null, {
+
+            synthControl.load("#audio", cursorControl, {
                 displayLoop: true, displayRestart: true, displayPlay: true,
                 displayProgress: true, displayWarp: true
             });
+
             synthControl.setTune(currentVisual, false, { chordsOff: false })
-                .catch(function (e) { statusEl.innerHTML = '<span class="err">Âm thanh: ' + (e.message || e) + '</span>'; });
+                .catch(function (e) {
+                    showStatus('Âm thanh: ' + (e.message || e), 'warning');
+                });
         }
 
         var timer = null;
-        input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(render, 250); });
+        input.addEventListener('input', function () {
+            clearTimeout(timer);
+            timer = setTimeout(function() {
+                updateHeadersFromText(input.value);
+                render();
+            }, 250);
+        });
 
-        // ---- Copy toàn bộ bản nhạc thành 1 ảnh PNG ----
+        // Shortcut Ctrl + Enter
+        window.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                copyImage();
+            }
+        });
+
+        // ---- 9. 300 DPI Export With UTF-8 Embedded Font ----
         document.getElementById('copyBtn').addEventListener('click', copyImage);
 
         function svgToImage(svg) {
             return new Promise(function (resolve, reject) {
                 var bb = svg.getBoundingClientRect();
-                var w = (svg.width && svg.width.baseVal && svg.width.baseVal.value) || bb.width || 400;
-                var h = (svg.height && svg.height.baseVal && svg.height.baseVal.value) || bb.height || 100;
+                var w = Math.ceil(svg.width && svg.width.baseVal ? svg.width.baseVal.value : (bb.width || 800));
+                var h = Math.ceil(svg.height && svg.height.baseVal ? svg.height.baseVal.value : (bb.height || 200));
+
                 var clone = svg.cloneNode(true);
                 clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+                clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
                 clone.setAttribute('width', w);
                 clone.setAttribute('height', h);
+                clone.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+
+                var styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+                styleEl.textContent = 
+                    "text { font-family: 'Segoe UI', Arial, sans-serif !important; }" +
+                    ".abcjs-title { font-weight: bold; font-size: 20px; fill: #0f172a; }" +
+                    ".abcjs-composer { font-style: italic; font-size: 13px; fill: #64748b; }" +
+                    ".abcjs-lyric { font-size: 13px; fill: #0f172a; }" +
+                    ".abcjs-chord { font-size: 13px; font-weight: 600; fill: #2563eb; }";
+                clone.insertBefore(styleEl, clone.firstChild);
+
                 var s = new XMLSerializer().serializeToString(clone);
-                var url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(s)));
+                var svgBlob = new Blob([s], { type: 'image/svg+xml;charset=utf-8' });
+                var url = URL.createObjectURL(svgBlob);
+
                 var img = new Image();
-                img.onload = function () { resolve({ img: img, w: w, h: h }); };
-                img.onerror = function () { reject(new Error('không rasterize được 1 dòng nhạc')); };
+                img.onload = function () {
+                    URL.revokeObjectURL(url);
+                    resolve({ img: img, w: w, h: h });
+                };
+                img.onerror = function () {
+                    URL.revokeObjectURL(url);
+                    reject(new Error("Lỗi render SVG sang Image"));
+                };
                 img.src = url;
             });
         }
 
         function copyImage() {
-            var svgs = paper.querySelectorAll('svg');
-            if (!svgs.length) { statusEl.innerHTML = '<span class="err">Chưa có bản nhạc để copy</span>'; return; }
-            statusEl.textContent = 'Đang tạo ảnh...';
-            Promise.all(Array.prototype.map.call(svgs, svgToImage)).then(function (items) {
-                var r = 2;
-                var maxW = 0, totalH = 0;
-                items.forEach(function (it) { if (it.w > maxW) maxW = it.w; totalH += it.h; });
+            var svgs = sheetWrapper.querySelectorAll('svg');
+            if (!svgs.length) {
+                showStatus('Chưa có bản nhạc để copy', 'warning');
+                return;
+            }
+
+            var r = 3.5; // High-DPI 300 DPI factor
+            var promises = [];
+            svgs.forEach(function (svg) { promises.push(svgToImage(svg)); });
+
+            Promise.all(promises).then(function (items) {
+                var totalH = 0, maxW = 0;
+                items.forEach(function (it) {
+                    if (it.w > maxW) maxW = it.w;
+                    totalH += it.h;
+                });
+
                 var canvas = document.createElement('canvas');
                 canvas.width = Math.round(maxW * r);
                 canvas.height = Math.round(totalH * r);
                 var ctx = canvas.getContext('2d');
-                ctx.setTransform(r, 0, 0, r, 0, 0);
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+
                 ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, maxW, totalH);
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.setTransform(r, 0, 0, r, 0, 0);
                 var y = 0;
-                items.forEach(function (it) { ctx.drawImage(it.img, 0, y, it.w, it.h); y += it.h; });
+                items.forEach(function (it) {
+                    ctx.drawImage(it.img, 0, y, it.w, it.h);
+                    y += it.h;
+                });
+
                 var png = canvas.toDataURL('image/png');
                 if (window.chrome && window.chrome.webview) {
                     window.chrome.webview.postMessage(JSON.stringify({
                         type: 'copy', png: png, source: input.value
                     }));
                 }
-                statusEl.textContent = 'Đã copy! Dán vào Word/Docs (Ctrl+V).';
+                showStatus('Đã sao chép ảnh 300 DPI vào Clipboard!', 'success');
             }).catch(function (e) {
-                statusEl.innerHTML = '<span class="err">Lỗi copy: ' + (e.message || e) + '</span>';
+                showStatus('Lỗi copy: ' + (e.message || e), 'danger');
             });
         }
 
-        // ---- Khởi tạo: chờ ABCJS (không throw — script nạp chậm vẫn sống) ----
+        // ---- 10. Initialization ----
         input.value = DEFAULT_ABC;
-        statusEl.textContent = 'Đang nạp công cụ nhạc…';
+        renderPianoKeyboard();
+        updateHarmonyBar("C");
+        updateHeadersFromText(DEFAULT_ABC);
+        showStatus('Khởi tạo hoàn tất', 'success');
 
         function startAbc() {
-            if (typeof ABCJS === 'undefined') {
-                return false;
-            }
+            if (typeof ABCJS === 'undefined') return false;
             abcReady = true;
-            audioSupported = ABCJS.synth && typeof ABCJS.synth.supportsAudio === 'function'
-                && ABCJS.synth.supportsAudio();
+            audioSupported = ABCJS.synth && typeof ABCJS.synth.supportsAudio === 'function' && ABCJS.synth.supportsAudio();
             if (!audioSupported) {
-                audioEl.innerHTML = '<span class="err">Trình duyệt không hỗ trợ phát âm thanh.</span>';
+                audioEl.innerHTML = '<span style="color:#b45309; font-size:12px;">Thiếu hỗ trợ âm thanh Web Audio</span>';
             }
             render();
             setTimeout(function () {
-                ensureImportLibs().catch(function () { /* nhập file vẫn báo lỗi lúc bấm */ });
-            }, 1500);
+                ensureImportLibs().catch(function () { });
+            }, 1200);
             return true;
         }
 
@@ -461,7 +1392,7 @@
                 if (startAbc() || ++abcPolls > 50) {
                     clearInterval(abcPoll);
                     if (!abcReady) {
-                        statusEl.innerHTML = '<span class="err">Không nạp được ABCJS. Đóng cửa sổ rồi mở lại.</span>';
+                        showStatus('Không nạp được ABCJS. Vui lòng đóng và mở lại.', 'danger');
                     }
                 }
             }, 80);

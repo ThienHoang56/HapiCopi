@@ -23,8 +23,9 @@ namespace HapiCopi
             Text = "HapiCopi - Soạn bản nhạc (ABC notation)";
             AutoScaleMode = AutoScaleMode.Font;
             AutoScaleDimensions = new SizeF(7F, 17F);
-            Width = 1040;
-            Height = 640;
+            Width = 1140;
+            Height = 740;
+            MinimumSize = new Size(880, 560);
             StartPosition = FormStartPosition.CenterScreen;
 
             try { Icon = UiTheme.AppIcon; } catch { }

@@ -43,6 +43,11 @@ namespace HapiCopi
             }
         }
 
+        public static void SetFeed(string? feed)
+        {
+            AppConfig.Set("UPDATE_FEED", feed?.Trim() ?? "");
+        }
+
         public static bool CheckOnStartup =>
             (AppConfig.Get("UPDATE_CHECK_ON_START") ?? "true").Trim().ToLowerInvariant() != "false";
 
@@ -188,8 +193,8 @@ namespace HapiCopi
         }
 
         /// <summary>
-        /// Gán kênh theo vị trí: bản mới nhất là thử nghiệm, bản liền trước đã chạy được nên là khuyến nghị.
-        /// Khi mới chỉ có một bản thì không có gì để đối chiếu, coi đó là bản khuyến nghị.
+        /// Gán kênh: bản mới nhất là chính thức / khuyến nghị (trừ khi có hậu tố beta/rc).
+        /// Bản cũ hơn là Older.
         /// </summary>
         private static void Classify(List<ReleaseInfo> releases)
         {
@@ -198,17 +203,26 @@ namespace HapiCopi
                 return;
             }
 
-            if (releases.Count == 1)
+            for (int i = 0; i < releases.Count; i++)
             {
-                releases[0].Channel = ReleaseChannel.Recommended;
-                return;
-            }
+                var r = releases[i];
+                bool isPreRelease = r.Version.Contains("beta", StringComparison.OrdinalIgnoreCase) ||
+                                   r.Version.Contains("alpha", StringComparison.OrdinalIgnoreCase) ||
+                                   r.Version.Contains("rc", StringComparison.OrdinalIgnoreCase) ||
+                                   r.Notes.Contains("thử nghiệm", StringComparison.OrdinalIgnoreCase);
 
-            releases[0].Channel = ReleaseChannel.Experimental;
-            releases[1].Channel = ReleaseChannel.Recommended;
-            for (int i = 2; i < releases.Count; i++)
-            {
-                releases[i].Channel = ReleaseChannel.Older;
+                if (isPreRelease)
+                {
+                    r.Channel = ReleaseChannel.Experimental;
+                }
+                else if (i == 0 || !releases.Take(i).Any(x => x.Channel == ReleaseChannel.Recommended))
+                {
+                    r.Channel = ReleaseChannel.Recommended;
+                }
+                else
+                {
+                    r.Channel = ReleaseChannel.Older;
+                }
             }
         }
 
@@ -218,6 +232,52 @@ namespace HapiCopi
         // ============================
         // CÀI ĐẶT / QUAY LUI
         // ============================
+
+        /// <summary>
+        /// Cài đặt trực tiếp từ một file bộ cài trên đĩa (.exe).
+        /// </summary>
+        public static (bool Started, string Message, string Version) InstallFromFile(string setupPath)
+        {
+            if (!File.Exists(setupPath))
+            {
+                return (false, "File cài đặt không tồn tại.", "");
+            }
+
+            if (!IsExecutable(setupPath))
+            {
+                return (false, "File được chọn không phải là bộ cài chương trình hợp lệ.", "");
+            }
+
+            string versionText = "";
+            try
+            {
+                var info = FileVersionInfo.GetVersionInfo(setupPath);
+                if (!string.IsNullOrWhiteSpace(info.FileVersion) && info.FileVersion != "0.0.0.0")
+                {
+                    versionText = info.FileVersion;
+                }
+                else if (!string.IsNullOrWhiteSpace(info.ProductVersion))
+                {
+                    versionText = info.ProductVersion;
+                }
+            }
+            catch { }
+
+            if (string.IsNullOrWhiteSpace(versionText))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(Path.GetFileName(setupPath), @"\d+(\.\d+)+");
+                versionText = match.Success ? match.Value : "mới";
+            }
+
+            var release = new ReleaseInfo
+            {
+                Version = versionText,
+                File = Path.GetFileName(setupPath)
+            };
+
+            var (started, message) = LaunchSetup(setupPath, release);
+            return (started, message, versionText);
+        }
 
         /// <summary>
         /// Tải (nếu chưa có sẵn) rồi chạy bộ cài. Trả về true khi tiến trình cài đã được khởi động —
