@@ -1443,8 +1443,27 @@
         }
 
         window.cleanHtmlResults = window.cleanHtmlResults || {};
+        window.mermaidResults = window.mermaidResults || {};
+
+        function pruneOldResults() {
+            try {
+                let htmlKeys = Object.keys(window.cleanHtmlResults);
+                if (htmlKeys.length > 10) {
+                    for (let i = 0; i < htmlKeys.length - 5; i++) {
+                        delete window.cleanHtmlResults[htmlKeys[i]];
+                    }
+                }
+                let mermaidKeys = Object.keys(window.mermaidResults);
+                if (mermaidKeys.length > 10) {
+                    for (let i = 0; i < mermaidKeys.length - 5; i++) {
+                        delete window.mermaidResults[mermaidKeys[i]];
+                    }
+                }
+            } catch (e) { }
+        }
 
         function startCleanHtml(id, html, fontName, fontSize, lineSpacing, parentHeadingLevel, isWordTarget, mermaidCacheJson) {
+            pruneOldResults();
             window.cleanHtmlResults[id] = { status: 'pending', result: null };
             doCleanHtmlAsync(html, fontName, fontSize, lineSpacing, parentHeadingLevel, isWordTarget, mermaidCacheJson)
                 .then(res => {
@@ -1456,10 +1475,8 @@
             return 'started';
         }
 
-        // 6. Đối tượng toàn cục lưu kết quả render Mermaid để C# poll kết quả
-        window.mermaidResults = window.mermaidResults || {};
-
         function startRenderMermaid(code, id) {
+            pruneOldResults();
             window.mermaidResults[id] = { status: 'pending', result: null };
             renderMermaidToPng(code, id).then(res => {
                 window.mermaidResults[id] = { status: 'success', result: res };

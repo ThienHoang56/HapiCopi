@@ -69,6 +69,7 @@ namespace HapiCopi
             MaximizeBox = true;
             MinimumSize = new Size(LogicalToDeviceUnits(800), LogicalToDeviceUnits(500));
             Size = new Size(LogicalToDeviceUnits(1000), LogicalToDeviceUnits(640));
+            FormClosed += (s, e) => MemoryOptimizer.OptimizeMemory();
 
             var header = new TableLayoutPanel
             {

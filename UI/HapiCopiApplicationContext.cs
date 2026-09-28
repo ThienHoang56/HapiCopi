@@ -156,11 +156,13 @@ namespace HapiCopi
 
             StartUpdateCheck();
             StartEditorWarmup();
+            MemoryOptimizer.StartPeriodicOptimization();
         }
 
         /// <summary>
-        /// Nạp sẵn hai cửa sổ soạn ngoài màn hình ngay khi Chromium sống,
-        /// để lần bấm menu không phải chờ MathJax/ABCJS.
+        /// Nạp sẵn cửa sổ soạn toán ngoài màn hình ngay khi Chromium sống,
+        /// để lần bấm menu hoặc double-click không phải chờ MathJax.
+        /// (Soạn bản nhạc ABC sẽ được nạp theo yêu cầu khi người dùng mở để tiết kiệm RAM).
         /// </summary>
         private void StartEditorWarmup()
         {
@@ -185,13 +187,8 @@ namespace HapiCopi
                             EditorWindow.PrepareOffscreen(_mathEditorForm);
                         }
 
-                        if (_abcEditorForm == null || _abcEditorForm.IsDisposed)
-                        {
-                            _abcEditorForm = new AbcEditorForm((text, html) => SetClipboardOnStaThread(text, html));
-                            EditorWindow.PrepareOffscreen(_abcEditorForm);
-                        }
-
-                        Program.Log("[Editor] Đã nạp sẵn soạn công thức và soạn bản nhạc.");
+                        Program.Log("[Editor] Đã nạp sẵn soạn công thức toán.");
+                        MemoryOptimizer.OptimizeMemory();
                     }
                     catch (Exception ex)
                     {
@@ -619,6 +616,11 @@ namespace HapiCopi
 
                 if (!string.IsNullOrEmpty(dataUri) && !dataUri.StartsWith("ERROR"))
                 {
+                    if (_mermaidCache.Count >= 20)
+                    {
+                        var firstKey = _mermaidCache.Keys.FirstOrDefault();
+                        if (firstKey != null) _mermaidCache.Remove(firstKey);
+                    }
                     _mermaidCache[innerCode] = dataUri;
                     Program.Log($"[Mermaid] Kết xuất sơ đồ thành công. Kích thước base64: {dataUri.Length} ký tự.");
                 }
@@ -1216,6 +1218,13 @@ namespace HapiCopi
             catch (Exception ex)
             {
                 Program.Log($"LỖI TRONG ProcessClipboard: {ex.Message}\n{ex.StackTrace}");
+            }
+            finally
+            {
+                if (!isStartup)
+                {
+                    MemoryOptimizer.ScheduleDelayedOptimization(2500);
+                }
             }
         }
 

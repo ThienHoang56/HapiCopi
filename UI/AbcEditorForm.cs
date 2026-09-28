@@ -38,7 +38,19 @@ namespace HapiCopi
             {
                 if (Visible)
                 {
+                    if (_web.CoreWebView2 != null)
+                    {
+                        try { _web.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal; } catch { }
+                    }
                     RequestReady();
+                }
+                else
+                {
+                    if (_web.CoreWebView2 != null)
+                    {
+                        try { _web.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low; } catch { }
+                    }
+                    MemoryOptimizer.OptimizeMemory();
                 }
             };
         }
@@ -57,6 +69,10 @@ namespace HapiCopi
             {
                 await WebViewManager.AttachEditorAsync(_web, "abceditor.html", OnWebMessage);
                 _ready = true;
+                if (!Visible && _web.CoreWebView2 != null)
+                {
+                    try { _web.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low; } catch { }
+                }
             }
             catch (Exception ex)
             {

@@ -41,9 +41,21 @@ namespace HapiCopi
             {
                 if (Visible)
                 {
+                    if (_web.CoreWebView2 != null)
+                    {
+                        try { _web.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal; } catch { }
+                    }
                     RequestReady();
                     SyncWordFontSize();
                     BeginInvoke(new Action(() => _web.Focus()));
+                }
+                else
+                {
+                    if (_web.CoreWebView2 != null)
+                    {
+                        try { _web.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low; } catch { }
+                    }
+                    MemoryOptimizer.OptimizeMemory();
                 }
             };
         }
@@ -62,6 +74,10 @@ namespace HapiCopi
             {
                 await WebViewManager.AttachEditorAsync(_web, "matheditor.html", OnWebMessage);
                 _ready = true;
+                if (!Visible && _web.CoreWebView2 != null)
+                {
+                    try { _web.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low; } catch { }
+                }
                 SyncWordFontSize();
 
                 if (_pendingFormula.HasValue)

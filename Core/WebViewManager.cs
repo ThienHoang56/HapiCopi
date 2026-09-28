@@ -29,6 +29,15 @@ namespace HapiCopi
         /// </summary>
         public static CoreWebView2Environment? SharedEnvironment => _environment;
 
+        public static uint BrowserProcessId
+        {
+            get
+            {
+                try { return _webView?.CoreWebView2?.BrowserProcessId ?? 0; }
+                catch { return 0; }
+            }
+        }
+
         public static void Initialize()
         {
             // Cần khởi tạo WebView2 trên UI STA Thread của WinForms
@@ -73,6 +82,20 @@ namespace HapiCopi
             }
         }
 
+        private static CoreWebView2EnvironmentOptions CreateEnvironmentOptions()
+        {
+            return new CoreWebView2EnvironmentOptions
+            {
+                AdditionalBrowserArguments =
+                    "--disable-features=Translate,OptimizationHints,MediaRouter,CalculateNativeWinOcclusion,SpareRendererForSitePerProcess " +
+                    "--disable-background-networking " +
+                    "--disable-component-update " +
+                    "--disable-sync " +
+                    "--renderer-process-limit=1 " +
+                    "--js-flags=\"--max-old-space-size=64\""
+            };
+        }
+
         private static async void InitializeWebViewAsync()
         {
             try
@@ -87,7 +110,7 @@ namespace HapiCopi
                 string cacheDir = ResourcePaths.WebViewCacheDir;
                 Directory.CreateDirectory(cacheDir);
 
-                _environment = await CoreWebView2Environment.CreateAsync(null, cacheDir);
+                _environment = await CoreWebView2Environment.CreateAsync(null, cacheDir, CreateEnvironmentOptions());
                 await _webView.EnsureCoreWebView2Async(_environment);
                 // Chromium đã sống — cửa sổ soạn được phép gắn ngay, không chờ index.html
                 // (trang đó còn kéo MathJax + Mermaid, chậm hơn nhiều soạn toán/nhạc).
@@ -176,7 +199,7 @@ namespace HapiCopi
             {
                 string cacheDir = ResourcePaths.WebViewCacheDir;
                 Directory.CreateDirectory(cacheDir);
-                env = await CoreWebView2Environment.CreateAsync(null, cacheDir);
+                env = await CoreWebView2Environment.CreateAsync(null, cacheDir, CreateEnvironmentOptions());
                 _environment = env;
             }
 
@@ -330,12 +353,14 @@ namespace HapiCopi
                                 string status = statusProp.GetString() ?? "";
                                 if (status == "success")
                                 {
+                                    _ = ExecuteScriptAsync($"delete window.cleanHtmlResults['{id}']");
                                     if (root.TryGetProperty("result", out var resultProp))
                                         return resultProp.GetString() ?? "";
                                     return "";
                                 }
                                 else if (status == "error")
                                 {
+                                    _ = ExecuteScriptAsync($"delete window.cleanHtmlResults['{id}']");
                                     Program.Log($"[WebViewManager LỖI] Lỗi JS CleanHtmlAsync");
                                     return html;
                                 }
@@ -349,6 +374,7 @@ namespace HapiCopi
                 }
             }
             
+            _ = ExecuteScriptAsync($"delete window.cleanHtmlResults['{id}']");
             Program.Log($"[WebViewManager LỖI] Quá thời gian CleanHtmlAsync");
             return html;
         }
@@ -389,6 +415,7 @@ namespace HapiCopi
                                 string status = statusProp.GetString() ?? "";
                                 if (status == "success")
                                 {
+                                    _ = ExecuteScriptAsync($"delete window.mermaidResults[{id}]");
                                     if (root.TryGetProperty("result", out var resultProp))
                                     {
                                         return resultProp.GetString() ?? "";
@@ -397,6 +424,7 @@ namespace HapiCopi
                                 }
                                 else if (status == "error")
                                 {
+                                    _ = ExecuteScriptAsync($"delete window.mermaidResults[{id}]");
                                     if (root.TryGetProperty("result", out var resultProp))
                                     {
                                         return resultProp.GetString() ?? "";
@@ -413,6 +441,7 @@ namespace HapiCopi
                 }
             }
             
+            _ = ExecuteScriptAsync($"delete window.mermaidResults[{id}]");
             return "ERROR: Render timeout";
         }
 

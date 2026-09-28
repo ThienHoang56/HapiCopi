@@ -56,6 +56,10 @@ namespace HapiCopi
             try
             {
                 ApplicationConfiguration.Initialize();
+                Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+                Application.ThreadException += (s, e) => Log($"[CRASH UI] {e.Exception}");
+                AppDomain.CurrentDomain.UnhandledException += (s, e) => Log($"[CRASH FATAL] {e.ExceptionObject}");
+
                 Log("==================================================");
                 Log("HapiCopi bắt đầu khởi chạy...");
 

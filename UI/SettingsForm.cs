@@ -33,6 +33,7 @@ namespace HapiCopi
             FormBorderStyle = FormBorderStyle.Sizable;
             MaximizeBox = false;
             MinimizeBox = false;
+            FormClosed += (s, e) => MemoryOptimizer.OptimizeMemory();
 
             // Nội dung dài hơn màn hình thì cuộn, chứ không cắt cụt.
             var scrollHost = new Panel
