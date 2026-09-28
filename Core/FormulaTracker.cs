@@ -67,6 +67,7 @@ namespace HapiCopi
                         _recentList.RemoveAt(_recentList.Count - 1);
                     }
                 }
+                Program.Log($"[FormulaTracker] Đã đăng ký nhận diện công thức: '{latex}' ({w}x{h} px, hash={hash.Substring(0, 8)}...)");
             }
             catch (Exception ex)
             {
@@ -76,25 +77,42 @@ namespace HapiCopi
 
         public static void ScanAndRegisterHtml(string html)
         {
-            if (string.IsNullOrEmpty(html) || !html.Contains("[HapiCopi:Math]")) return;
+            if (string.IsNullOrEmpty(html)) return;
 
             try
             {
-                var matches = Regex.Matches(html, @"<img[^>]+src=""(data:image\/png;base64,[^""]+)""[^>]+(?:alt|title)=""\[HapiCopi:Math\]\s*([^""]+)""", RegexOptions.IgnoreCase);
-                foreach (Match m in matches)
+                var imgMatches = Regex.Matches(html, @"<img\b[^>]*>", RegexOptions.IgnoreCase);
+                foreach (Match imgM in imgMatches)
                 {
-                    string src = m.Groups[1].Value;
-                    string latex = System.Net.WebUtility.HtmlDecode(m.Groups[2].Value);
-                    Register(src, latex);
+                    string tag = imgM.Value;
+                    var srcM = Regex.Match(tag, @"src=""(data:image\/png;base64,[^""]+)""", RegexOptions.IgnoreCase);
+                    var mathM = Regex.Match(tag, @"(?:alt|title|data-latex)=""(?:\[HapiCopi:Math\]\s*)?([^""]+)""", RegexOptions.IgnoreCase);
+                    if (srcM.Success && mathM.Success)
+                    {
+                        string src = srcM.Groups[1].Value;
+                        string latex = System.Net.WebUtility.HtmlDecode(mathM.Groups[1].Value);
+                        Register(src, latex);
+                    }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Program.Log($"[FormulaTracker] Lỗi quét HTML: {ex.Message}");
+            }
         }
 
         public static bool TryIdentifyFormula(byte[]? pngBytes, Image? clipboardImage, out string formula, out float fontSize)
         {
             formula = "";
             fontSize = 11f;
+
+            int byteLen = pngBytes?.Length ?? 0;
+            int imgW = clipboardImage?.Width ?? 0;
+            int imgH = clipboardImage?.Height ?? 0;
+            int cacheCount = 0;
+            lock (_lock) { cacheCount = _recentList.Count; }
+
+            Program.Log($"[FormulaTracker] Đang kiểm tra nhận diện ảnh ({byteLen} bytes, {imgW}x{imgH} px). Số công thức trong cache: {cacheCount}");
 
             if (pngBytes != null && pngBytes.Length > 0)
             {
@@ -122,8 +140,11 @@ namespace HapiCopi
             }
 
             // 3. Kiểm tra kích thước và tỷ lệ khung hình (dành cho trường hợp Google Docs recompress ảnh PNG)
-            int imgW = clipboardImage?.Width ?? 0;
-            int imgH = clipboardImage?.Height ?? 0;
+            if (imgW == 0 && clipboardImage != null)
+            {
+                imgW = clipboardImage.Width;
+                imgH = clipboardImage.Height;
+            }
             if (imgW == 0 && pngBytes != null && pngBytes.Length > 0)
             {
                 try
