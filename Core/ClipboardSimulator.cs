@@ -173,6 +173,18 @@ namespace HapiCopi
             return success;
         }
 
+        public static void SimulateCtrlC()
+        {
+            try
+            {
+                SendKeys.SendWait("^c");
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[SimulateCtrlC LỖI] {ex.Message}");
+            }
+        }
+
         public static void SimulateCtrlV()
         {
             try

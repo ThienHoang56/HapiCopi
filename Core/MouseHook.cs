@@ -10,6 +10,26 @@ namespace HapiCopi
         private const int WH_MOUSE_LL = 14;
         private const int WM_LBUTTONUP = 0x0202;
 
+        private const int SM_CXDOUBLECLK = 36;
+        private const int SM_CYDOUBLECLK = 37;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT
+        {
+            public int x;
+            public int y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MSLLHOOKSTRUCT
+        {
+            public POINT pt;
+            public uint mouseData;
+            public uint flags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
 
@@ -26,19 +46,23 @@ namespace HapiCopi
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
 
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+        [DllImport("user32.dll")]
+        private static extern uint GetDoubleClickTime();
+
+        [DllImport("user32.dll")]
+        private static extern int GetSystemMetrics(int nIndex);
 
         private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
 
         private readonly LowLevelMouseProc _proc;
         private IntPtr _hookId = IntPtr.Zero;
 
-        public event Action<WordFormulaInfo>? WordFormulaClicked;
+        public event Action<WordFormulaInfo>? WordFormulaDoubleClicked;
+        public event Action<IntPtr, ActiveAppInfo>? WebFormulaDoubleClicked;
 
-        private static int _cachedPid = -1;
-        private static bool _isCachedWord = false;
-        private static long _lastTriggerTick = 0;
+        private static long _lastClickTick = 0;
+        private static int _lastClickX = -9999;
+        private static int _lastClickY = -9999;
 
         public MouseHook()
         {
@@ -66,58 +90,74 @@ namespace HapiCopi
             }
         }
 
-        private static bool IsWordForeground(IntPtr fgWnd)
-        {
-            if (fgWnd == IntPtr.Zero) return false;
-            GetWindowThreadProcessId(fgWnd, out uint pid);
-            if (pid == 0) return false;
-            int ipid = (int)pid;
-            if (ipid == _cachedPid) return _isCachedWord;
-
-            try
-            {
-                using var proc = Process.GetProcessById(ipid);
-                bool isWord = proc.ProcessName.Equals("WINWORD", StringComparison.OrdinalIgnoreCase);
-                _cachedPid = ipid;
-                _isCachedWord = isWord;
-                return isWord;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
         private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
             if (nCode >= 0 && wParam == (IntPtr)WM_LBUTTONUP)
             {
-                Task.Run(async () =>
+                int clickX = 0, clickY = 0;
+                try
                 {
-                    try
+                    var hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+                    clickX = hookStruct.pt.x;
+                    clickY = hookStruct.pt.y;
+                }
+                catch { }
+
+                long now = Environment.TickCount64;
+                int maxTime = (int)GetDoubleClickTime();
+                if (maxTime <= 0) maxTime = 500;
+                int maxDx = GetSystemMetrics(SM_CXDOUBLECLK);
+                if (maxDx <= 0) maxDx = 4;
+                int maxDy = GetSystemMetrics(SM_CYDOUBLECLK);
+                if (maxDy <= 0) maxDy = 4;
+
+                bool isDblClick = (now - _lastClickTick <= maxTime) &&
+                                  (Math.Abs(clickX - _lastClickX) <= maxDx) &&
+                                  (Math.Abs(clickY - _lastClickY) <= maxDy);
+
+                if (isDblClick)
+                {
+                    _lastClickTick = 0;
+                    _lastClickX = -9999;
+                    _lastClickY = -9999;
+
+                    Task.Run(async () =>
                     {
-                        // Đợi Word hoàn tất cập nhật Selection sau khi nhả chuột
-                        await Task.Delay(90);
-
-                        IntPtr fgWnd = GetForegroundWindow();
-                        if (!IsWordForeground(fgWnd)) return;
-
-                        // Chống kích hoạt lặp liên tục trong 400ms (ví dụ double-click)
-                        long now = Environment.TickCount64;
-                        if (now - _lastTriggerTick < 400) return;
-
-                        var formulaInfo = WordInterop.GetSelectedFormulaInfo();
-                        if (formulaInfo != null && !string.IsNullOrEmpty(formulaInfo.Formula))
+                        try
                         {
-                            _lastTriggerTick = Environment.TickCount64;
-                            WordFormulaClicked?.Invoke(formulaInfo);
+                            await Task.Delay(100);
+                            IntPtr fgWnd = GetForegroundWindow();
+                            ActiveAppInfo activeApp = ActiveWindowHelper.GetActiveAppInfo();
+
+                            if (activeApp.IsMicrosoftWord || activeApp.ProcessName.Equals("WINWORD", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var formulaInfo = WordInterop.GetSelectedFormulaInfo();
+                                if (formulaInfo != null && !string.IsNullOrEmpty(formulaInfo.Formula))
+                                {
+                                    WordFormulaDoubleClicked?.Invoke(formulaInfo);
+                                }
+                            }
+                            else if (activeApp.IsGoogleDocs ||
+                                     activeApp.ProcessName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
+                                     activeApp.ProcessName.Equals("msedge", StringComparison.OrdinalIgnoreCase) ||
+                                     activeApp.ProcessName.Equals("brave", StringComparison.OrdinalIgnoreCase) ||
+                                     activeApp.ProcessName.Equals("firefox", StringComparison.OrdinalIgnoreCase))
+                            {
+                                WebFormulaDoubleClicked?.Invoke(fgWnd, activeApp);
+                            }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        Program.Log($"[MouseHook] Lỗi kiểm tra selection click: {ex.Message}");
-                    }
-                });
+                        catch (Exception ex)
+                        {
+                            Program.Log($"[MouseHook] Lỗi xử lý double-click: {ex.Message}");
+                        }
+                    });
+                }
+                else
+                {
+                    _lastClickTick = now;
+                    _lastClickX = clickX;
+                    _lastClickY = clickY;
+                }
             }
             return CallNextHookEx(_hookId, nCode, wParam, lParam);
         }

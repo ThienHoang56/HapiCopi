@@ -104,7 +104,8 @@ namespace HapiCopi
             try
             {
                 _mouseHook = new MouseHook();
-                _mouseHook.WordFormulaClicked += OnWordFormulaClicked;
+                _mouseHook.WordFormulaDoubleClicked += OnWordFormulaDoubleClicked;
+                _mouseHook.WebFormulaDoubleClicked += OnWebFormulaDoubleClicked;
             }
             catch (Exception ex)
             {
@@ -226,7 +227,11 @@ namespace HapiCopi
             }
         }
 
-        private void OnWordFormulaClicked(WordFormulaInfo info)
+        private volatile bool _isAwaitingDoubleClickFormula = false;
+        private IntPtr _doubleClickSourceWnd = IntPtr.Zero;
+        private DateTime _awaitingDoubleClickTime = DateTime.MinValue;
+
+        private void OnWordFormulaDoubleClicked(WordFormulaInfo info)
         {
             _syncContext.Post(_ =>
             {
@@ -241,13 +246,25 @@ namespace HapiCopi
                     }
 
                     _mathEditorForm.OpenForWordFormula(info);
-                    Program.Log($"[MouseHook] Đã phát hiện click vào ảnh công thức Word: {info.Formula}");
+                    Program.Log($"[MouseHook] Đã phát hiện nhấp đúp vào ảnh công thức Word: {info.Formula}");
                 }
                 catch (Exception ex)
                 {
                     Program.Log($"[MouseHook LỖI] Không mở được Math Editor: {ex.Message}");
                 }
             }, null);
+        }
+
+        private void OnWebFormulaDoubleClicked(IntPtr fgWnd, ActiveAppInfo appInfo)
+        {
+            if (_isPaused) return;
+
+            _isAwaitingDoubleClickFormula = true;
+            _doubleClickSourceWnd = fgWnd;
+            _awaitingDoubleClickTime = DateTime.Now;
+
+            Program.Log($"[MouseHook] Nhấp đúp chuột trong {appInfo.ProcessName} ({appInfo.WindowTitle}). Tự động kích hoạt kiểm tra công thức...");
+            ClipboardSimulator.SimulateCtrlC();
         }
 
         private void OnBalloonTipClicked(object? sender, EventArgs e)
@@ -867,13 +884,17 @@ namespace HapiCopi
                     Program.Log($"[Clipboard] Lỗi đọc dữ liệu ảnh: {ex.Message}");
                 }
 
-                // Kiểm tra xem có phải ảnh công thức toán đã copy (từ Google Docs, Web, Paint, v.v.)
-                if (!isStartup && (hasImage || pngBytes != null || clipImg != null))
+                // Kiểm tra xem sự kiện có kích hoạt từ thao tác nhấp đúp chuột (Double Click) trên Google Docs / Web không
+                bool isDoubleClickTriggered = _isAwaitingDoubleClickFormula &&
+                                             (DateTime.Now - _awaitingDoubleClickTime).TotalMilliseconds < 2000;
+                _isAwaitingDoubleClickFormula = false;
+
+                if (!isStartup && isDoubleClickTriggered && (hasImage || pngBytes != null || clipImg != null))
                 {
                     if (FormulaTracker.TryIdentifyFormula(pngBytes, clipImg, out string matchedFormula, out float matchedFontSize))
                     {
-                        IntPtr sourceWindow = ActiveWindowHelper.GetForegroundWindow();
-                        Program.Log($"[FormulaMatch] Tìm thấy công thức toán từ ảnh: '{matchedFormula}' từ ứng dụng {appName}");
+                        IntPtr sourceWindow = _doubleClickSourceWnd != IntPtr.Zero ? _doubleClickSourceWnd : ActiveWindowHelper.GetForegroundWindow();
+                        Program.Log($"[FormulaMatch] Tìm thấy công thức toán từ nhấp đúp: '{matchedFormula}' từ ứng dụng {appName}");
 
                         bool isDocsOrWeb = sourceApp.IsGoogleDocs ||
                                            appName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
@@ -900,6 +921,10 @@ namespace HapiCopi
                         }, null);
 
                         return;
+                    }
+                    else
+                    {
+                        Program.Log("[FormulaMatch] Đối tượng nhấp đúp không khớp công thức toán đã đăng ký.");
                     }
                 }
 
