@@ -162,7 +162,7 @@
             border: 1px solid #cbd5e1;
             border-radius: 8px;
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
-            padding: 24px 30px; width: 100%; max-width: 860px; min-height: 340px;
+            padding: 28px 36px; width: 96%; max-width: 1060px; min-height: 420px;
             transform-origin: top center; transition: transform 0.15s ease;
         }
         .sheet-paper svg {
@@ -237,10 +237,14 @@
         }
 
         .export-hint { font-size: 11px; color: #64748b; font-weight: 500; }
-        .abcjs-highlight { fill: #0284c7 !important; stroke: #0284c7 !important; }
+        
+        /* Refined Playhead Highlight: Chỉ highlight đầu nốt, không loang lổ vào arpeggio hay slur */
+        .abcjs-highlight { fill: #0284c7 !important; }
+        .abcjs-highlight path:not(.abcjs-arpeggio):not(.abcjs-slur):not(.abcjs-tie) { stroke: #0284c7 !important; }
+        
         .abcjs-cursor {
             stroke: #0284c7; stroke-width: 2.5px; stroke-linecap: round;
-            opacity: 0.9; pointer-events: none;
+            opacity: 0.85; pointer-events: none;
         }
 
         /* 3. INTERACTIVE NOTATION DOCK (BOTTOM SHELF) */
@@ -539,6 +543,13 @@
                     <span id="octLabel" class="live-hud-tag">4 (C4-B4)</span>
                 </div>
                 <button class="dur-btn" id="octUpBtn" title="Tăng 1 quãng tám [Phím ↑ hoặc ]]">8va ▶</button>
+                <div class="ribbon-divider" id="voiceDivider" style="display:none;"></div>
+                <div class="live-hud" id="voiceHud" style="display:none;" title="Chọn bè đang soạn thảo">
+                    <span>Bè:</span>
+                    <select id="activeVoiceSel" class="ctrl-select" style="height:22px; font-size:11px; font-weight:700; background:transparent; color:#38bdf8; border:none; padding:0 2px; outline:none; cursor:pointer;">
+                        <option value="">Bè 1</option>
+                    </select>
+                </div>
                 <div class="ribbon-divider"></div>
                 <button class="dur-btn" id="collapseDockBtn" title="Thu gọn/Mở rộng dock">▾ Thu gọn</button>
             </div>
@@ -1014,36 +1025,82 @@
         document.getElementById('barBtn').addEventListener('click', function() { insertSnippet("| "); });
         document.getElementById('repeatBtn').addEventListener('click', function() { insertSnippet("|: ‸ :| "); });
 
-        // ---- 5. Playhead Cursor & Timing ----
+        // ---- 5. Playhead Cursor & Timing (Multi-Voice Aware & Auto-Scroll) ----
         function CursorControl(rootEl) {
             this.root = rootEl;
             this.cursor = null;
+            this.svg = null;
         }
         CursorControl.prototype.onStart = function() {
-            var svg = this.root.querySelector("svg");
-            if (!svg) return;
+            this.svg = this.root.querySelector("svg");
+            if (!this.svg) return;
+
+            // Xóa con trỏ cũ nếu còn sót
+            var old = this.svg.querySelectorAll(".abcjs-cursor");
+            for (var k = 0; k < old.length; k++) {
+                if (old[k].parentNode) old[k].parentNode.removeChild(old[k]);
+            }
+
             this.cursor = document.createElementNS("http://www.w3.org/2000/svg", "line");
             this.cursor.setAttribute("class", "abcjs-cursor");
-            svg.appendChild(this.cursor);
+            this.cursor.setAttribute("stroke", "#0284c7");
+            this.cursor.setAttribute("stroke-width", "2.5");
+            this.cursor.setAttribute("stroke-linecap", "round");
+            this.cursor.setAttribute("opacity", "0.85");
+            this.cursor.style.pointerEvents = "none";
+            this.svg.appendChild(this.cursor);
         };
         CursorControl.prototype.onEvent = function(ev) {
             if (!ev) return;
+
+            // 1. Gỡ highlight cũ
             var lastElems = this.root.querySelectorAll(".abcjs-highlight");
             for (var i = 0; i < lastElems.length; i++) {
                 lastElems[i].classList.remove("abcjs-highlight");
             }
+
+            // 2. Thêm highlight mới chỉ cho các nốt thật sự
             if (ev.elements) {
                 for (var i = 0; i < ev.elements.length; i++) {
                     for (var j = 0; j < ev.elements[i].length; j++) {
-                        ev.elements[i][j].classList.add("abcjs-highlight");
+                        var el = ev.elements[i][j];
+                        if (el && !el.classList.contains("abcjs-arpeggio") && !el.classList.contains("abcjs-slur")) {
+                            el.classList.add("abcjs-highlight");
+                        }
                     }
                 }
             }
-            if (this.cursor && ev.left !== null && typeof ev.left !== 'undefined') {
-                this.cursor.setAttribute("x1", ev.left - 2);
-                this.cursor.setAttribute("x2", ev.left - 2);
-                this.cursor.setAttribute("y1", ev.top);
-                this.cursor.setAttribute("y2", ev.top + ev.height);
+
+            // 3. Cập nhật vị trí con trỏ Playhead
+            if (this.cursor && ev.left !== null && typeof ev.left !== 'undefined' && typeof ev.top === 'number' && typeof ev.height === 'number') {
+                var x = ev.left - 2;
+                var y1 = ev.top;
+                var y2 = ev.top + ev.height;
+
+                // Với bài piano nhiều bè, giới hạn chiều cao con trỏ để không bị đâm xuyên khoảng trắng
+                if (ev.height > 240) {
+                    y2 = y1 + Math.min(ev.height, 200);
+                }
+
+                this.cursor.setAttribute("x1", x);
+                this.cursor.setAttribute("x2", x);
+                this.cursor.setAttribute("y1", y1);
+                this.cursor.setAttribute("y2", y2);
+
+                // 4. Auto-Scroll theo con trỏ khi bản nhạc dài
+                var viewport = document.getElementById('paper');
+                if (viewport) {
+                    var currentScroll = viewport.scrollTop;
+                    var viewH = viewport.clientHeight;
+                    var cursorVisualY = y1 * zoomLevel;
+
+                    if (cursorVisualY > currentScroll + viewH * 0.72 || cursorVisualY < currentScroll) {
+                        viewport.scrollTo({
+                            top: Math.max(0, cursorVisualY - 110),
+                            behavior: 'smooth'
+                        });
+                    }
+                }
             }
         };
         CursorControl.prototype.onFinished = function() {
@@ -1185,10 +1242,30 @@
             return xmlStr.replace(/<!DOCTYPE[\s\S]*?>/gi, '');
         }
 
+        function cleanAndOptimizeAbc(abc) {
+            if (!abc) return '';
+
+            // 1. Sửa lỗi nốt hoa mỹ acciaccatura có dấu gạch chéo {/G} -> {G}
+            // ABCJS không hiểu dấu '/' trong grace notes và sẽ báo lỗi Unknown character ignored
+            abc = abc.replace(/\{(\s*)\/([A-Ga-g][^}]*)\}/g, '{$1$2}');
+
+            // 2. Gỡ bỏ các chỉ thị phân trang cưỡng bức gây lệch layout trên màn hình
+            abc = abc.replace(/^%%pagewidth[^\n]*\n?/gm, '');
+            abc = abc.replace(/^%%leftmargin[^\n]*\n?/gm, '');
+            abc = abc.replace(/^%%rightmargin[^\n]*\n?/gm, '');
+            abc = abc.replace(/^%%scale[^\n]*\n?/gm, '');
+
+            // 3. Chuẩn hóa vạch nhịp kép
+            abc = abc.replace(/\|\s*\|/g, '||');
+
+            return abc;
+        }
+
         function loadAbcText(abc, label) {
             saveUndoState();
-            input.value = abc;
-            updateHeadersFromText(abc);
+            var cleaned = cleanAndOptimizeAbc(abc);
+            input.value = cleaned;
+            updateHeadersFromText(cleaned);
             render();
             showStatus(label || 'Đã nạp bài hát', 'success');
         }
@@ -1209,7 +1286,12 @@
                     return;
                 }
 
-                var res = converterFn(xmldoc);
+                // Cấu hình tối ưu xml2abc:
+                // x: 1 -> tắt các dấu $ ngắt dòng cưỡng bức lệch pha của XML, để ABCJS tự ngắt dòng đồng bộ mọi voice!
+                // wev: 1 -> ghi nốt lặng đầy đủ cho mọi voice trống, tránh lệch nhịp khi phát synth!
+                // m: 1 -> xuất MIDI controls đầy đủ
+                var xmlOptions = { x: 1, wev: 1, m: 1, b: 0 };
+                var res = converterFn(xmldoc, xmlOptions);
                 var abc = res && res[0];
                 if (abc && abc.trim().length > 0) {
                     loadAbcText(abc, label || 'Đã chuyển đổi MusicXML thành công');
@@ -1264,7 +1346,7 @@
             }
         }
 
-        // Snippet Insertion (With smart placement)
+        // Snippet Insertion (With smart placement & active voice support)
         var CARET = '\u2038';
         function insertSnippet(snip) {
             if (!snip) return;
@@ -1287,12 +1369,34 @@
                 input.value = val.substring(0, start) + text + val.substring(end);
                 input.selectionStart = input.selectionEnd = caretPos;
             } else {
-                // Chèn trước vạch kết '|]' nếu có
-                var endBarIdx = val.lastIndexOf("|]");
-                if (endBarIdx !== -1) {
-                    input.value = val.substring(0, endBarIdx) + snip + val.substring(endBarIdx);
+                var voiceSel = document.getElementById('activeVoiceSel');
+                var activeVoice = voiceSel ? voiceSel.value : '';
+
+                // Nếu có nhiều bè và người dùng chọn bè cụ thể (ví dụ V:1 hoặc V:2)
+                if (activeVoice) {
+                    var vRegex = new RegExp("(^|\\n)V:\\s*" + activeVoice + "([\\s\\S]*?)(\\n(?=V:)|$)", "m");
+                    var match = val.match(vRegex);
+                    if (match && match.index !== undefined) {
+                        var voiceBody = match[2];
+                        var endBar = voiceBody.lastIndexOf("|]");
+                        var insertPos;
+                        if (endBar !== -1) {
+                            insertPos = match.index + match[1].length + ("V:" + activeVoice).length + endBar;
+                        } else {
+                            insertPos = match.index + match[0].length;
+                        }
+                        input.value = val.substring(0, insertPos) + " " + snip + val.substring(insertPos);
+                    } else {
+                        input.value = val.trimEnd() + " " + snip;
+                    }
                 } else {
-                    input.value = val.trimEnd() + " " + snip;
+                    // Chèn trước vạch kết '|]' nếu có
+                    var endBarIdx = val.lastIndexOf("|]");
+                    if (endBarIdx !== -1) {
+                        input.value = val.substring(0, endBarIdx) + snip + val.substring(endBarIdx);
+                    } else {
+                        input.value = val.trimEnd() + " " + snip;
+                    }
                 }
             }
             render();
@@ -1436,11 +1540,12 @@
             if (match) {
                 var line = parseInt(match[1], 10);
                 var col = parseInt(match[2], 10);
-                var text = match[3];
+                var text = match[3].replace(/<[^>]*>/g, '').trim();
                 linterMsg.textContent = '⚠ Dòng ' + line + ', cột ' + col + ': ' + text;
                 linterBar.onclick = function() { jumpToLineCol(line, col); };
             } else {
-                linterMsg.textContent = '⚠ ' + first;
+                var cleanFirst = first.replace(/<[^>]*>/g, '').trim();
+                linterMsg.textContent = '⚠ ' + cleanFirst;
                 linterBar.onclick = null;
             }
             linterBar.classList.add('active');
@@ -1458,6 +1563,49 @@
             input.setSelectionRange(pos, pos + 1);
         }
 
+        function updateVoiceList() {
+            var voiceSel = document.getElementById('activeVoiceSel');
+            var voiceHud = document.getElementById('voiceHud');
+            var voiceDivider = document.getElementById('voiceDivider');
+            if (!voiceSel || !voiceHud) return;
+
+            var val = input.value;
+            var matches = val.match(/^V:\s*([^\s\n%]+)(.*)$/gm);
+            if (!matches || matches.length <= 1) {
+                voiceHud.style.display = 'none';
+                if (voiceDivider) voiceDivider.style.display = 'none';
+                return;
+            }
+
+            var currentVal = voiceSel.value;
+            voiceSel.innerHTML = '';
+            var seen = {};
+
+            matches.forEach(function(line) {
+                var m = line.match(/^V:\s*([^\s\n%]+)(.*)$/);
+                if (m) {
+                    var vId = m[1];
+                    if (!seen[vId]) {
+                        seen[vId] = true;
+                        var opt = document.createElement('option');
+                        opt.value = vId;
+                        var extra = m[2] || '';
+                        var label = 'Bè ' + vId;
+                        if (extra.indexOf('clef=treble') !== -1) label += ' (Khóa Sol)';
+                        else if (extra.indexOf('clef=bass') !== -1) label += ' (Khóa Fa)';
+                        opt.textContent = label;
+                        voiceSel.appendChild(opt);
+                    }
+                }
+            });
+
+            if (currentVal && seen[currentVal]) {
+                voiceSel.value = currentVal;
+            }
+            voiceHud.style.display = 'inline-flex';
+            if (voiceDivider) voiceDivider.style.display = 'block';
+        }
+
         function render() {
             if (!abcReady || typeof ABCJS === 'undefined') return;
             var abc = input.value;
@@ -1465,6 +1613,8 @@
                 var visual = ABCJS.renderAbc(sheetWrapper, abc, {
                     responsive: "resize",
                     add_classes: true,
+                    staffwidth: 880,
+                    wrap: { minSpacing: 1.8, maxSpacing: 2.8, preferSpacing: 2.2 },
                     paddingtop: 14, paddingbottom: 20, paddingright: 18, paddingleft: 18,
                     clickListener: function(abcelem) {
                         if (abcelem && typeof abcelem.startChar === 'number' && typeof abcelem.endChar === 'number') {
@@ -1482,6 +1632,7 @@
                     updateLinter(null);
                 }
 
+                updateVoiceList();
                 loadAudio();
             } catch (e) {
                 showStatus('Lỗi: ' + (e.message || e), 'danger');
