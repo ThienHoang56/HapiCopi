@@ -3,77 +3,232 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>HapiCopi - Soạn công thức</title>
+    <title>HapiCopi - Soạn công thức toán trực quan</title>
     <script>
-        // Nạp thêm input AsciiMath bên cạnh tex-svg để có MathJax.asciimath2svg().
+        // Nạp thêm input AsciiMath bên cạnh tex-svg để có MathJax.asciimath2svg()
         window.MathJax = {
             loader: {
                 load: ['input/asciimath'],
-                // Mặc định MathJax kéo component từ CDN — offline thì startup.promise không bao giờ xong.
                 paths: { mathjax: '.' }
+            },
+            tex: {
+                macros: {
+                    placeholder: ['{\\square}', 1]
+                }
             },
             svg: { fontCache: 'local' },
             options: { enableAssistiveMml: false },
             startup: { typeset: false }
         };
     </script>
+    <script src="mathlive.min.js"></script>
+    <script>
+        if (window.MathfieldElement) {
+            window.MathfieldElement.fontsDirectory = "./fonts/";
+            window.MathfieldElement.soundsDirectory = null;
+        }
+    </script>
+    <script src="mathjax-tex-svg.js?v=1"></script>
     <style>
         * { box-sizing: border-box; }
         html, body { height: 100%; margin: 0; }
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             display: flex; flex-direction: column;
-            background: #f5f6f8; color: #1f2328;
+            background: #f8fafc; color: #0f172a;
+            user-select: none;
         }
+
+        /* Top Toolbar */
         .toolbar {
-            display: flex; align-items: center; gap: 14px;
-            padding: 8px 12px; background: #ffffff; border-bottom: 1px solid #e1e4e8;
-            flex-wrap: wrap;
+            display: flex; align-items: center; gap: 12px;
+            padding: 8px 14px; background: #ffffff; border-bottom: 1px solid #e2e8f0;
+            flex-wrap: wrap; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
         }
-        .toolbar label { font-size: 13px; cursor: pointer; user-select: none; }
+
+        /* Mode Switcher Pills */
+        .mode-switch {
+            display: inline-flex; background: #f1f5f9; padding: 3px;
+            border-radius: 8px; border: 1px solid #e2e8f0; gap: 2px;
+        }
+        .mode-tab {
+            border: none; background: transparent; padding: 5px 12px;
+            border-radius: 6px; font-size: 12.5px; font-weight: 600;
+            color: #64748b; cursor: pointer; transition: all 0.15s ease;
+            display: inline-flex; align-items: center; gap: 5px;
+        }
+        .mode-tab:hover { color: #1e293b; background: rgba(255,255,255,0.6); }
+        .mode-tab.active {
+            background: #ffffff; color: #2563eb;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .tb-item {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 12.5px; color: #334155; cursor: pointer;
+        }
+        .tb-item input[type="checkbox"] { cursor: pointer; }
+
+        .select-input {
+            padding: 3px 8px; border: 1px solid #cbd5e1; border-radius: 6px;
+            font-size: 12px; background: #fff; color: #1e293b; cursor: pointer;
+            outline: none; transition: border-color 0.15s;
+        }
+        .select-input:focus { border-color: #2563eb; }
+
+        .kb-btn {
+            padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+            background: #ffffff; font-size: 12px; color: #475569; cursor: pointer;
+            display: inline-flex; align-items: center; gap: 4px;
+            transition: all 0.15s;
+        }
+        .kb-btn:hover { background: #f1f5f9; color: #1e293b; border-color: #94a3b8; }
+        .kb-btn.active { background: #eff6ff; color: #2563eb; border-color: #93c5fd; }
+
         #copyBtn {
-            margin-left: auto; padding: 7px 16px; border: none; border-radius: 6px;
-            background: #2563eb; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+            margin-left: auto; padding: 7px 18px; border: none; border-radius: 7px;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
+            box-shadow: 0 2px 4px rgba(37,99,235,0.25);
+            transition: all 0.15s ease;
         }
-        #copyBtn:hover { background: #1d4ed8; }
-        #status { font-size: 12px; color: #57606a; min-width: 140px; }
+        #copyBtn:hover {
+            background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+            box-shadow: 0 3px 8px rgba(37,99,235,0.35);
+        }
+        #copyBtn:active { transform: translateY(1px); }
+
+        #status { font-size: 12px; color: #64748b; font-weight: 500; }
+
+        /* Main Workspace */
         .main { flex: 1; display: flex; min-height: 0; }
-        .editor { width: 44%; display: flex; flex-direction: column; border-right: 1px solid #e1e4e8; }
+
+        /* Left Column: Editor */
+        .editor-col {
+            width: 48%; display: flex; flex-direction: column;
+            border-right: 1px solid #e2e8f0; background: #ffffff;
+        }
+
+        .editor-container {
+            padding: 12px 14px 6px 14px;
+            display: flex; flex-direction: column; gap: 8px;
+            background: #ffffff;
+        }
+
+        /* WYSIWYG MathLive Input */
+        #mathField {
+            font-size: 24px; min-height: 120px; max-height: 220px;
+            overflow-y: auto; padding: 14px 18px;
+            background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 8px;
+            outline: none; box-shadow: inset 0 1px 2px rgba(0,0,0,0.03);
+            transition: all 0.2s ease;
+        }
+        #mathField:focus-within {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+        }
+        #mathField::part(virtual-keyboard-toggle) {
+            display: none;
+        }
+
+        /* Raw Text / AsciiMath Input */
         #input {
-            flex: 1; border: none; resize: none; padding: 14px;
-            font-family: 'Consolas', 'Courier New', monospace; font-size: 15px; line-height: 1.5;
-            outline: none; background: #fff;
+            height: 120px; border: 1.5px solid #cbd5e1; border-radius: 8px;
+            resize: none; padding: 12px 16px;
+            font-family: 'Consolas', 'Courier New', monospace; font-size: 14.5px; line-height: 1.5;
+            outline: none; background: #fafafa; color: #1e293b;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.03);
+            display: none;
         }
+        #input:focus {
+            border-color: #2563eb; background: #ffffff;
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+        }
+
+        /* Helpful Tips Banner */
+        .tips-banner {
+            background: #f0f7ff; border: 1px solid #bae6fd; border-radius: 6px;
+            padding: 6px 10px; font-size: 11.5px; color: #0369a1;
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        }
+        .tips-banner b { color: #0284c7; }
+        .tips-text { flex: 1; line-height: 1.4; }
+
+        /* Palette / Math Templates */
         .palette {
-            padding: 8px 10px; background: #fafbfc; border-top: 1px solid #e1e4e8;
-            max-height: 48%; overflow: auto;
+            flex: 1; padding: 8px 12px; background: #f8fafc;
+            border-top: 1px solid #e2e8f0; overflow-y: auto;
         }
-        .pgroup { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
-        .plabel { font-size: 11px; color: #8a929b; flex: 0 0 70px; }
+        .pgroup {
+            display: flex; align-items: center; flex-wrap: wrap; gap: 5px;
+            margin-bottom: 7px;
+        }
+        .plabel {
+            font-size: 11px; font-weight: 600; color: #64748b;
+            flex: 0 0 74px; text-transform: uppercase; letter-spacing: 0.3px;
+        }
         .palette button {
-            min-width: 34px; height: 30px; padding: 0 9px;
-            border: 1px solid #d0d7de; border-radius: 6px; background: #fff;
-            font-size: 14px; line-height: 1; cursor: pointer; color: #24292f;
+            min-width: 34px; height: 31px; padding: 0 8px;
+            border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff;
+            font-family: 'Cambria Math', 'Segoe UI Symbol', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 14px; line-height: 1; cursor: pointer; color: #1e293b;
+            display: inline-flex; align-items: center; justify-content: center;
+            transition: all 0.12s ease;
         }
-        .palette button:hover { background: #eaf1ff; border-color: #2563eb; color: #1d4ed8; }
-        .phint { font-size: 11px; color: #8a929b; margin-top: 4px; }
-        .preview {
+        .palette button:hover {
+            background: #eff6ff; border-color: #2563eb; color: #1d4ed8;
+            transform: translateY(-1px); box-shadow: 0 2px 4px rgba(37,99,235,0.12);
+        }
+        .palette button:active { transform: translateY(0); }
+
+        /* Right Column: Preview */
+        .preview-col {
+            flex: 1; display: flex; flex-direction: column;
+            background: #ffffff; min-width: 0;
+        }
+        .preview-header {
+            padding: 8px 16px; border-bottom: 1px solid #f1f5f9;
+            font-size: 11.5px; font-weight: 600; color: #64748b;
+            display: flex; align-items: center; justify-content: space-between;
+            background: #fafafa;
+        }
+        .preview-body {
             flex: 1; padding: 24px; overflow: auto; display: flex;
-            align-items: center; justify-content: center; background: #fff;
+            align-items: center; justify-content: center; background: #ffffff;
         }
-        .preview svg { max-width: 100%; }
-        .err { color: #cf222e; font-size: 13px; font-family: monospace; }
+        .preview-body svg { max-width: 100%; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.02)); }
+
+        .preview-footer {
+            padding: 8px 14px; background: #f8fafc; border-top: 1px solid #e2e8f0;
+            font-size: 11px; color: #64748b; display: flex; align-items: center; gap: 6px;
+        }
+
+        .err { color: #dc2626; font-size: 12.5px; font-family: monospace; }
     </style>
 </head>
 
 <body>
+    <!-- Header Toolbar -->
     <div class="toolbar">
-        <label><input type="radio" name="mode" value="asciimath" checked> AsciiMath (dễ)</label>
-        <label><input type="radio" name="mode" value="latex"> LaTeX</label>
-        <label><input type="checkbox" id="displayMode" checked> Chế độ khối</label>
-        <label style="display:inline-flex; align-items:center; gap:4px; margin-left:4px;">
-            <span style="font-size:12px; color:#57606a;">Cỡ chữ:</span>
-            <select id="fontSizeSelect" style="padding:2px 6px; border:1px solid #d0d7de; border-radius:4px; font-size:12px; background:#fff; cursor:pointer;">
+        <div class="mode-switch">
+            <button class="mode-tab active" data-mode="wysiwyg" title="Soạn thảo trực quan như Word / MathType: gõ phân số /, số mũ ^, căn sqrt...">
+                ✨ Trực quan (WYSIWYG)
+            </button>
+            <button class="mode-tab" data-mode="latex" title="Xem và chỉnh sửa trực tiếp mã LaTeX">
+                ⟨/⟩ Mã LaTeX
+            </button>
+            <button class="mode-tab" data-mode="asciimath" title="Cú pháp AsciiMath đơn giản">
+                ⌨️ AsciiMath
+            </button>
+        </div>
+
+        <label class="tb-item">
+            <input type="checkbox" id="displayMode" checked> Chế độ khối
+        </label>
+
+        <label class="tb-item" style="margin-left: 4px;">
+            <span style="font-size:12px; color:#64748b;">Cỡ chữ:</span>
+            <select id="fontSizeSelect" class="select-input">
                 <option value="9">9pt (Bảng / Chú thích)</option>
                 <option value="10">10pt (Nhỏ)</option>
                 <option value="11" selected>11pt (Chuẩn Word)</option>
@@ -84,127 +239,212 @@
                 <option value="18">18pt (Tiêu đề lớn)</option>
             </select>
         </label>
+
+        <button class="kb-btn" id="kbToggleBtn" title="Bật / tắt bàn phím toán ảo trên màn hình">
+            ⌨️ Phím ảo
+        </button>
+
         <span id="status"></span>
-        <button id="copyBtn">Copy ảnh công thức</button>
-    </div>
-    <div class="main">
-        <div class="editor">
-            <textarea id="input" spellcheck="false">x = (-b +- sqrt(b^2 - 4ac)) / (2a)</textarea>
-            <div class="palette" id="palette">
-                <div class="pgroup">
-                    <span class="plabel">Cấu trúc</span>
-                    <button data-snip="(‸)/()" title="Phân số">a⁄b</button>
-                    <button data-snip="(‸)^()" title="Lũy thừa">x²</button>
-                    <button data-snip="(‸)_()" title="Chỉ số dưới">xᵢ</button>
-                    <button data-snip="sqrt(‸)" title="Căn bậc hai">√</button>
-                    <button data-snip="root()(‸)" title="Căn bậc n">ⁿ√</button>
-                    <button data-snip="abs(‸)" title="Trị tuyệt đối">|x|</button>
-                    <button data-snip="(‸)" title="Ngoặc đơn">( )</button>
-                    <button data-snip="{:(‸),():}" title="Hệ phương trình">{</button>
-                </div>
-                <div class="pgroup">
-                    <span class="plabel">Toán tử lớn</span>
-                    <button data-snip="sum_(‸)^()" title="Tổng Σ">∑</button>
-                    <button data-snip="prod_(‸)^()" title="Tích ∏">∏</button>
-                    <button data-snip="int_(‸)^() dx" title="Tích phân">∫</button>
-                    <button data-snip="lim_(‸ -> )" title="Giới hạn">lim</button>
-                    <button data-snip="[[‸,],[,]]" title="Ma trận 2×2">▦</button>
-                    <button data-snip="((‸),())" title="Vector cột">(⋮)</button>
-                </div>
-                <div class="pgroup">
-                    <span class="plabel">Quan hệ</span>
-                    <button data-snip="+- ">±</button>
-                    <button data-snip="xx ">×</button>
-                    <button data-snip="-: ">÷</button>
-                    <button data-snip="* ">⋅</button>
-                    <button data-snip="&lt;= ">≤</button>
-                    <button data-snip="&gt;= ">≥</button>
-                    <button data-snip="!= ">≠</button>
-                    <button data-snip="~~ ">≈</button>
-                    <button data-snip="-&gt; ">→</button>
-                    <button data-snip="=&gt; ">⇒</button>
-                    <button data-snip="&lt;=&gt; ">⇔</button>
-                    <button data-snip="oo ">∞</button>
-                </div>
-                <div class="pgroup">
-                    <span class="plabel">Tập / Logic</span>
-                    <button data-snip="in ">∈</button>
-                    <button data-snip="notin ">∉</button>
-                    <button data-snip="sub ">⊂</button>
-                    <button data-snip="sube ">⊆</button>
-                    <button data-snip="cup ">∪</button>
-                    <button data-snip="cap ">∩</button>
-                    <button data-snip="forall ">∀</button>
-                    <button data-snip="exists ">∃</button>
-                    <button data-snip="RR ">ℝ</button>
-                </div>
-                <div class="pgroup">
-                    <span class="plabel">Hy Lạp</span>
-                    <button data-snip="alpha ">α</button>
-                    <button data-snip="beta ">β</button>
-                    <button data-snip="gamma ">γ</button>
-                    <button data-snip="delta ">δ</button>
-                    <button data-snip="theta ">θ</button>
-                    <button data-snip="lambda ">λ</button>
-                    <button data-snip="mu ">μ</button>
-                    <button data-snip="pi ">π</button>
-                    <button data-snip="sigma ">σ</button>
-                    <button data-snip="phi ">φ</button>
-                    <button data-snip="omega ">ω</button>
-                    <button data-snip="Delta ">Δ</button>
-                    <button data-snip="Omega ">Ω</button>
-                </div>
-                <div class="pgroup">
-                    <span class="plabel">Hàm số</span>
-                    <button data-snip="sin ">sin</button>
-                    <button data-snip="cos ">cos</button>
-                    <button data-snip="tan ">tan</button>
-                    <button data-snip="log ">log</button>
-                    <button data-snip="ln ">ln</button>
-                    <button data-snip="hat(‸)" title="Mũ (hat)">x̂</button>
-                    <button data-snip="vec(‸)" title="Vector">v⃗</button>
-                    <button data-snip="bar(‸)" title="Gạch ngang">x̄</button>
-                </div>
-                <div class="phint">Bôi đen một phần công thức rồi bấm nút để bọc quanh (ví dụ chọn <code>x+1</code> rồi bấm √ → <code>sqrt(x+1)</code>).</div>
-            </div>
-        </div>
-        <div class="preview" id="preview"></div>
+        <button id="copyBtn">Copy ảnh công thức (Ctrl+Enter)</button>
     </div>
 
-    <script src="mathjax-tex-svg.js?v=1"></script>
+    <!-- Main Workspace -->
+    <div class="main">
+        <!-- Left: Editor & Palette -->
+        <div class="editor-col">
+            <div class="editor-container">
+                <!-- Interactive MathField -->
+                <math-field id="mathField" math-virtual-keyboard-policy="manual">x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}</math-field>
+                <!-- Raw text input for LaTeX / AsciiMath -->
+                <textarea id="input" spellcheck="false" placeholder="Nhập công thức..."></textarea>
+
+                <!-- Helpful Tips Banner -->
+                <div class="tips-banner" id="tipsBanner">
+                    <span class="tips-text" id="tipsText">
+                        <b>💡 Mẹo gõ tự nhiên:</b> Gõ <code>/</code> ra phân số (□/□) • Gõ <code>^</code> ra số mũ • Gõ <code>_</code> ra chỉ số dưới • Gõ <code>sqrt</code> ra căn • Phím <b>Tab</b> hoặc <b>Mũi tên</b> để di chuyển giữa các ô.
+                    </span>
+                </div>
+            </div>
+
+            <!-- Palette Ribbon -->
+            <div class="palette" id="palette">
+                <!-- Cấu trúc -->
+                <div class="pgroup">
+                    <span class="plabel">Cấu trúc</span>
+                    <button data-latex="\frac{#@}{#?}" data-ascii="(‸)/()" title="Phân số (gõ '/')">a⁄b</button>
+                    <button data-latex="^{#?}" data-ascii="(‸)^()" title="Lũy thừa (gõ '^')">x²</button>
+                    <button data-latex="_{#?}" data-ascii="(‸)_()" title="Chỉ số dưới (gõ '_')">xᵢ</button>
+                    <button data-latex="\sqrt{#@}" data-ascii="sqrt(‸)" title="Căn bậc hai (gõ 'sqrt')">√</button>
+                    <button data-latex="\sqrt[#?]{#@}" data-ascii="root()(‸)" title="Căn bậc n">ⁿ√</button>
+                    <button data-latex="\left|#@\right|" data-ascii="abs(‸)" title="Trị tuyệt đối">|x|</button>
+                    <button data-latex="\left(#@\right)" data-ascii="(‸)" title="Ngoặc đơn">( )</button>
+                    <button data-latex="\left[#@\right]" data-ascii="[‸]" title="Ngoặc vuông">[ ]</button>
+                    <button data-latex="\left\{#@\right\}" data-ascii="{‸}" title="Ngoặc nhọn">{ }</button>
+                    <button data-latex="\begin{cases} #? \\ #? \end{cases}" data-ascii="{:(‸),():}" title="Hệ phương trình">{</button>
+                </div>
+
+                <!-- Toán tử lớn -->
+                <div class="pgroup">
+                    <span class="plabel">Toán tử lớn</span>
+                    <button data-latex="\sum_{#?}^{#?} #?" data-ascii="sum_(‸)^()" title="Tổng Σ">∑</button>
+                    <button data-latex="\prod_{#?}^{#?} #?" data-ascii="prod_(‸)^()" title="Tích ∏">∏</button>
+                    <button data-latex="\int_{#?}^{#?} #? \, d#?" data-ascii="int_(‸)^() dx" title="Tích phân">∫</button>
+                    <button data-latex="\iint_{#?} #? \, d#?" data-ascii="iint_(‸) " title="Tích phân 2 lớp">∬</button>
+                    <button data-latex="\oint_{#?} #? \, d#?" data-ascii="oint_(‸) " title="Tích phân đường mặt kín">∮</button>
+                    <button data-latex="\lim_{#? \to #?} #?" data-ascii="lim_(‸ -> )" title="Giới hạn lim">lim</button>
+                    <button data-latex="\begin{pmatrix} #? & #? \\ #? & #? \end{pmatrix}" data-ascii="[[‸,],[,]]" title="Ma trận 2×2">▦₂</button>
+                    <button data-latex="\begin{pmatrix} #? & #? & #? \\ #? & #? & #? \\ #? & #? & #? \end{pmatrix}" data-ascii="[[‸,,],[,,],[,,]]" title="Ma trận 3×3">▦₃</button>
+                    <button data-latex="\begin{pmatrix} #? \\ #? \end{pmatrix}" data-ascii="((‸),())" title="Vector cột">(⋮)</button>
+                </div>
+
+                <!-- Quan hệ -->
+                <div class="pgroup">
+                    <span class="plabel">Quan hệ</span>
+                    <button data-latex="\pm " data-ascii="+- " title="Cộng trừ ±">±</button>
+                    <button data-latex="\times " data-ascii="xx " title="Nhân ×">×</button>
+                    <button data-latex="\div " data-ascii="-: " title="Chia ÷">÷</button>
+                    <button data-latex="\cdot " data-ascii="* " title="Chấm nhân ⋅">⋅</button>
+                    <button data-latex="\le " data-ascii="&lt;= " title="Nhỏ hơn hoặc bằng ≤">≤</button>
+                    <button data-latex="\ge " data-ascii="&gt;= " title="Lớn hơn hoặc bằng ≥">≥</button>
+                    <button data-latex="\ne " data-ascii="!= " title="Khác ≠">≠</button>
+                    <button data-latex="\approx " data-ascii="~~ " title="Xấp xỉ ≈">≈</button>
+                    <button data-latex="\equiv " data-ascii="-= " title="Đồng dư ≡">≡</button>
+                    <button data-latex="\to " data-ascii="-&gt; " title="Mũi tên →">→</button>
+                    <button data-latex="\Rightarrow " data-ascii="=&gt; " title="Suy ra ⇒">⇒</button>
+                    <button data-latex="\Leftrightarrow " data-ascii="&lt;=&gt; " title="Tương đương ⇔">⇔</button>
+                    <button data-latex="\infty " data-ascii="oo " title="Vô cực ∞">∞</button>
+                </div>
+
+                <!-- Tập / Logic -->
+                <div class="pgroup">
+                    <span class="plabel">Tập / Logic</span>
+                    <button data-latex="\in " data-ascii="in " title="Thuộc ∈">∈</button>
+                    <button data-latex="\notin " data-ascii="notin " title="Không thuộc ∉">∉</button>
+                    <button data-latex="\subset " data-ascii="sub " title="Tập con ⊂">⊂</button>
+                    <button data-latex="\subseteq " data-ascii="sube " title="Tập con hoặc bằng ⊆">⊆</button>
+                    <button data-latex="\cup " data-ascii="cup " title="Hợp ∪">∪</button>
+                    <button data-latex="\cap " data-ascii="cap " title="Giao ∩">∩</button>
+                    <button data-latex="\forall " data-ascii="forall " title="Với mọi ∀">∀</button>
+                    <button data-latex="\exists " data-ascii="exists " title="Tồn tại ∃">∃</button>
+                    <button data-latex="\mathbb{R} " data-ascii="RR " title="Tập số thực ℝ">ℝ</button>
+                    <button data-latex="\mathbb{N} " data-ascii="NN " title="Tập số tự nhiên ℕ">ℕ</button>
+                    <button data-latex="\mathbb{Z} " data-ascii="ZZ " title="Tập số nguyên ℤ">ℤ</button>
+                    <button data-latex="\emptyset " data-ascii="O/ " title="Tập rỗng ∅">∅</button>
+                </div>
+
+                <!-- Hy Lạp -->
+                <div class="pgroup">
+                    <span class="plabel">Hy Lạp</span>
+                    <button data-latex="\alpha " data-ascii="alpha ">α</button>
+                    <button data-latex="\beta " data-ascii="beta ">β</button>
+                    <button data-latex="\gamma " data-ascii="gamma ">γ</button>
+                    <button data-latex="\delta " data-ascii="delta ">δ</button>
+                    <button data-latex="\theta " data-ascii="theta ">θ</button>
+                    <button data-latex="\lambda " data-ascii="lambda ">λ</button>
+                    <button data-latex="\mu " data-ascii="mu ">μ</button>
+                    <button data-latex="\pi " data-ascii="pi ">π</button>
+                    <button data-latex="\sigma " data-ascii="sigma ">σ</button>
+                    <button data-latex="\phi " data-ascii="phi ">φ</button>
+                    <button data-latex="\omega " data-ascii="omega ">ω</button>
+                    <button data-latex="\Delta " data-ascii="Delta ">Δ</button>
+                    <button data-latex="\Omega " data-ascii="Omega ">Ω</button>
+                    <button data-latex="\nabla " data-ascii="grad " title="Toán tử Nabla ∇">∇</button>
+                </div>
+
+                <!-- Hàm số & Vector -->
+                <div class="pgroup">
+                    <span class="plabel">Hàm & Vector</span>
+                    <button data-latex="\sin " data-ascii="sin ">sin</button>
+                    <button data-latex="\cos " data-ascii="cos ">cos</button>
+                    <button data-latex="\tan " data-ascii="tan ">tan</button>
+                    <button data-latex="\cot " data-ascii="cot ">cot</button>
+                    <button data-latex="\log " data-ascii="log ">log</button>
+                    <button data-latex="\ln " data-ascii="ln ">ln</button>
+                    <button data-latex="\hat{#@}" data-ascii="hat(‸)" title="Mũ (hat)"><span style="position:relative; display:inline-block;">x<span style="position:absolute; top:-6px; left:2px; font-size:10px; font-family:sans-serif;">^</span></span></button>
+                    <button data-latex="\vec{#@}" data-ascii="vec(‸)" title="Vector (gõ \vec)"><span style="position:relative; display:inline-block;">v<span style="position:absolute; top:-6px; left:1px; font-size:10px; font-family:sans-serif;">→</span></span></button>
+                    <button data-latex="\bar{#@}" data-ascii="bar(‸)" title="Gạch ngang (bar)"><span style="text-decoration:overline;">x</span></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Live Publication Preview -->
+        <div class="preview-col">
+            <div class="preview-header">
+                <span>BẢN XEM TRƯỚC (XUẤT BẢN WORD / DOCS)</span>
+                <span id="previewMeta" style="font-weight: normal; color: #94a3b8;">11pt</span>
+            </div>
+            <div class="preview-body" id="preview"></div>
+            <div class="preview-footer">
+                <span>💡 <b>Mẹo hai chiều:</b> Nhấp đúp chuột vào ảnh công thức trong Word hoặc Google Docs để mở lại cửa sổ này sửa bất kỳ lúc nào!</span>
+            </div>
+        </div>
+    </div>
+
     <script>
         var ready = false;
         var currentSvg = null;
+        var activeMode = 'wysiwyg'; // 'wysiwyg' | 'latex' | 'asciimath'
+
+        var mathField = document.getElementById('mathField');
         var input = document.getElementById('input');
         var preview = document.getElementById('preview');
+        var previewMeta = document.getElementById('previewMeta');
         var statusEl = document.getElementById('status');
+        var tipsText = document.getElementById('tipsText');
+        var kbToggleBtn = document.getElementById('kbToggleBtn');
+
         statusEl.textContent = 'Đang nạp công cụ công thức…';
 
-        function getMode() { return document.querySelector('input[name=mode]:checked').value; }
-        function isDisplay() { return document.getElementById('displayMode').checked; }
+        function isDisplay() {
+            return document.getElementById('displayMode').checked;
+        }
 
+        function getActiveFormula() {
+            if (activeMode === 'wysiwyg') {
+                return mathField ? mathField.getValue('latex') : '';
+            } else {
+                return input ? input.value : '';
+            }
+        }
+
+        // Render preview via MathJax
         function render() {
             if (!ready) return;
-            var src = input.value;
+            var src = getActiveFormula();
             preview.innerHTML = '';
             currentSvg = null;
-            if (!src.trim()) { statusEl.textContent = ''; return; }
+
+            if (!src || !src.trim()) {
+                statusEl.textContent = '';
+                previewMeta.textContent = '';
+                return;
+            }
+
             try {
                 var opts = { display: isDisplay() };
-                var useAscii = getMode() === 'asciimath';
+                var useAscii = activeMode === 'asciimath';
+
                 if (useAscii && typeof MathJax.asciimath2svg !== 'function') {
                     statusEl.textContent = 'Đang nạp AsciiMath…';
                     return;
                 }
+
                 var node = useAscii
                     ? MathJax.asciimath2svg(src, opts)
                     : MathJax.tex2svg(src, opts);
+
                 var svg = node.querySelector('svg');
                 if (svg) {
-                    // Chỉ chèn riêng thẻ <svg> (bỏ mjx-assistive-mml) để không render đúp công thức.
+                    var fsSelect = document.getElementById('fontSizeSelect');
+                    var fsVal = fsSelect ? parseFloat(fsSelect.value) || 11 : 11;
+                    // Scale SVG font-size so user sees visual size feedback
+                    svg.style.fontSize = (fsVal * 1.45) + 'px';
+
                     preview.appendChild(svg);
                     currentSvg = svg;
                     statusEl.textContent = '';
+
+                    previewMeta.textContent = fsVal + 'pt • Hiển thị sắc nét';
                 } else {
                     statusEl.innerHTML = '<span class="err">Không dựng được công thức</span>';
                 }
@@ -213,40 +453,150 @@
             }
         }
 
-        var timer = null;
-        input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(render, 150); });
-        document.querySelectorAll('input[name=mode], #displayMode').forEach(function (el) {
-            el.addEventListener('change', render);
+        var renderTimer = null;
+        function scheduleRender() {
+            clearTimeout(renderTimer);
+            renderTimer = setTimeout(render, 120);
+        }
+
+        // Events on mathField
+        if (mathField) {
+            mathField.addEventListener('input', function() {
+                input.value = mathField.getValue('latex');
+                scheduleRender();
+            });
+        }
+
+        // Events on text input
+        input.addEventListener('input', function() {
+            if (activeMode === 'latex' && mathField) {
+                mathField.setValue(input.value);
+            }
+            scheduleRender();
         });
 
-        // Chèn nhanh cú pháp từ palette. Ký tự '‸' đánh dấu vị trí con trỏ / chỗ bọc phần đã bôi đen.
-        var CARET = '\u2038';
-        function insertSnippet(snip) {
-            if (!snip) return;
-            var start = input.selectionStart, end = input.selectionEnd;
-            var sel = input.value.substring(start, end);
-            var text, caretPos;
-            var idx = snip.indexOf(CARET);
-            if (idx !== -1) {
-                text = snip.substring(0, idx) + sel + snip.substring(idx + 1);
-                caretPos = start + idx + sel.length;
-            } else {
-                text = snip;
-                caretPos = start + snip.length;
+        // Mode Switching
+        var modeTabs = document.querySelectorAll('.mode-tab');
+        modeTabs.forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                var targetMode = tab.getAttribute('data-mode');
+                switchMode(targetMode);
+            });
+        });
+
+        function switchMode(newMode) {
+            if (activeMode === newMode) return;
+
+            // Sync values across editors
+            if (activeMode === 'wysiwyg') {
+                input.value = mathField.getValue('latex');
+            } else if (activeMode === 'latex') {
+                mathField.setValue(input.value);
             }
-            input.value = input.value.substring(0, start) + text + input.value.substring(end);
-            input.selectionStart = input.selectionEnd = caretPos;
-            input.focus();
+
+            activeMode = newMode;
+
+            // Update UI tabs
+            modeTabs.forEach(function(t) {
+                t.classList.toggle('active', t.getAttribute('data-mode') === activeMode);
+            });
+
+            // Toggle visibility
+            if (activeMode === 'wysiwyg') {
+                mathField.style.display = 'block';
+                input.style.display = 'none';
+                tipsText.innerHTML = '<b>💡 Mẹo gõ tự nhiên:</b> Gõ <code>/</code> ra phân số (□/□) • Gõ <code>^</code> ra số mũ • Gõ <code>_</code> ra chỉ số dưới • Gõ <code>sqrt</code> ra căn • Phím <b>Tab</b> hoặc <b>Mũi tên</b> để di chuyển giữa các ô.';
+                mathField.focus();
+            } else if (activeMode === 'latex') {
+                mathField.style.display = 'none';
+                input.style.display = 'block';
+                input.placeholder = 'Nhập mã LaTeX (ví dụ: \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a})...';
+                tipsText.innerHTML = '<b>💡 Chế độ mã nguồn LaTeX:</b> Gõ trực tiếp mã lệnh hoặc click các nút trong thanh công cụ bên dưới.';
+                input.focus();
+            } else if (activeMode === 'asciimath') {
+                mathField.style.display = 'none';
+                input.style.display = 'block';
+                input.placeholder = 'Nhập cú pháp AsciiMath (ví dụ: (-b +- sqrt(b^2 - 4ac)) / (2a))...';
+                tipsText.innerHTML = '<b>💡 Cú pháp AsciiMath:</b> Gõ công thức mộc không cần gạch chéo ngược (\\). Ví dụ: <code>(a+b)/(c+d)</code>, <code>sqrt(x)</code>, <code>sum_(i=1)^n</code>.';
+                input.focus();
+            }
+
             render();
         }
 
-        document.getElementById('palette').addEventListener('mousedown', function (e) {
-            var btn = e.target.closest ? e.target.closest('button') : null;
-            if (!btn) return;
-            e.preventDefault(); // giữ focus + vùng chọn trong textarea
-            insertSnippet(btn.getAttribute('data-snip'));
+        document.getElementById('displayMode').addEventListener('change', render);
+        document.getElementById('fontSizeSelect').addEventListener('change', render);
+
+        // Virtual Keyboard Toggle
+        kbToggleBtn.addEventListener('click', function() {
+            if (window.mathVirtualKeyboard) {
+                if (window.mathVirtualKeyboard.visible) {
+                    window.mathVirtualKeyboard.hide();
+                    kbToggleBtn.classList.remove('active');
+                } else {
+                    window.mathVirtualKeyboard.show();
+                    kbToggleBtn.classList.add('active');
+                    if (activeMode === 'wysiwyg') mathField.focus();
+                }
+            }
         });
 
+        // Insert Template from Palette
+        function insertSnippetIntoText(snip, textarea) {
+            if (!snip) return;
+            var start = textarea.selectionStart, end = textarea.selectionEnd;
+            var sel = textarea.value.substring(start, end);
+            var text = snip;
+            var caretPos = start;
+
+            // Handle '#@' placeholder for wrapped selection
+            if (text.indexOf('#@') !== -1) {
+                text = text.replace(/#@/g, sel);
+            }
+            // Handle '#?' placeholder
+            var qIdx = text.indexOf('#?');
+            if (qIdx !== -1) {
+                text = text.replace(/#\?/g, '');
+                caretPos = start + qIdx;
+            } else {
+                caretPos = start + text.length;
+            }
+
+            textarea.value = textarea.value.substring(0, start) + text + textarea.value.substring(end);
+            textarea.selectionStart = textarea.selectionEnd = caretPos;
+            textarea.focus();
+        }
+
+        document.getElementById('palette').addEventListener('mousedown', function(e) {
+            var btn = e.target.closest ? e.target.closest('button') : null;
+            if (!btn) return;
+            e.preventDefault(); // Giữ nguyên focus và selection
+
+            if (activeMode === 'wysiwyg') {
+                var latexSnip = btn.getAttribute('data-latex');
+                if (latexSnip) {
+                    mathField.focus();
+                    mathField.insert(latexSnip, { selectionMode: 'placeholder' });
+                    input.value = mathField.getValue('latex');
+                    scheduleRender();
+                }
+            } else if (activeMode === 'latex') {
+                var latexSnip = btn.getAttribute('data-latex');
+                if (latexSnip) {
+                    insertSnippetIntoText(latexSnip, input);
+                    mathField.setValue(input.value);
+                    scheduleRender();
+                }
+            } else {
+                var asciiSnip = btn.getAttribute('data-ascii') || btn.getAttribute('data-latex');
+                if (asciiSnip) {
+                    insertSnippetIntoText(asciiSnip, input);
+                    scheduleRender();
+                }
+            }
+        });
+
+        // PNG Metadata injection for lossless round-trip
         var pngCrcTable = null;
         function makePngCrcTable() {
             var c, table = [];
@@ -308,7 +658,10 @@
         document.getElementById('copyBtn').addEventListener('click', copyImage);
 
         function copyImage() {
-            if (!currentSvg) { statusEl.innerHTML = '<span class="err">Chưa có công thức để copy</span>'; return; }
+            if (!currentSvg) {
+                statusEl.innerHTML = '<span class="err">Chưa có công thức để copy</span>';
+                return;
+            }
             try {
                 var svg = currentSvg;
                 var fsSelect = document.getElementById('fontSizeSelect');
@@ -347,7 +700,7 @@
 
                 var img = new Image();
                 img.onload = function () {
-                    var r = 3.5;
+                    var r = 3.5; // Siêu phân giải Retina
                     var canvas = document.createElement('canvas');
                     canvas.width = Math.round(W * r);
                     canvas.height = Math.round(H * r);
@@ -355,18 +708,22 @@
                     ctx.setTransform(r, 0, 0, r, 0, 0);
                     ctx.drawImage(img, 0, 0, W, H);
                     var png = canvas.toDataURL('image/png');
+
+                    var formulaText = getActiveFormula();
                     try {
-                        png = injectPngTextChunk(png, 'HapiCopi:Math', input.value);
+                        png = injectPngTextChunk(png, 'HapiCopi:Math', formulaText);
                     } catch (e) { }
 
                     var isWord = !!window._isWordMode;
                     var isDocs = !!window._isDocsMode;
+                    var outMode = activeMode === 'asciimath' ? 'asciimath' : 'latex';
+
                     if (window.chrome && window.chrome.webview) {
                         window.chrome.webview.postMessage(JSON.stringify({
                             type: 'copy',
                             png: png,
-                            source: input.value,
-                            mode: getMode(),
+                            source: formulaText,
+                            mode: outMode,
                             widthPt: wPt.toFixed(2),
                             heightPt: hPt.toFixed(2),
                             verticalAlignPt: vAlignPt.toFixed(2),
@@ -376,6 +733,7 @@
                             isDocsUpdate: isDocs
                         }));
                     }
+
                     if (isWord) {
                         statusEl.textContent = 'Đã cập nhật trực tiếp vào Word!';
                     } else if (isDocs) {
@@ -393,18 +751,21 @@
 
         window._isWordMode = false;
         window._isDocsMode = false;
+
         window.setFormula = function(formula, mode, fontSize, isWord, isDocs) {
-            if (formula) {
-                var input = document.getElementById('input');
-                input.value = formula;
+            if (mode === 'asciimath') {
+                input.value = formula || '';
+                switchMode('asciimath');
+            } else {
+                if (mathField) mathField.setValue(formula || '');
+                input.value = formula || '';
+                switchMode('wysiwyg');
             }
-            if (mode) {
-                var r = document.querySelector('input[name=mode][value="' + mode + '"]');
-                if (r) r.checked = true;
-            }
+
             if (fontSize) {
                 window.setFontSize(fontSize);
             }
+
             window._isWordMode = !!isWord;
             window._isDocsMode = !!isDocs;
             var copyBtn = document.getElementById('copyBtn');
@@ -420,7 +781,7 @@
             render();
         };
 
-        // Phím tắt: Ctrl+Enter để copy/cập nhật, Esc để đóng cửa sổ
+        // Keyboard Shortcuts: Ctrl+Enter to copy, Esc to close
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
@@ -446,7 +807,7 @@
             if (!found) {
                 var opt = document.createElement('option');
                 opt.value = size;
-                opt.textContent = size + 'pt (từ Word)';
+                opt.textContent = size + 'pt (từ tài liệu)';
                 opt.selected = true;
                 sel.appendChild(opt);
             }
@@ -468,7 +829,7 @@
         }
 
         if (window.MathJax && MathJax.startup && MathJax.startup.promise) {
-            MathJax.startup.promise.then(markReady).catch(function (err) {
+            MathJax.startup.promise.then(markReady).catch(function(err) {
                 if (!tryMarkReady()) {
                     statusEl.innerHTML = '<span class="err">MathJax lỗi: ' + (err && err.message ? err.message : err) + '</span>';
                 }
@@ -477,7 +838,7 @@
 
         tryMarkReady();
         var polls = 0;
-        var poll = setInterval(function () {
+        var poll = setInterval(function() {
             if (tryMarkReady() || ++polls > 50) {
                 clearInterval(poll);
                 if (!ready) {
