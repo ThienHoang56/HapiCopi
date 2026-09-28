@@ -71,6 +71,19 @@
         <label><input type="radio" name="mode" value="asciimath" checked> AsciiMath (dễ)</label>
         <label><input type="radio" name="mode" value="latex"> LaTeX</label>
         <label><input type="checkbox" id="displayMode" checked> Chế độ khối</label>
+        <label style="display:inline-flex; align-items:center; gap:4px; margin-left:4px;">
+            <span style="font-size:12px; color:#57606a;">Cỡ chữ:</span>
+            <select id="fontSizeSelect" style="padding:2px 6px; border:1px solid #d0d7de; border-radius:4px; font-size:12px; background:#fff; cursor:pointer;">
+                <option value="9">9pt (Bảng / Chú thích)</option>
+                <option value="10">10pt (Nhỏ)</option>
+                <option value="11" selected>11pt (Chuẩn Word)</option>
+                <option value="12">12pt (Chuẩn VN)</option>
+                <option value="13">13pt (Báo cáo)</option>
+                <option value="14">14pt (Tiêu đề)</option>
+                <option value="16">16pt (Lớn)</option>
+                <option value="18">18pt (Tiêu đề lớn)</option>
+            </select>
+        </label>
         <span id="status"></span>
         <button id="copyBtn">Copy ảnh công thức</button>
     </div>
@@ -240,28 +253,43 @@
             if (!currentSvg) { statusEl.innerHTML = '<span class="err">Chưa có công thức để copy</span>'; return; }
             try {
                 var svg = currentSvg;
-                var exToPx = 11;
+                var fsSelect = document.getElementById('fontSizeSelect');
+                var fontSize = fsSelect ? parseFloat(fsSelect.value) || 11 : 11;
+                var exInPt = 0.435 * fontSize;
+                var exInPx = exInPt * (96.0 / 72.0);
+
                 var wEx = parseFloat(svg.getAttribute('width')) || 0;
                 var hEx = parseFloat(svg.getAttribute('height')) || 0;
-                var W = wEx > 0 ? wEx * exToPx : 0;
-                var H = hEx > 0 ? hEx * exToPx : 0;
                 try {
                     var box = svg.getBBox();
-                    if (!W) W = box.width;
-                    if (!H) H = box.height;
+                    if (!wEx && box.width) wEx = box.width / exInPx;
+                    if (!hEx && box.height) hEx = box.height / exInPx;
                 } catch (ignore) { }
-                W = Math.max(8, W || 80);
-                H = Math.max(8, H || 32);
+                wEx = Math.max(0.5, wEx || 8);
+                hEx = Math.max(0.5, hEx || 3);
+
+                var wPt = Math.max(1, wEx * exInPt);
+                var hPt = Math.max(1, hEx * exInPt);
+                var W = Math.max(2, wEx * exInPx);
+                var H = Math.max(2, hEx * exInPx);
+
+                var vAlignPt = 0;
+                var rawVAlign = svg.style.verticalAlign || '';
+                if (rawVAlign.endsWith('ex')) {
+                    vAlignPt = parseFloat(rawVAlign) * exInPt;
+                } else if (rawVAlign.endsWith('em')) {
+                    vAlignPt = parseFloat(rawVAlign) * fontSize;
+                }
 
                 var clone = svg.cloneNode(true);
-                clone.setAttribute('width', W);
-                clone.setAttribute('height', H);
+                clone.setAttribute('width', Math.round(W));
+                clone.setAttribute('height', Math.round(H));
                 var s = new XMLSerializer().serializeToString(clone);
                 var url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(s)));
 
                 var img = new Image();
                 img.onload = function () {
-                    var r = 3;
+                    var r = 3.5;
                     var canvas = document.createElement('canvas');
                     canvas.width = Math.round(W * r);
                     canvas.height = Math.round(H * r);
@@ -271,10 +299,18 @@
                     var png = canvas.toDataURL('image/png');
                     if (window.chrome && window.chrome.webview) {
                         window.chrome.webview.postMessage(JSON.stringify({
-                            type: 'copy', png: png, source: input.value, mode: getMode()
+                            type: 'copy',
+                            png: png,
+                            source: input.value,
+                            mode: getMode(),
+                            widthPt: wPt.toFixed(2),
+                            heightPt: hPt.toFixed(2),
+                            verticalAlignPt: vAlignPt.toFixed(2),
+                            fontSize: fontSize,
+                            isDisplay: isDisplay()
                         }));
                     }
-                    statusEl.textContent = 'Đã copy! Dán vào Word/Docs (Ctrl+V).';
+                    statusEl.textContent = 'Đã copy (' + fontSize + 'pt)! Dán vào Word/Docs (Ctrl+V).';
                 };
                 img.onerror = function () { statusEl.innerHTML = '<span class="err">Lỗi rasterize ảnh</span>'; };
                 img.src = url;
@@ -282,6 +318,26 @@
                 statusEl.innerHTML = '<span class="err">Lỗi copy: ' + (e.message || e) + '</span>';
             }
         }
+
+        window.setFontSize = function(size) {
+            var sel = document.getElementById('fontSizeSelect');
+            if (!sel || !size) return;
+            var found = false;
+            for (var i = 0; i < sel.options.length; i++) {
+                if (parseFloat(sel.options[i].value) === size) {
+                    sel.selectedIndex = i;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                var opt = document.createElement('option');
+                opt.value = size;
+                opt.textContent = size + 'pt (từ Word)';
+                opt.selected = true;
+                sel.appendChild(opt);
+            }
+        };
 
         function markReady() {
             if (ready) return;

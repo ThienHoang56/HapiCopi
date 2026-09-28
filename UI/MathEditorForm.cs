@@ -37,6 +37,7 @@ namespace HapiCopi
                 if (Visible)
                 {
                     RequestReady();
+                    SyncWordFontSize();
                 }
             };
         }
@@ -55,6 +56,7 @@ namespace HapiCopi
             {
                 await WebViewManager.AttachEditorAsync(_web, "matheditor.html", OnWebMessage);
                 _ready = true;
+                SyncWordFontSize();
             }
             catch (Exception ex)
             {
@@ -65,6 +67,26 @@ namespace HapiCopi
                     MessageBox.Show("Không mở được soạn công thức:\n" + ex.Message, "HapiCopi",
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
+            }
+        }
+
+        private void SyncWordFontSize()
+        {
+            try
+            {
+                var format = WordInterop.GetCurrentFormatWithTimeout(60);
+                if (format.IsFromActiveWord && format.FontSize > 0)
+                {
+                    int rounded = (int)Math.Round(format.FontSize);
+                    if (_ready && _web.CoreWebView2 != null)
+                    {
+                        _web.CoreWebView2.ExecuteScriptAsync($"if (typeof setFontSize === 'function') setFontSize({rounded});");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[MathEditor] Lỗi đồng bộ cỡ chữ Word: {ex.Message}");
             }
         }
 
@@ -92,12 +114,34 @@ namespace HapiCopi
                 {
                     string png = root.TryGetProperty("png", out var p) ? (p.GetString() ?? "") : "";
                     string source = root.TryGetProperty("source", out var s) ? (s.GetString() ?? "") : "";
+                    string widthPt = root.TryGetProperty("widthPt", out var wp) ? (wp.GetString() ?? "") : "";
+                    string heightPt = root.TryGetProperty("heightPt", out var hp) ? (hp.GetString() ?? "") : "";
+                    string vAlignPt = root.TryGetProperty("verticalAlignPt", out var vp) ? (vp.GetString() ?? "") : "";
+                    bool isDisplay = root.TryGetProperty("isDisplay", out var dp) && dp.GetBoolean();
+
                     if (!string.IsNullOrEmpty(png) && png.StartsWith("data:image"))
                     {
-                        string fragment = $"<img src=\"{png}\" style=\"vertical-align:middle;\" />";
+                        string style = "";
+                        if (!string.IsNullOrEmpty(heightPt)) style += $"height:{heightPt}pt; ";
+                        if (!string.IsNullOrEmpty(widthPt)) style += $"width:{widthPt}pt; ";
+                        if (isDisplay)
+                        {
+                            style += "display:block; margin:6pt auto; ";
+                        }
+                        else if (!string.IsNullOrEmpty(vAlignPt))
+                        {
+                            style += $"vertical-align:{vAlignPt}pt; ";
+                        }
+                        else
+                        {
+                            style += "vertical-align:middle; ";
+                        }
+
+                        string safeSource = System.Net.WebUtility.HtmlEncode(source);
+                        string fragment = $"<img src=\"{png}\" alt=\"[HapiCopi:Math] {safeSource}\" title=\"[HapiCopi:Math] {safeSource}\" style=\"{style.Trim()}\" />";
                         string cfHtml = MarkdownToWordConverter.PackageAsClipboardHtml(fragment);
                         _setClipboard(source, cfHtml);
-                        Program.Log("[MathEditor] Đã copy ảnh công thức vào clipboard.");
+                        Program.Log($"[MathEditor] Đã copy ảnh công thức vào clipboard (Size={heightPt}pt, Display={isDisplay}).");
                     }
                 }
             }
