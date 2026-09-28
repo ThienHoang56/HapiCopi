@@ -173,6 +173,24 @@ namespace HapiCopi
             return success;
         }
 
+        public static void SimulateCtrlV()
+        {
+            try
+            {
+                HapiCopiApplicationContext.IsSimulatingPaste = true;
+                SendKeys.SendWait("^v");
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[SimulateCtrlV LỖI] {ex.Message}");
+            }
+            finally
+            {
+                System.Threading.Thread.Sleep(60);
+                HapiCopiApplicationContext.IsSimulatingPaste = false;
+            }
+        }
+
         /// <summary>
         /// Khôi phục lại clipboard gốc (sử dụng khi quá trình định dạng bị hủy hoặc không thay đổi).
         /// </summary>

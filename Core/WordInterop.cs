@@ -379,5 +379,220 @@ namespace HapiCopi
             }
             return 0;
         }
+
+        public static WordFormulaInfo GetSelectedFormulaInfo()
+        {
+            WordFormulaInfo result = null;
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    object wordAppObj = null;
+                    try
+                    {
+                        Guid clsid = WordClsid;
+                        GetActiveObject(ref clsid, IntPtr.Zero, out wordAppObj);
+                    }
+                    catch
+                    {
+                        return;
+                    }
+
+                    if (wordAppObj == null) return;
+                    dynamic wordApp = wordAppObj;
+                    if (wordApp.Windows == null || wordApp.Windows.Count == 0) return;
+                    dynamic activeWindow = wordApp.ActiveWindow;
+                    if (activeWindow == null) return;
+                    dynamic selection = activeWindow.Selection;
+                    if (selection == null) return;
+
+                    int selType = 0;
+                    try { selType = (int)selection.Type; } catch {}
+                    // wdSelectionIP = 1 (con trỏ đang ở trong text, không chọn shape nào)
+                    if (selType == 1) return;
+
+                    // 1. Kiểm tra InlineShapes (ảnh trong dòng)
+                    if (selection.InlineShapes != null && selection.InlineShapes.Count > 0)
+                    {
+                        dynamic shape = selection.InlineShapes[1];
+                        string alt = shape.AlternativeText ?? shape.Title ?? "";
+                        if (alt.StartsWith("[HapiCopi:Math]"))
+                        {
+                            string formula = alt.Substring("[HapiCopi:Math]".Length).Trim();
+                            formula = System.Net.WebUtility.HtmlDecode(formula);
+                            float fontSize = 11f;
+                            try { fontSize = selection.Font?.Size ?? 11f; } catch {}
+                            result = new WordFormulaInfo
+                            {
+                                Formula = formula,
+                                WidthPt = (float)shape.Width,
+                                HeightPt = (float)shape.Height,
+                                FontSize = fontSize,
+                                IsInline = true
+                            };
+                            return;
+                        }
+                    }
+
+                    // 2. Kiểm tra ShapeRange (ảnh trôi nổi)
+                    if (selection.ShapeRange != null && selection.ShapeRange.Count > 0)
+                    {
+                        dynamic shape = selection.ShapeRange[1];
+                        string alt = shape.AlternativeText ?? shape.Title ?? "";
+                        if (alt.StartsWith("[HapiCopi:Math]"))
+                        {
+                            string formula = alt.Substring("[HapiCopi:Math]".Length).Trim();
+                            formula = System.Net.WebUtility.HtmlDecode(formula);
+                            float fontSize = 11f;
+                            try { fontSize = selection.Font?.Size ?? 11f; } catch {}
+                            result = new WordFormulaInfo
+                            {
+                                Formula = formula,
+                                WidthPt = (float)shape.Width,
+                                HeightPt = (float)shape.Height,
+                                FontSize = fontSize,
+                                IsInline = false
+                            };
+                            return;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"[WordInterop] Lỗi đọc công thức: {ex.Message}");
+                }
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.Start();
+            thread.Join(150);
+            return result;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        public static void ActivateWordWindow()
+        {
+            try
+            {
+                object wordAppObj = null;
+                Guid clsid = WordClsid;
+                GetActiveObject(ref clsid, IntPtr.Zero, out wordAppObj);
+                if (wordAppObj != null)
+                {
+                    dynamic wordApp = wordAppObj;
+                    if (wordApp.ActiveWindow != null)
+                    {
+                        IntPtr hwnd = (IntPtr)wordApp.ActiveWindow.Hwnd;
+                        if (hwnd != IntPtr.Zero)
+                        {
+                            SetForegroundWindow(hwnd);
+                        }
+                    }
+                }
+            }
+            catch {}
+        }
+
+        public static bool ReplaceSelectedFormulaInWord(string pngBase64, string newFormula, float widthPt, float heightPt, float vAlignPt)
+        {
+            bool success = false;
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    object wordAppObj = null;
+                    try
+                    {
+                        Guid clsid = WordClsid;
+                        GetActiveObject(ref clsid, IntPtr.Zero, out wordAppObj);
+                    }
+                    catch { return; }
+
+                    if (wordAppObj == null) return;
+                    dynamic wordApp = wordAppObj;
+                    if (wordApp.Windows == null || wordApp.Windows.Count == 0) return;
+                    dynamic activeWindow = wordApp.ActiveWindow;
+                    if (activeWindow == null) return;
+                    dynamic selection = activeWindow.Selection;
+                    if (selection == null) return;
+
+                    dynamic targetShape = null;
+                    bool isInline = true;
+
+                    if (selection.InlineShapes != null && selection.InlineShapes.Count > 0)
+                    {
+                        targetShape = selection.InlineShapes[1];
+                        isInline = true;
+                    }
+                    else if (selection.ShapeRange != null && selection.ShapeRange.Count > 0)
+                    {
+                        targetShape = selection.ShapeRange[1];
+                        isInline = false;
+                    }
+
+                    if (targetShape == null) return;
+
+                    string rawBase64 = pngBase64;
+                    if (rawBase64.Contains(",")) rawBase64 = rawBase64.Substring(rawBase64.IndexOf(",") + 1);
+                    byte[] bytes = Convert.FromBase64String(rawBase64);
+                    string tempFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "HapiCopi_Formula_Update.png");
+                    System.IO.File.WriteAllBytes(tempFile, bytes);
+
+                    dynamic doc = activeWindow.Document;
+
+                    if (isInline)
+                    {
+                        dynamic range = targetShape.Range;
+                        int start = (int)range.Start;
+                        targetShape.Delete();
+                        dynamic insertRange = doc.Range(start, start);
+                        dynamic newShape = insertRange.InlineShapes.AddPicture(tempFile, false, true);
+                        newShape.AlternativeText = "[HapiCopi:Math] " + newFormula;
+                        newShape.Title = "[HapiCopi:Math] " + newFormula;
+                        if (widthPt > 0) newShape.Width = widthPt;
+                        if (heightPt > 0) newShape.Height = heightPt;
+                        if (vAlignPt != 0)
+                        {
+                            try { newShape.Range.Font.Position = (float)Math.Round(vAlignPt); } catch {}
+                        }
+                        newShape.Select();
+                    }
+                    else
+                    {
+                        dynamic anchor = targetShape.Anchor;
+                        int start = (int)anchor.Start;
+                        targetShape.Delete();
+                        dynamic insertRange = doc.Range(start, start);
+                        dynamic newShape = insertRange.InlineShapes.AddPicture(tempFile, false, true);
+                        newShape.AlternativeText = "[HapiCopi:Math] " + newFormula;
+                        newShape.Title = "[HapiCopi:Math] " + newFormula;
+                        if (widthPt > 0) newShape.Width = widthPt;
+                        if (heightPt > 0) newShape.Height = heightPt;
+                        newShape.Select();
+                    }
+
+                    success = true;
+                    Program.Log("[WordInterop] Đã thay thế công thức trực tiếp trong Word thành công!");
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"[WordInterop] Lỗi thay thế công thức: {ex.Message}");
+                }
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.Start();
+            thread.Join(2500);
+            return success;
+        }
+    }
+
+    public class WordFormulaInfo
+    {
+        public string Formula { get; set; } = "";
+        public float WidthPt { get; set; }
+        public float HeightPt { get; set; }
+        public float FontSize { get; set; } = 11f;
+        public bool IsInline { get; set; } = true;
     }
 }

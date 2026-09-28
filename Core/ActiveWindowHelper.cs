@@ -86,7 +86,7 @@ namespace HapiCopi
     public static class ActiveWindowHelper
     {
         [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
+        public static extern IntPtr GetForegroundWindow();
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]

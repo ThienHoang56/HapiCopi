@@ -755,6 +755,64 @@
             }
         }
 
+        var pngCrcTable = null;
+        function makePngCrcTable() {
+            var c, table = [];
+            for (var n = 0; n < 256; n++) {
+                c = n;
+                for (var k = 0; k < 8; k++) {
+                    c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
+                }
+                table[n] = c;
+            }
+            return table;
+        }
+        function getPngCrc32(buf) {
+            if (!pngCrcTable) pngCrcTable = makePngCrcTable();
+            var c = 0xFFFFFFFF;
+            for (var i = 0; i < buf.length; i++) {
+                c = pngCrcTable[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+            }
+            return (c ^ 0xFFFFFFFF) >>> 0;
+        }
+
+        function injectPngTextChunk(dataUrl, keyword, text) {
+            try {
+                if (!dataUrl || !dataUrl.startsWith('data:image/png;base64,')) return dataUrl;
+                var raw = atob(dataUrl.substring(22));
+                var bytes = new Uint8Array(raw.length);
+                for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+
+                var enc = new TextEncoder();
+                var keyBytes = enc.encode(keyword);
+                var valBytes = enc.encode(text);
+                var dataLen = keyBytes.length + 1 + valBytes.length;
+
+                var chunk = new Uint8Array(12 + dataLen);
+                var dv = new DataView(chunk.buffer);
+                dv.setUint32(0, dataLen);
+                chunk[4] = 116; chunk[5] = 69; chunk[6] = 88; chunk[7] = 116; // 'tEXt'
+                chunk.set(keyBytes, 8);
+                chunk[8 + keyBytes.length] = 0;
+                chunk.set(valBytes, 9 + keyBytes.length);
+
+                var crc = getPngCrc32(chunk.subarray(4, 8 + dataLen));
+                dv.setUint32(8 + dataLen, crc);
+
+                var newBytes = new Uint8Array(bytes.length + chunk.length);
+                newBytes.set(bytes.subarray(0, 33), 0);
+                newBytes.set(chunk, 33);
+                newBytes.set(bytes.subarray(33), 33 + chunk.length);
+
+                var binary = '';
+                var len = newBytes.byteLength;
+                for (var j = 0; j < len; j++) binary += String.fromCharCode(newBytes[j]);
+                return 'data:image/png;base64,' + btoa(binary);
+            } catch (e) {
+                return dataUrl;
+            }
+        }
+
         async function renderLatexToPngAsync(latex, isDisplay, targetFontSize) {
             return new Promise((resolve) => {
                 try {
@@ -808,8 +866,13 @@
                             const ctx = canvas.getContext('2d');
                             ctx.setTransform(retina, 0, 0, retina, 0, 0);
                             ctx.drawImage(image, 0, 0, widthPx, heightPx);
+                            let pngData = canvas.toDataURL('image/png');
+                            try {
+                                pngData = injectPngTextChunk(pngData, 'HapiCopi:Math', clean);
+                            } catch (e) { }
+
                             resolve({
-                                data: canvas.toDataURL('image/png'),
+                                data: pngData,
                                 widthPt: widthPt.toFixed(2),
                                 heightPt: heightPt.toFixed(2),
                                 verticalAlignPt: vAlignPt.toFixed(2),

@@ -12,6 +12,7 @@ namespace HapiCopi
         private readonly NotifyIcon _notifyIcon;
         private readonly ClipboardListener _listener;
         private readonly KeyboardHook _keyboardHook;
+        private readonly MouseHook? _mouseHook;
         private readonly ToolStripMenuItem _pauseMenuItem;
         private readonly ToolStripMenuItem _updateMenuItem;
         private UpdateForm? _updateForm;
@@ -20,6 +21,7 @@ namespace HapiCopi
         private bool _isSimulatingClipboard = false;
         private readonly Dictionary<string, string> _mermaidCache = new Dictionary<string, string>();
         private readonly System.Threading.SynchronizationContext _syncContext;
+        private string? _lastCopiedFormula;
 
         public static bool IsSimulatingPaste { get; set; } = false;
 
@@ -97,6 +99,19 @@ namespace HapiCopi
             // 4. Đăng ký Hook bàn phím bắt sự kiện dán chủ động
             _keyboardHook = new KeyboardHook();
             _keyboardHook.PastePressed += OnPastePressed;
+
+            // 4b. Đăng ký Hook chuột phát hiện click sửa công thức trực tiếp
+            try
+            {
+                _mouseHook = new MouseHook();
+                _mouseHook.WordFormulaClicked += OnWordFormulaClicked;
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[MouseHook LỖI] {ex.Message}");
+            }
+
+            _notifyIcon.BalloonTipClicked += OnBalloonTipClicked;
 
             // Nạp lịch sử từ đĩa vật lý khi khởi động
             try
@@ -201,12 +216,59 @@ namespace HapiCopi
                     _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
                 }
 
+                _mathEditorForm.ResetWordMode();
                 EditorWindow.Present(_mathEditorForm);
                 _mathEditorForm.RequestReady();
             }
             catch (Exception ex)
             {
                 Program.Log($"[MathEditor LỖI] Không mở được cửa sổ: {ex.Message}");
+            }
+        }
+
+        private void OnWordFormulaClicked(WordFormulaInfo info)
+        {
+            _syncContext.Post(_ =>
+            {
+                try
+                {
+                    if (_isPaused) return;
+
+                    _mathEditorForm ??= new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                    if (_mathEditorForm.IsDisposed)
+                    {
+                        _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                    }
+
+                    _mathEditorForm.OpenForWordFormula(info);
+                    Program.Log($"[MouseHook] Đã phát hiện click vào ảnh công thức Word: {info.Formula}");
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"[MouseHook LỖI] Không mở được Math Editor: {ex.Message}");
+                }
+            }, null);
+        }
+
+        private void OnBalloonTipClicked(object? sender, EventArgs e)
+        {
+            if (!string.IsNullOrEmpty(_lastCopiedFormula))
+            {
+                string formula = _lastCopiedFormula;
+                _lastCopiedFormula = null;
+                _syncContext.Post(_ =>
+                {
+                    try
+                    {
+                        _mathEditorForm ??= new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                        if (_mathEditorForm.IsDisposed)
+                        {
+                            _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                        }
+                        _mathEditorForm.OpenForFormulaText(formula);
+                    }
+                    catch { }
+                }, null);
             }
         }
 
@@ -438,6 +500,10 @@ namespace HapiCopi
                 try
                 {
                     _isSimulatingClipboard = true;
+                    if (!string.IsNullOrEmpty(html))
+                    {
+                        FormulaTracker.ScanAndRegisterHtml(html);
+                    }
                     ClipboardHelper.SetOfficeClipboard(text, html);
                 }
                 catch (Exception ex)
@@ -772,7 +838,72 @@ namespace HapiCopi
                     return;
                 }
 
-                if (string.IsNullOrEmpty(originalText) && !hasHtml)
+                byte[]? pngBytes = null;
+                Image? clipImg = null;
+                bool hasImage = false;
+
+                try
+                {
+                    IDataObject? dataObj = Clipboard.GetDataObject();
+                    if (dataObj != null)
+                    {
+                        if (dataObj.GetDataPresent("PNG"))
+                        {
+                            if (dataObj.GetData("PNG") is System.IO.MemoryStream ms)
+                            {
+                                pngBytes = ms.ToArray();
+                                hasImage = true;
+                            }
+                        }
+                        if (dataObj.GetDataPresent(DataFormats.Bitmap))
+                        {
+                            clipImg = Clipboard.GetImage();
+                            if (clipImg != null) hasImage = true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"[Clipboard] Lỗi đọc dữ liệu ảnh: {ex.Message}");
+                }
+
+                // Kiểm tra xem có phải ảnh công thức toán đã copy (từ Google Docs, Web, Paint, v.v.)
+                if (!isStartup && (hasImage || pngBytes != null || clipImg != null))
+                {
+                    if (FormulaTracker.TryIdentifyFormula(pngBytes, clipImg, out string matchedFormula, out float matchedFontSize))
+                    {
+                        IntPtr sourceWindow = ActiveWindowHelper.GetForegroundWindow();
+                        Program.Log($"[FormulaMatch] Tìm thấy công thức toán từ ảnh: '{matchedFormula}' từ ứng dụng {appName}");
+
+                        bool isDocsOrWeb = sourceApp.IsGoogleDocs ||
+                                           appName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
+                                           appName.Equals("msedge", StringComparison.OrdinalIgnoreCase) ||
+                                           appName.Equals("brave", StringComparison.OrdinalIgnoreCase) ||
+                                           appName.Equals("firefox", StringComparison.OrdinalIgnoreCase);
+
+                        _syncContext.Post(_ =>
+                        {
+                            try
+                            {
+                                _mathEditorForm ??= new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                                if (_mathEditorForm.IsDisposed)
+                                {
+                                    _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                                }
+
+                                _mathEditorForm.OpenForFormulaText(matchedFormula, mode: "latex", fontSize: matchedFontSize, isDocs: isDocsOrWeb, sourceWindow: sourceWindow);
+                            }
+                            catch (Exception ex)
+                            {
+                                Program.Log($"[FormulaMatch LỖI] {ex.Message}");
+                            }
+                        }, null);
+
+                        return;
+                    }
+                }
+
+                if (string.IsNullOrEmpty(originalText) && !hasHtml && !hasImage)
                 {
                     Program.Log("Bỏ qua: Clipboard trống.");
                     return;
@@ -792,6 +923,44 @@ namespace HapiCopi
                                        KrokiRenderer.ContainsAnyDiagramHtml(originalHtml);
 
                 bool shouldFormat = isMarkdownOrAi || isUnstructured || isPdfText || containsDiagram || isOfficeOrDocsCopy;
+
+                // Phát hiện xem có copy ảnh công thức đã xuất (Google Docs/Web/Office)
+                if (!isStartup && !string.IsNullOrEmpty(originalHtml) && originalHtml.Contains("[HapiCopi:Math]"))
+                {
+                    var mathMatch = Regex.Match(originalHtml, @"alt=""\[HapiCopi:Math\]\s*([^""]+)""");
+                    if (!mathMatch.Success)
+                    {
+                        mathMatch = Regex.Match(originalHtml, @"title=""\[HapiCopi:Math\]\s*([^""]+)""");
+                    }
+                    if (mathMatch.Success)
+                    {
+                        string formula = System.Net.WebUtility.HtmlDecode(mathMatch.Groups[1].Value);
+                        _lastCopiedFormula = formula;
+                        Program.Log($"[FormulaMatch] Phát hiện HTML chứa công thức: {formula}");
+
+                        IntPtr sourceWindow = ActiveWindowHelper.GetForegroundWindow();
+                        bool isDocsOrWeb = sourceApp.IsGoogleDocs ||
+                                           appName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
+                                           appName.Equals("msedge", StringComparison.OrdinalIgnoreCase) ||
+                                           appName.Equals("brave", StringComparison.OrdinalIgnoreCase) ||
+                                           appName.Equals("firefox", StringComparison.OrdinalIgnoreCase);
+
+                        _syncContext.Post(_ =>
+                        {
+                            try
+                            {
+                                _mathEditorForm ??= new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                                if (_mathEditorForm.IsDisposed)
+                                {
+                                    _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                                }
+                                _mathEditorForm.OpenForFormulaText(formula, mode: "latex", fontSize: 11f, isDocs: isDocsOrWeb, sourceWindow: sourceWindow);
+                            }
+                            catch { }
+                        }, null);
+                        return;
+                    }
+                }
 
                 // Cache dữ liệu gốc để xử lý dán động
                 _lastRawText = originalText;
@@ -1313,6 +1482,7 @@ namespace HapiCopi
                     }
 
                     string cleanPlainText = await MarkdownToWordConverter.ProcessLatexInPlainTextAsync(_lastRawText);
+                    FormulaTracker.ScanAndRegisterHtml(docsHtml);
                     ClipboardHelper.SetOfficeClipboard(cleanPlainText, docsHtml);
                 }
                 else if (appInfo.IsLaTeXEditor)
@@ -1385,6 +1555,7 @@ namespace HapiCopi
                     }
 
                     string cleanPlainText = await MarkdownToWordConverter.ProcessLatexInPlainTextAsync(_lastRawText);
+                    FormulaTracker.ScanAndRegisterHtml(officeHtml);
                     ClipboardHelper.SetOfficeClipboard(cleanPlainText, officeHtml);
                 }
             }
@@ -1582,6 +1753,7 @@ namespace HapiCopi
             try { _notifyIcon.Visible = false; _notifyIcon.Dispose(); } catch { }
             try { _listener.Dispose(); } catch { }
             try { _keyboardHook.Dispose(); } catch { }
+            try { _mouseHook?.Dispose(); } catch { }
             try { WebViewManager.Shutdown(); } catch { }
 
             Program.Log("[Shutdown] Đã thoát sạch.");

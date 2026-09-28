@@ -247,6 +247,64 @@
             insertSnippet(btn.getAttribute('data-snip'));
         });
 
+        var pngCrcTable = null;
+        function makePngCrcTable() {
+            var c, table = [];
+            for (var n = 0; n < 256; n++) {
+                c = n;
+                for (var k = 0; k < 8; k++) {
+                    c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
+                }
+                table[n] = c;
+            }
+            return table;
+        }
+        function getPngCrc32(buf) {
+            if (!pngCrcTable) pngCrcTable = makePngCrcTable();
+            var c = 0xFFFFFFFF;
+            for (var i = 0; i < buf.length; i++) {
+                c = pngCrcTable[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+            }
+            return (c ^ 0xFFFFFFFF) >>> 0;
+        }
+
+        function injectPngTextChunk(dataUrl, keyword, text) {
+            try {
+                if (!dataUrl || !dataUrl.startsWith('data:image/png;base64,')) return dataUrl;
+                var raw = atob(dataUrl.substring(22));
+                var bytes = new Uint8Array(raw.length);
+                for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+
+                var enc = new TextEncoder();
+                var keyBytes = enc.encode(keyword);
+                var valBytes = enc.encode(text);
+                var dataLen = keyBytes.length + 1 + valBytes.length;
+
+                var chunk = new Uint8Array(12 + dataLen);
+                var dv = new DataView(chunk.buffer);
+                dv.setUint32(0, dataLen);
+                chunk[4] = 116; chunk[5] = 69; chunk[6] = 88; chunk[7] = 116; // 'tEXt'
+                chunk.set(keyBytes, 8);
+                chunk[8 + keyBytes.length] = 0;
+                chunk.set(valBytes, 9 + keyBytes.length);
+
+                var crc = getPngCrc32(chunk.subarray(4, 8 + dataLen));
+                dv.setUint32(8 + dataLen, crc);
+
+                var newBytes = new Uint8Array(bytes.length + chunk.length);
+                newBytes.set(bytes.subarray(0, 33), 0);
+                newBytes.set(chunk, 33);
+                newBytes.set(bytes.subarray(33), 33 + chunk.length);
+
+                var binary = '';
+                var len = newBytes.byteLength;
+                for (var j = 0; j < len; j++) binary += String.fromCharCode(newBytes[j]);
+                return 'data:image/png;base64,' + btoa(binary);
+            } catch (e) {
+                return dataUrl;
+            }
+        }
+
         document.getElementById('copyBtn').addEventListener('click', copyImage);
 
         function copyImage() {
@@ -297,6 +355,12 @@
                     ctx.setTransform(r, 0, 0, r, 0, 0);
                     ctx.drawImage(img, 0, 0, W, H);
                     var png = canvas.toDataURL('image/png');
+                    try {
+                        png = injectPngTextChunk(png, 'HapiCopi:Math', input.value);
+                    } catch (e) { }
+
+                    var isWord = !!window._isWordMode;
+                    var isDocs = !!window._isDocsMode;
                     if (window.chrome && window.chrome.webview) {
                         window.chrome.webview.postMessage(JSON.stringify({
                             type: 'copy',
@@ -307,10 +371,18 @@
                             heightPt: hPt.toFixed(2),
                             verticalAlignPt: vAlignPt.toFixed(2),
                             fontSize: fontSize,
-                            isDisplay: isDisplay()
+                            isDisplay: isDisplay(),
+                            isWordUpdate: isWord,
+                            isDocsUpdate: isDocs
                         }));
                     }
-                    statusEl.textContent = 'Đã copy (' + fontSize + 'pt)! Dán vào Word/Docs (Ctrl+V).';
+                    if (isWord) {
+                        statusEl.textContent = 'Đã cập nhật trực tiếp vào Word!';
+                    } else if (isDocs) {
+                        statusEl.textContent = 'Đã cập nhật trực tiếp vào Google Docs!';
+                    } else {
+                        statusEl.textContent = 'Đã copy (' + fontSize + 'pt)! Dán vào Word/Docs (Ctrl+V).';
+                    }
                 };
                 img.onerror = function () { statusEl.innerHTML = '<span class="err">Lỗi rasterize ảnh</span>'; };
                 img.src = url;
@@ -318,6 +390,47 @@
                 statusEl.innerHTML = '<span class="err">Lỗi copy: ' + (e.message || e) + '</span>';
             }
         }
+
+        window._isWordMode = false;
+        window._isDocsMode = false;
+        window.setFormula = function(formula, mode, fontSize, isWord, isDocs) {
+            if (formula) {
+                var input = document.getElementById('input');
+                input.value = formula;
+            }
+            if (mode) {
+                var r = document.querySelector('input[name=mode][value="' + mode + '"]');
+                if (r) r.checked = true;
+            }
+            if (fontSize) {
+                window.setFontSize(fontSize);
+            }
+            window._isWordMode = !!isWord;
+            window._isDocsMode = !!isDocs;
+            var copyBtn = document.getElementById('copyBtn');
+            if (copyBtn) {
+                if (isWord) {
+                    copyBtn.textContent = "💾 Cập nhật vào Word (Ctrl+Enter)";
+                } else if (isDocs) {
+                    copyBtn.textContent = "💾 Cập nhật vào Google Docs (Ctrl+Enter)";
+                } else {
+                    copyBtn.textContent = "Copy ảnh công thức (Ctrl+Enter)";
+                }
+            }
+            render();
+        };
+
+        // Phím tắt: Ctrl+Enter để copy/cập nhật, Esc để đóng cửa sổ
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                copyImage();
+            } else if (e.key === 'Escape') {
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({ type: 'close' }));
+                }
+            }
+        });
 
         window.setFontSize = function(size) {
             var sel = document.getElementById('fontSizeSelect');
