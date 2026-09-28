@@ -27,8 +27,8 @@ namespace HapiCopi
             Text = "HapiCopi - Soạn công thức toán";
             AutoScaleMode = AutoScaleMode.Font;
             AutoScaleDimensions = new SizeF(7F, 17F);
-            Width = 940;
-            Height = 580;
+            Width = 980;
+            Height = 620;
             StartPosition = FormStartPosition.CenterScreen;
 
             try { Icon = UiTheme.AppIcon; } catch { }
@@ -43,6 +43,7 @@ namespace HapiCopi
                 {
                     RequestReady();
                     SyncWordFontSize();
+                    BeginInvoke(new Action(() => _web.Focus()));
                 }
             };
         }
