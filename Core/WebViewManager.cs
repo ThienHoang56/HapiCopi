@@ -222,7 +222,7 @@ namespace HapiCopi
             web.CoreWebView2.Settings.AreDevToolsEnabled = false;
             web.DefaultBackgroundColor = Color.White;
             web.CoreWebView2.WebMessageReceived += onMessage;
-            web.Source = new Uri("http://hapicopi.local/" + pageFileName + "?v=3");
+            web.Source = new Uri("http://hapicopi.local/" + pageFileName + "?v=5");
         }
 
         // Helper để gọi lệnh script JS từ bất kỳ Thread nào và trả về kết quả
