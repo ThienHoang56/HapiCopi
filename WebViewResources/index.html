@@ -690,19 +690,37 @@
                 processContainer(container, c => c.getAttribute('data-latex') || c.textContent || "", isDisplay);
             }
 
-            // Google Search AI Overview math containers (data-xpm-copy-root, data-xpm-latex)
-            let googleMathContainers = doc.querySelectorAll('[data-xpm-copy-root], [data-xpm-latex]');
-            for (let container of googleMathContainers) {
-                let latex = container.getAttribute('data-xpm-latex');
+            // Google Search AI Overview math containers:
+            // ALWAYS replace the outer [data-xpm-copy-root] container so that the inner speech text (<annotation>) and SVG fallback are wiped out!
+            let googleRoots = Array.from(doc.querySelectorAll('[data-xpm-copy-root]'));
+            for (let root of googleRoots) {
+                let latex = root.getAttribute('data-xpm-latex');
+                if (!latex) {
+                    let child = root.querySelector('[data-xpm-latex]');
+                    if (child) latex = child.getAttribute('data-xpm-latex');
+                }
                 if (latex) {
-                    let isDisplay = container.getAttribute('data-xpm-math-type') === 'display';
-                    processContainer(container, () => latex, isDisplay);
+                    let mType = root.getAttribute('data-xpm-math-type') || '';
+                    let isDisplay = mType === 'block' || mType === 'display';
+                    processContainer(root, () => latex, isDisplay);
+                }
+            }
+
+            // Fallback for standalone [data-xpm-latex] that are not inside a [data-xpm-copy-root]
+            let standaloneGoogle = doc.querySelectorAll('[data-xpm-latex]');
+            for (let el of standaloneGoogle) {
+                if (el.closest('[data-xpm-copy-root]') || el.classList.contains('latex-math-image')) continue;
+                let latex = el.getAttribute('data-xpm-latex');
+                if (latex) {
+                    let isDisplay = (el.getAttribute('data-xpm-math-type') || '').includes('block');
+                    processContainer(el, () => latex, isDisplay);
                 }
             }
 
             // MathML tags (<math>)
             let mathmlContainers = doc.querySelectorAll('math');
             for (let container of mathmlContainers) {
+                if (container.closest('[data-xpm-copy-root]') || container.closest('.latex-math-image')) continue;
                 let annotation = container.querySelector('annotation[encoding*="tex"]');
                 let latex = annotation ? annotation.textContent : (container.getAttribute('alttext') || "");
                 if (latex) {
@@ -714,6 +732,7 @@
             // Generic web math attributes (data-latex, data-tex, data-formula)
             let genericAttrMathContainers = doc.querySelectorAll('[data-latex]:not(.latex-math-image):not([data-xpm-latex]):not(.math-inline):not(.math-display):not(.latex-math), [data-tex]:not(mjx-container), [data-formula]');
             for (let container of genericAttrMathContainers) {
+                if (container.closest('[data-xpm-copy-root]')) continue;
                 let latex = container.getAttribute('data-latex') || container.getAttribute('data-tex') || container.getAttribute('data-formula');
                 if (latex) {
                     let isDisplay = container.getAttribute('data-display') === '1' || container.classList.contains('display');
@@ -726,10 +745,13 @@
 
         function cleanRemainingMathMarkup(doc) {
             try {
-                // 1. Dọn dẹp KaTeX còn sót lại: Thay bằng annotation (raw LaTeX) hoặc textContent
+                // 0. Xóa bỏ triệt để mọi thẻ annotation text-to-speech (screen reader text như "negative the fraction with numerator...")
+                doc.querySelectorAll('annotation[encoding="text/plain"], annotation[encoding*="speech"]').forEach(a => a.remove());
+
+                // 1. Dọn dẹp KaTeX còn sót lại: Chỉ lấy annotation TeX hoặc aria-label/textContent
                 let katexContainers = doc.querySelectorAll('.katex');
                 for (let container of katexContainers) {
-                    let annotation = container.querySelector('annotation');
+                    let annotation = container.querySelector('annotation[encoding*="tex"]');
                     let rawText = annotation ? annotation.textContent : (container.getAttribute('aria-label') || container.textContent || "");
                     if (rawText && container.parentNode) {
                         let textNode = doc.createTextNode(rawText);
@@ -781,15 +803,30 @@
                         }
                     }
                 }
+
                 // 4. Dọn dẹp Google Search math còn sót lại: Thay bằng data-xpm-latex
                 let googleRemaining = doc.querySelectorAll('[data-xpm-copy-root], [data-xpm-latex]');
                 for (let container of googleRemaining) {
-                    let latex = container.getAttribute('data-xpm-latex') || "";
-                    if (latex && container.parentNode) {
-                        let textNode = doc.createTextNode(latex);
-                        container.parentNode.replaceChild(textNode, container);
+                    let latex = container.getAttribute('data-xpm-latex');
+                    if (!latex) {
+                        let child = container.querySelector('[data-xpm-latex]');
+                        if (child) latex = child.getAttribute('data-xpm-latex');
+                    }
+                    if (container.parentNode) {
+                        if (latex) {
+                            let textNode = doc.createTextNode(latex);
+                            container.parentNode.replaceChild(textNode, container);
+                        } else {
+                            container.remove();
+                        }
                     }
                 }
+
+                // 5. Xóa bỏ các thẻ math rác hoặc svg ẩn còn sót lại của Google Search
+                doc.querySelectorAll('math, svg[aria-hidden="true"]').forEach(el => {
+                    if (el.closest('.latex-math-image')) return;
+                    el.remove();
+                });
             } catch (e) {
                 console.error("Lỗi trong cleanRemainingMathMarkup:", e);
             }
