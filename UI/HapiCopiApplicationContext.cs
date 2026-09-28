@@ -1634,6 +1634,7 @@ namespace HapiCopi
                         htmlLower.Contains("<em") || htmlLower.Contains("<i>") || htmlLower.Contains("<i ") ||
                         htmlLower.Contains("<a href") ||
                         htmlLower.Contains("katex") || htmlLower.Contains("mathjax") || htmlLower.Contains("mjx-") || htmlLower.Contains("<math") ||
+                        htmlLower.Contains("data-xpm-latex") || htmlLower.Contains("data-latex") || htmlLower.Contains("data-tex") ||
                         (isBrowserCopy && (htmlLower.Contains("<p") || htmlLower.Contains("<br") || htmlLower.Contains("<div") || htmlLower.Contains("<span"))))
                     {
                         Program.Log("Nhận diện qua cấu trúc HTML: Tìm thấy dấu hiệu AI/Markdown/Table/Blockquote/Math/WebPage.");

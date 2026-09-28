@@ -690,6 +690,37 @@
                 processContainer(container, c => c.getAttribute('data-latex') || c.textContent || "", isDisplay);
             }
 
+            // Google Search AI Overview math containers (data-xpm-copy-root, data-xpm-latex)
+            let googleMathContainers = doc.querySelectorAll('[data-xpm-copy-root], [data-xpm-latex]');
+            for (let container of googleMathContainers) {
+                let latex = container.getAttribute('data-xpm-latex');
+                if (latex) {
+                    let isDisplay = container.getAttribute('data-xpm-math-type') === 'display';
+                    processContainer(container, () => latex, isDisplay);
+                }
+            }
+
+            // MathML tags (<math>)
+            let mathmlContainers = doc.querySelectorAll('math');
+            for (let container of mathmlContainers) {
+                let annotation = container.querySelector('annotation[encoding*="tex"]');
+                let latex = annotation ? annotation.textContent : (container.getAttribute('alttext') || "");
+                if (latex) {
+                    let isDisplay = container.getAttribute('display') === 'block';
+                    processContainer(container, () => latex, isDisplay);
+                }
+            }
+
+            // Generic web math attributes (data-latex, data-tex, data-formula)
+            let genericAttrMathContainers = doc.querySelectorAll('[data-latex]:not(.latex-math-image):not([data-xpm-latex]):not(.math-inline):not(.math-display):not(.latex-math), [data-tex]:not(mjx-container), [data-formula]');
+            for (let container of genericAttrMathContainers) {
+                let latex = container.getAttribute('data-latex') || container.getAttribute('data-tex') || container.getAttribute('data-formula');
+                if (latex) {
+                    let isDisplay = container.getAttribute('data-display') === '1' || container.classList.contains('display');
+                    processContainer(container, () => latex, isDisplay);
+                }
+            }
+
             await Promise.all(promises);
         }
 
@@ -748,6 +779,15 @@
                         } else {
                             el.remove();
                         }
+                    }
+                }
+                // 4. Dọn dẹp Google Search math còn sót lại: Thay bằng data-xpm-latex
+                let googleRemaining = doc.querySelectorAll('[data-xpm-copy-root], [data-xpm-latex]');
+                for (let container of googleRemaining) {
+                    let latex = container.getAttribute('data-xpm-latex') || "";
+                    if (latex && container.parentNode) {
+                        let textNode = doc.createTextNode(latex);
+                        container.parentNode.replaceChild(textNode, container);
                     }
                 }
             } catch (e) {
@@ -1061,6 +1101,19 @@
 
                 // Tự động tái cấu trúc bảng biểu giả lập div-based thành table thực tế
                 reconstructDivTables(doc);
+
+                // Chuyển đổi các thẻ div inline bên trong li, p, span thành span để Word và Google Docs không ngắt dòng
+                doc.body.querySelectorAll('p div, li div, span div').forEach(div => {
+                    let style = div.getAttribute('style') || '';
+                    if (style.includes('inline-block') || style.includes('inline') || style.includes('contents') || div.getAttribute('data-xpm-math-type')) {
+                        let span = doc.createElement('span');
+                        while (div.firstChild) span.appendChild(div.firstChild);
+                        for (let attr of Array.from(div.attributes)) {
+                            span.setAttribute(attr.name, attr.value);
+                        }
+                        if (div.parentNode) div.parentNode.replaceChild(span, div);
+                    }
+                });
 
                 // Giải mã và thay thế sơ đồ Mermaid và Kroki từ cache
                 let diagramCache = {};
