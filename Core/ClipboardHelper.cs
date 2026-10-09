@@ -112,19 +112,19 @@ namespace HapiCopi
         /// Đẩy đồng thời văn bản thô (giữ nguyên) và HTML (định dạng Office) vào Clipboard cùng Marker chống đệ quy.
         /// Tự động chạy trên luồng STA nếu luồng gọi hiện tại là MTA.
         /// </summary>
-        public static bool SetOfficeClipboard(string plainText, string officeHtml)
+        public static bool SetOfficeClipboard(string plainText, string officeHtml, Image? image = null)
         {
             if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
             {
                 bool result = false;
-                var thread = new Thread(() => result = SetOfficeClipboard(plainText, officeHtml));
+                var thread = new Thread(() => result = SetOfficeClipboard(plainText, officeHtml, image));
                 thread.SetApartmentState(ApartmentState.STA);
                 thread.Start();
                 thread.Join();
                 return result;
             }
 
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 6; i++)
             {
                 try
                 {
@@ -141,8 +141,14 @@ namespace HapiCopi
                     {
                         dataObject.SetText(plainText, TextDataFormat.UnicodeText);
                     }
+
+                    // 3. Đưa định dạng Bitmap (nếu có) để dán được vào Paint, Photoshop, Telegram, Messenger,...
+                    if (image != null)
+                    {
+                        dataObject.SetImage(image);
+                    }
                     
-                    // 3. Đánh dấu Marker để tránh đệ quy vô hạn
+                    // 4. Đánh dấu Marker để tránh đệ quy vô hạn
                     dataObject.SetData(MarkerFormat, true);
                     
                     // Thực hiện ghi đè Clipboard
@@ -151,7 +157,7 @@ namespace HapiCopi
                 }
                 catch (ExternalException)
                 {
-                    Thread.Sleep(10); // Chờ 10ms nếu bị khóa bởi tiến trình khác
+                    Thread.Sleep(15 * (i + 1)); // Exponential backoff nếu bị khóa bởi tiến trình khác
                 }
                 catch (Exception ex)
                 {

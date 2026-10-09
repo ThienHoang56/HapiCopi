@@ -154,20 +154,35 @@ namespace HapiCopi
             return "";
         }
 
-        public static string GetActiveBrowserUrlWithTimeout(string processName, IntPtr hwnd, int timeoutMs = 300)
+        private static IntPtr _lastUrlHwnd = IntPtr.Zero;
+        private static string _lastCachedUrl = "";
+        private static DateTime _lastUrlTime = DateTime.MinValue;
+
+        public static string GetActiveBrowserUrlWithTimeout(string processName, IntPtr hwnd, int timeoutMs = 250)
         {
-            string url = "";
-            var thread = new System.Threading.Thread(() =>
+            if (hwnd == IntPtr.Zero) return "";
+            if (hwnd == _lastUrlHwnd && (DateTime.Now - _lastUrlTime).TotalSeconds < 4)
             {
-                url = GetActiveBrowserUrl(processName, hwnd);
-            });
-            thread.SetApartmentState(System.Threading.ApartmentState.STA);
-            thread.Start();
-            if (!thread.Join(timeoutMs))
-            {
-                Program.Log($"[UIA] Quá thời hạn truy vấn URL ({timeoutMs}ms) cho {processName}");
-                try { thread.Interrupt(); } catch {}
+                return _lastCachedUrl;
             }
+
+            string url = "";
+            try
+            {
+                var task = System.Threading.Tasks.Task.Run(() => GetActiveBrowserUrl(processName, hwnd));
+                if (task.Wait(timeoutMs))
+                {
+                    url = task.Result;
+                    _lastUrlHwnd = hwnd;
+                    _lastCachedUrl = url;
+                    _lastUrlTime = DateTime.Now;
+                }
+                else
+                {
+                    Program.Log($"[UIA] Quá thời hạn truy vấn URL ({timeoutMs}ms) cho {processName}");
+                }
+            }
+            catch { }
             return url;
         }
 
@@ -205,13 +220,21 @@ namespace HapiCopi
                     }
                 }
 
-                // 4. Lấy Browser URL nếu là trình duyệt
+                // 4. Lấy Browser URL nếu là trình duyệt (Chỉ khi cần thiết và WindowTitle chưa đủ để nhận diện)
                 if (info.ProcessName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
                     info.ProcessName.Equals("msedge", StringComparison.OrdinalIgnoreCase) ||
                     info.ProcessName.Equals("firefox", StringComparison.OrdinalIgnoreCase))
                 {
-                    info.BrowserUrl = GetActiveBrowserUrlWithTimeout(info.ProcessName, hwnd, 300);
-                    Program.Log($"[ActiveWindowHelper] Query URL hoàn tất: \"{info.BrowserUrl}\"");
+                    // Fast-path: Nếu tiêu đề tab trình duyệt đã có tên Google Docs hoặc Word thì bỏ qua UI Automation hoàn toàn
+                    bool alreadyRecognized = info.WindowTitle.Contains("Google Docs", StringComparison.OrdinalIgnoreCase) ||
+                                             info.WindowTitle.Contains("Google Tài liệu", StringComparison.OrdinalIgnoreCase) ||
+                                             info.WindowTitle.Contains(".docx", StringComparison.OrdinalIgnoreCase) ||
+                                             info.WindowTitle.Contains("- Word", StringComparison.OrdinalIgnoreCase);
+
+                    if (!alreadyRecognized)
+                    {
+                        info.BrowserUrl = GetActiveBrowserUrlWithTimeout(info.ProcessName, hwnd, 150);
+                    }
                 }
             }
             catch (Exception ex)

@@ -63,7 +63,7 @@ namespace HapiCopi
             _pauseMenuItem = new ToolStripMenuItem("Tạm dừng", null, OnPauseClicked);
             var historyMenuItem = new ToolStripMenuItem("Lịch sử Clipboard...", null, OnHistoryClicked);
             var mathEditorMenuItem = new ToolStripMenuItem("Soạn công thức toán...", null, OnMathEditorClicked);
-            var abcEditorMenuItem = new ToolStripMenuItem("Soạn bản nhạc (ABC)...", null, OnAbcEditorClicked);
+            var abcEditorMenuItem = new ToolStripMenuItem("🔒 Soạn nhạc (Chưa hoàn thiện)...", null, OnAbcEditorClicked);
             var settingsMenuItem = new ToolStripMenuItem("Cài đặt...", null, OnSettingsClicked);
             _updateMenuItem = new ToolStripMenuItem("Phiên bản & Cập nhật...", null, OnUpdateClicked);
             var exitMenuItem = new ToolStripMenuItem("Thoát", null, OnExitClicked);
@@ -114,26 +114,32 @@ namespace HapiCopi
 
             _notifyIcon.BalloonTipClicked += OnBalloonTipClicked;
 
-            // Nạp lịch sử từ đĩa vật lý khi khởi động
-            try
+            // Nạp lịch sử từ đĩa vật lý ngầm khi khởi động để không làm nghẽn UI STA Thread
+            System.Threading.Tasks.Task.Run(() =>
             {
-                var loaded = HistoryManager.LoadHistory();
-                _clipboardHistory.AddRange(loaded);
-                Program.Log($"[Startup] Đã nạp {_clipboardHistory.Count} mục lịch sử clipboard từ ổ đĩa.");
-            }
-            catch (Exception ex)
-            {
-                Program.Log($"[Startup LỖI] Lỗi nạp lịch sử clipboard: {ex.Message}");
-            }
+                try
+                {
+                    var loaded = HistoryManager.LoadHistory();
+                    _syncContext.Post(_ =>
+                    {
+                        lock (_clipboardHistory)
+                        {
+                            _clipboardHistory.AddRange(loaded);
+                        }
+                        Program.Log($"[Startup] Đã nạp {_clipboardHistory.Count} mục lịch sử clipboard từ ổ đĩa.");
+                    }, null);
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"[Startup LỖI] Lỗi nạp lịch sử clipboard: {ex.Message}");
+                }
+            });
 
             // 5. Mở kênh nhận lệnh từ instance thứ hai (shortcut, bộ cài, bộ gỡ cài đặt)
             Application.ApplicationExit += OnApplicationExit;
             AppInstanceChannel.StartServer(HandleRemoteCommand);
 
-            // 6. Thực hiện xử lý clipboard đang có sẵn ngay khi khởi động
-            ProcessClipboard(isStartup: true);
-
-            // 7. Mở cửa sổ theo lệnh khởi chạy, rồi dò bản cập nhật ở chế độ nền
+            // 6. Mở cửa sổ theo lệnh khởi chạy, rồi dò bản cập nhật ở chế độ nền
             if (startupCommand == AppInstanceChannel.CommandUpdate)
             {
                 OnUpdateClicked(this, EventArgs.Empty);
@@ -155,47 +161,8 @@ namespace HapiCopi
             }
 
             StartUpdateCheck();
-            StartEditorWarmup();
+            // Soạn toán/nhạc sẽ được nạp theo yêu cầu khi người dùng mở (lazy loading) để tối ưu khởi động mượt mà và tiết kiệm RAM.
             MemoryOptimizer.StartPeriodicOptimization();
-        }
-
-        /// <summary>
-        /// Nạp sẵn cửa sổ soạn toán ngoài màn hình ngay khi Chromium sống,
-        /// để lần bấm menu hoặc double-click không phải chờ MathJax.
-        /// (Soạn bản nhạc ABC sẽ được nạp theo yêu cầu khi người dùng mở để tiết kiệm RAM).
-        /// </summary>
-        private void StartEditorWarmup()
-        {
-            System.Threading.Tasks.Task.Run(async () =>
-            {
-                try
-                {
-                    await WebViewManager.EnvironmentTask;
-                }
-                catch
-                {
-                    return;
-                }
-
-                _syncContext.Post(_ =>
-                {
-                    try
-                    {
-                        if (_mathEditorForm == null || _mathEditorForm.IsDisposed)
-                        {
-                            _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
-                            EditorWindow.PrepareOffscreen(_mathEditorForm);
-                        }
-
-                        Program.Log("[Editor] Đã nạp sẵn soạn công thức toán.");
-                        MemoryOptimizer.OptimizeMemory();
-                    }
-                    catch (Exception ex)
-                    {
-                        Program.Log($"[Editor] Không nạp sẵn được: {ex.Message}");
-                    }
-                }, null);
-            });
         }
 
         // ============================
@@ -287,19 +254,111 @@ namespace HapiCopi
         }
 
         // ============================
-        // ABC MUSIC EDITOR
+        // ABC MUSIC EDITOR (TẠM KHÓA THỬ NGHIỆM)
         // ============================
 
         private AbcEditorForm? _abcEditorForm;
+        private static bool _isMusicAdminUnlocked = false;
+
+        private static bool PromptMusicAdminPassword()
+        {
+            if (_isMusicAdminUnlocked) return true;
+
+            using var form = new Form
+            {
+                Text = "🔒 Tính năng đang khóa thử nghiệm",
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false,
+                MinimizeBox = false,
+                StartPosition = FormStartPosition.CenterScreen,
+                ClientSize = new Size(380, 160),
+                ShowInTaskbar = true,
+                BackColor = Color.FromArgb(248, 250, 252)
+            };
+
+            var lblDesc = new Label
+            {
+                Text = "Tính năng Soạn nhạc đang trong giai đoạn hoàn thiện & thử nghiệm nội bộ.\nVui lòng nhập mật khẩu Quản trị viên để mở khóa:",
+                Location = new Point(16, 14),
+                Size = new Size(348, 38),
+                Font = new Font("Segoe UI", 9f, FontStyle.Regular),
+                ForeColor = Color.FromArgb(30, 41, 59)
+            };
+
+            var txtPass = new TextBox
+            {
+                Location = new Point(18, 60),
+                Size = new Size(344, 25),
+                UseSystemPasswordChar = true,
+                Font = new Font("Segoe UI", 10.5f),
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            var btnOk = new Button
+            {
+                Text = "Mở khóa",
+                DialogResult = DialogResult.OK,
+                Location = new Point(176, 106),
+                Size = new Size(95, 32),
+                BackColor = Color.FromArgb(37, 99, 235),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                Cursor = Cursors.Hand
+            };
+            btnOk.FlatAppearance.BorderSize = 0;
+
+            var btnCancel = new Button
+            {
+                Text = "Đóng",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(278, 106),
+                Size = new Size(84, 32),
+                BackColor = Color.FromArgb(241, 245, 249),
+                ForeColor = Color.FromArgb(71, 85, 105),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9f),
+                Cursor = Cursors.Hand
+            };
+            btnCancel.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
+
+            form.Controls.AddRange(new Control[] { lblDesc, txtPass, btnOk, btnCancel });
+            form.AcceptButton = btnOk;
+            form.CancelButton = btnCancel;
+
+            form.Shown += (s, e) => txtPass.Focus();
+
+            if (form.ShowDialog() == DialogResult.OK)
+            {
+                if (txtPass.Text.Trim() == "050605")
+                {
+                    _isMusicAdminUnlocked = true;
+                    return true;
+                }
+
+                MessageBox.Show(
+                    "Mật khẩu quản trị viên không chính xác.\nTính năng tạm thời bị khóa cho đến bản cập nhật tiếp theo.",
+                    "Truy cập bị từ chối",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+
+            return false;
+        }
 
         private void OnAbcEditorClicked(object? sender, EventArgs e)
         {
             try
             {
-                _abcEditorForm ??= new AbcEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                if (!PromptMusicAdminPassword())
+                {
+                    return;
+                }
+
+                _abcEditorForm ??= new AbcEditorForm((text, html, img) => SetClipboardOnStaThread(text, html, img));
                 if (_abcEditorForm.IsDisposed)
                 {
-                    _abcEditorForm = new AbcEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                    _abcEditorForm = new AbcEditorForm((text, html, img) => SetClipboardOnStaThread(text, html, img));
                 }
 
                 EditorWindow.Present(_abcEditorForm);
@@ -441,6 +500,34 @@ namespace HapiCopi
             }
         }
 
+        public static string SanitizeHtmlForHistory(string html)
+        {
+            if (string.IsNullOrEmpty(html)) return "";
+            if (html.Length > 16384)
+            {
+                // Rút gọn các chuỗi ảnh data:image Base64 lớn để tránh phình RAM
+                html = Regex.Replace(html, @"src=""data:image\/[^;]+;base64,[^""]{500,}""",
+                    @"src=""data:image/png;base64,[Ảnh Base64 đã rút gọn trong Lịch sử]""",
+                    RegexOptions.IgnoreCase);
+
+                if (html.Length > 32768)
+                {
+                    html = html.Substring(0, 32768) + "\r\n<!-- [Đã cắt bớt nội dung HTML trong Lịch sử để bảo toàn bộ nhớ] -->";
+                }
+            }
+            return html;
+        }
+
+        public static string SanitizeTextForHistory(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            if (text.Length > 32768)
+            {
+                return text.Substring(0, 32768) + "\r\n... [Đã cắt bớt nội dung văn bản trong Lịch sử để bảo toàn bộ nhớ]";
+            }
+            return text;
+        }
+
         private void AddToHistory(ClipboardHistoryItem item)
         {
             // Kiểm tra cấu hình có bật tính năng ghi nhớ lịch sử không
@@ -451,6 +538,12 @@ namespace HapiCopi
                 HistoryManager.DeletePhysicalFiles();
                 return;
             }
+
+            // Bảo vệ bộ nhớ: Rút gọn dữ liệu lớn trước khi lưu vào danh sách lịch sử RAM
+            item.OriginalText = SanitizeTextForHistory(item.OriginalText);
+            item.OriginalHtml = SanitizeHtmlForHistory(item.OriginalHtml);
+            item.ProcessedText = SanitizeTextForHistory(item.ProcessedText);
+            item.ProcessedHtml = SanitizeHtmlForHistory(item.ProcessedHtml);
 
             _clipboardHistory.Add(item);
             while (_clipboardHistory.Count > MaxHistoryItems)
@@ -507,7 +600,7 @@ namespace HapiCopi
             ProcessClipboard(isStartup: false);
         }
 
-        private void SetClipboardOnStaThread(string text, string html)
+        private void SetClipboardOnStaThread(string text, string html, Image? image = null)
         {
             var thread = new System.Threading.Thread(() =>
             {
@@ -518,7 +611,7 @@ namespace HapiCopi
                     {
                         FormulaTracker.ScanAndRegisterHtml(html);
                     }
-                    ClipboardHelper.SetOfficeClipboard(text, html);
+                    ClipboardHelper.SetOfficeClipboard(text, html, image);
                 }
                 catch (Exception ex)
                 {
@@ -891,43 +984,51 @@ namespace HapiCopi
                                              (DateTime.Now - _awaitingDoubleClickTime).TotalMilliseconds < 2000;
                 _isAwaitingDoubleClickFormula = false;
 
-                if (!isStartup && isDoubleClickTriggered && (hasImage || pngBytes != null || clipImg != null))
+                try
                 {
-                    if (FormulaTracker.TryIdentifyFormula(pngBytes, clipImg, out string matchedFormula, out float matchedFontSize))
+                    if (!isStartup && isDoubleClickTriggered && (hasImage || pngBytes != null || clipImg != null))
                     {
-                        IntPtr sourceWindow = _doubleClickSourceWnd != IntPtr.Zero ? _doubleClickSourceWnd : ActiveWindowHelper.GetForegroundWindow();
-                        Program.Log($"[FormulaMatch] Tìm thấy công thức toán từ nhấp đúp: '{matchedFormula}' từ ứng dụng {appName}");
-
-                        bool isDocsOrWeb = sourceApp.IsGoogleDocs ||
-                                           appName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
-                                           appName.Equals("msedge", StringComparison.OrdinalIgnoreCase) ||
-                                           appName.Equals("brave", StringComparison.OrdinalIgnoreCase) ||
-                                           appName.Equals("firefox", StringComparison.OrdinalIgnoreCase);
-
-                        _syncContext.Post(_ =>
+                        if (FormulaTracker.TryIdentifyFormula(pngBytes, clipImg, out string matchedFormula, out float matchedFontSize))
                         {
-                            try
+                            IntPtr sourceWindow = _doubleClickSourceWnd != IntPtr.Zero ? _doubleClickSourceWnd : ActiveWindowHelper.GetForegroundWindow();
+                            Program.Log($"[FormulaMatch] Tìm thấy công thức toán từ nhấp đúp: '{matchedFormula}' từ ứng dụng {appName}");
+
+                            bool isDocsOrWeb = sourceApp.IsGoogleDocs ||
+                                               appName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
+                                               appName.Equals("msedge", StringComparison.OrdinalIgnoreCase) ||
+                                               appName.Equals("brave", StringComparison.OrdinalIgnoreCase) ||
+                                               appName.Equals("firefox", StringComparison.OrdinalIgnoreCase);
+
+                            _syncContext.Post(_ =>
                             {
-                                _mathEditorForm ??= new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
-                                if (_mathEditorForm.IsDisposed)
+                                try
                                 {
-                                    _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                                    _mathEditorForm ??= new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                                    if (_mathEditorForm.IsDisposed)
+                                    {
+                                        _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
+                                    }
+
+                                    _mathEditorForm.OpenForFormulaText(matchedFormula, mode: "latex", fontSize: matchedFontSize, isDocs: isDocsOrWeb, sourceWindow: sourceWindow);
                                 }
+                                catch (Exception ex)
+                                {
+                                    Program.Log($"[FormulaMatch LỖI] {ex.Message}");
+                                }
+                            }, null);
 
-                                _mathEditorForm.OpenForFormulaText(matchedFormula, mode: "latex", fontSize: matchedFontSize, isDocs: isDocsOrWeb, sourceWindow: sourceWindow);
-                            }
-                            catch (Exception ex)
-                            {
-                                Program.Log($"[FormulaMatch LỖI] {ex.Message}");
-                            }
-                        }, null);
-
-                        return;
+                            return;
+                        }
+                        else
+                        {
+                            Program.Log("[FormulaMatch] Đối tượng nhấp đúp không khớp công thức toán đã đăng ký.");
+                        }
                     }
-                    else
-                    {
-                        Program.Log("[FormulaMatch] Đối tượng nhấp đúp không khớp công thức toán đã đăng ký.");
-                    }
+                }
+                finally
+                {
+                    clipImg?.Dispose();
+                    clipImg = null;
                 }
 
                 if (string.IsNullOrEmpty(originalText) && !hasHtml && !hasImage)
@@ -1013,24 +1114,42 @@ namespace HapiCopi
                             try
                             {
                                 object? data = dataObj.GetData(format);
-                                if (data is string strData)
+                                try
                                 {
-                                    historyItem.ClipboardFormats[format] = strData;
+                                    if (data is string strData)
+                                    {
+                                        if (strData.Length > 8192)
+                                        {
+                                            historyItem.ClipboardFormats[format] = strData.Substring(0, 512) +
+                                                $"\r\n... [Đã tóm tắt: {strData.Length:N0} ký tự để tối ưu RAM]";
+                                        }
+                                        else
+                                        {
+                                            historyItem.ClipboardFormats[format] = strData;
+                                        }
+                                    }
+                                    else if (data is byte[] bytes)
+                                    {
+                                        string hex = string.Join(" ", bytes.Take(32).Select(b => b.ToString("X2")));
+                                        string ascii = System.Text.Encoding.ASCII.GetString(bytes.Take(32).ToArray());
+                                        ascii = new string(ascii.Select(c => char.IsControl(c) ? '.' : c).ToArray());
+                                        historyItem.ClipboardFormats[format] = $"[Mảng Byte: {bytes.Length} bytes]\r\nHex: {hex}{(bytes.Length > 32 ? "..." : "")}\r\nASCII: {ascii}";
+                                    }
+                                    else if (data != null)
+                                    {
+                                        historyItem.ClipboardFormats[format] = $"[{data.GetType().Name}] {data}";
+                                    }
+                                    else
+                                    {
+                                        historyItem.ClipboardFormats[format] = "(null)";
+                                    }
                                 }
-                                else if (data is byte[] bytes)
+                                finally
                                 {
-                                    string hex = string.Join(" ", bytes.Take(32).Select(b => b.ToString("X2")));
-                                    string ascii = System.Text.Encoding.ASCII.GetString(bytes.Take(32).ToArray());
-                                    ascii = new string(ascii.Select(c => char.IsControl(c) ? '.' : c).ToArray());
-                                    historyItem.ClipboardFormats[format] = $"[Mảng Byte: {bytes.Length} bytes]\r\nHex: {hex}{(bytes.Length > 32 ? "..." : "")}\r\nASCII: {ascii}";
-                                }
-                                else if (data != null)
-                                {
-                                    historyItem.ClipboardFormats[format] = $"[{data.GetType().Name}] {data}";
-                                }
-                                else
-                                {
-                                    historyItem.ClipboardFormats[format] = "(null)";
+                                    if (data is IDisposable disposable)
+                                    {
+                                        try { disposable.Dispose(); } catch { }
+                                    }
                                 }
                             }
                             catch (Exception ex)

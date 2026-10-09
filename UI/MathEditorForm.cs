@@ -29,12 +29,32 @@ namespace HapiCopi
             AutoScaleDimensions = new SizeF(7F, 17F);
             Width = 980;
             Height = 620;
+            MinimumSize = new Size(740, 480);
             StartPosition = FormStartPosition.CenterScreen;
 
             try { Icon = UiTheme.AppIcon; } catch { }
 
             _web = new Microsoft.Web.WebView2.WinForms.WebView2 { Dock = DockStyle.Fill };
             Controls.Add(_web);
+
+            HandwritingProfileService.OnProfileUpdated += (count, label) =>
+            {
+                try
+                {
+                    if (IsHandleCreated && !IsDisposed)
+                    {
+                        BeginInvoke(new Action(() =>
+                        {
+                            if (_web.CoreWebView2 != null)
+                            {
+                                string script = $"if (typeof onInkDistilled === 'function') onInkDistilled({count}, {System.Text.Json.JsonSerializer.Serialize(label)});";
+                                _web.CoreWebView2.ExecuteScriptAsync(script);
+                            }
+                        }));
+                    }
+                }
+                catch { }
+            };
 
             FormClosing += OnFormClosing;
             VisibleChanged += (_, _) =>
@@ -205,6 +225,124 @@ namespace HapiCopi
                 if (type == "close")
                 {
                     Hide();
+                    return;
+                }
+
+                if (type == "recognizeInk")
+                {
+                    string img = root.TryGetProperty("image", out var im) ? (im.GetString() ?? "") : "";
+                    string engine = root.TryGetProperty("engine", out var eng) ? (eng.GetString() ?? "ai") : "ai";
+
+                    List<List<PointF>>? strokeList = null;
+                    if (root.TryGetProperty("strokes", out var strokesElem) && strokesElem.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        strokeList = new List<List<PointF>>();
+                        foreach (var sElem in strokesElem.EnumerateArray())
+                        {
+                            var pts = new List<PointF>();
+                            foreach (var pElem in sElem.EnumerateArray())
+                            {
+                                float px = pElem.GetProperty("x").GetSingle();
+                                float py = pElem.GetProperty("y").GetSingle();
+                                pts.Add(new PointF(px, py));
+                            }
+                            if (pts.Count > 0) strokeList.Add(pts);
+                        }
+                    }
+
+                    _ = Task.Run(async () =>
+                    {
+                        var result = await MathVisionService.RecognizeHandwrittenMathAsync(img, engine, strokeList);
+                        string safeLatex = System.Text.Json.JsonSerializer.Serialize(result.latex);
+                        string safeCandidates = System.Text.Json.JsonSerializer.Serialize(result.candidates ?? new List<string>());
+                        string safeError = System.Text.Json.JsonSerializer.Serialize(result.error);
+                        string script = $"if (typeof onInkRecognized === 'function') onInkRecognized({(result.success ? "true" : "false")}, {safeLatex}, {safeCandidates}, {safeError}, {result.elapsedMs});";
+                        try
+                        {
+                            BeginInvoke(new Action(() =>
+                            {
+                                if (_web.CoreWebView2 != null)
+                                {
+                                    _ = _web.CoreWebView2.ExecuteScriptAsync(script);
+                                }
+                            }));
+                        }
+                        catch { }
+                    });
+                    return;
+                }
+
+                if (type == "learnInk")
+                {
+                    string label = root.TryGetProperty("label", out var l) ? (l.GetString() ?? "") : "";
+                    string wrongLabel = root.TryGetProperty("wrongLabel", out var wl) ? (wl.GetString() ?? "") : "";
+                    List<List<PointF>>? strokeList = null;
+                    if (root.TryGetProperty("strokes", out var strokesElem) && strokesElem.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        strokeList = new List<List<PointF>>();
+                        foreach (var sElem in strokesElem.EnumerateArray())
+                        {
+                            var pts = new List<PointF>();
+                            foreach (var pElem in sElem.EnumerateArray())
+                            {
+                                float px = pElem.GetProperty("x").GetSingle();
+                                float py = pElem.GetProperty("y").GetSingle();
+                                pts.Add(new PointF(px, py));
+                            }
+                            if (pts.Count > 0) strokeList.Add(pts);
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(label) && strokeList != null && strokeList.Count > 0)
+                    {
+                        if (!string.IsNullOrEmpty(wrongLabel) && !wrongLabel.Equals(label, StringComparison.OrdinalIgnoreCase))
+                        {
+                            HandwritingProfileService.PenalizeWrongPrediction(wrongLabel, strokeList);
+                        }
+
+                        bool learned = HandwritingProfileService.LearnSample(label, strokeList);
+                        int count = HandwritingProfileService.GetSampleCount();
+                        string script = $"if (typeof onInkLearned === 'function') onInkLearned({(learned ? "true" : "false")}, {count}, {System.Text.Json.JsonSerializer.Serialize(label)});";
+                        BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(script)));
+                    }
+                    return;
+                }
+
+                if (type == "getInkProfile")
+                {
+                    int count = HandwritingProfileService.GetSampleCount();
+                    string script = $"if (typeof onInkProfileLoaded === 'function') onInkProfileLoaded({count});";
+                    BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(script)));
+                    return;
+                }
+
+                if (type == "openProfileFolder")
+                {
+                    try
+                    {
+                        string dir = HandwritingProfileService.ProfileDirectory;
+                        if (!System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = dir,
+                            UseShellExecute = true
+                        });
+                        Program.Log($"[MathEditor] Đã mở thư mục hồ sơ: {dir}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Program.Log($"[MathEditor] Lỗi mở thư mục hồ sơ: {ex.Message}");
+                    }
+                    return;
+                }
+
+                if (type == "clearInkProfile")
+                {
+                    HandwritingProfileService.ClearProfile();
+                    int count = HandwritingProfileService.GetSampleCount();
+                    string script = $"if (typeof onInkProfileLoaded === 'function') onInkProfileLoaded({count});";
+                    BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(script)));
+                    Program.Log("[MathEditor] Đã xóa hồ sơ nét chữ cá nhân về mặc định.");
                     return;
                 }
 

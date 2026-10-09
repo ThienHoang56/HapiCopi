@@ -62,6 +62,15 @@ namespace HapiCopi
                     list = JsonSerializer.Deserialize<List<ClipboardHistoryItem>>(json) ?? new List<ClipboardHistoryItem>();
                     Program.Log($"[HistoryManager] Đã nạp thành công {list.Count} mục lịch sử từ file văn bản rõ.");
                 }
+
+                // Làm sạch và thu gọn các chuỗi Base64 cũ còn sót lại trong lịch sử để tiết kiệm RAM
+                foreach (var item in list)
+                {
+                    item.OriginalText = HapiCopiApplicationContext.SanitizeTextForHistory(item.OriginalText);
+                    item.OriginalHtml = HapiCopiApplicationContext.SanitizeHtmlForHistory(item.OriginalHtml);
+                    item.ProcessedText = HapiCopiApplicationContext.SanitizeTextForHistory(item.ProcessedText);
+                    item.ProcessedHtml = HapiCopiApplicationContext.SanitizeHtmlForHistory(item.ProcessedHtml);
+                }
             }
             catch (Exception ex)
             {

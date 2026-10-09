@@ -64,6 +64,7 @@ $exe = Join-Path $publishDir "HapiCopi.exe"
 $wv = Join-Path $publishDir "WebViewResources"
 if (-not (Test-Path $exe)) { throw "Thiếu HapiCopi.exe trong $publishDir" }
 if (-not (Test-Path (Join-Path $wv "index.html"))) { throw "Thiếu WebViewResources sau publish." }
+if (Test-Path (Join-Path $root ".env")) { Copy-Item (Join-Path $root ".env") (Join-Path $publishDir ".env") -Force }
 
 Write-Host "Publish OK: $publishDir" -ForegroundColor Green
 Get-ChildItem $publishDir -File | Select-Object Name, @{N='MB';E={[math]::Round($_.Length/1MB,1)}} | Format-Table -AutoSize
@@ -91,14 +92,8 @@ if (-not $iscc) {
 }
 
 if (-not $iscc) {
-    Write-Host @"
-
-Chưa tìm thấy ISCC.exe. Cài Inno Setup 6 rồi chạy lại:
-  https://jrsoftware.org/isdl.php
-  hoặc: winget install JRSoftware.InnoSetup
-
-Publish đã xong tại: $publishDir
-"@ -ForegroundColor Red
+    Write-Host "Chưa tìm thấy ISCC.exe. Cài Inno Setup 6 rồi chạy lại: https://jrsoftware.org/isdl.php" -ForegroundColor Red
+    Write-Host "Publish đã xong tại: $publishDir" -ForegroundColor Red
     exit 2
 }
 

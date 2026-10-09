@@ -12,20 +12,20 @@ namespace HapiCopi
     public class AbcEditorForm : Form
     {
         private readonly Microsoft.Web.WebView2.WinForms.WebView2 _web;
-        private readonly Action<string, string> _setClipboard;
+        private readonly Action<string, string, Image?> _setClipboard;
         private bool _ready;
         private bool _attaching;
 
-        public AbcEditorForm(Action<string, string> setClipboard)
+        public AbcEditorForm(Action<string, string, Image?> setClipboard)
         {
             _setClipboard = setClipboard;
 
-            Text = "HapiCopi - Soạn bản nhạc (ABC notation)";
+            Text = "HapiCopi Studio - Soạn bản nhạc & Ký âm (Chuẩn MuseScore)";
             AutoScaleMode = AutoScaleMode.Font;
             AutoScaleDimensions = new SizeF(7F, 17F);
-            Width = 1140;
-            Height = 740;
-            MinimumSize = new Size(880, 560);
+            Width = 1200;
+            Height = 760;
+            MinimumSize = new Size(920, 580);
             StartPosition = FormStartPosition.CenterScreen;
 
             try { Icon = UiTheme.AppIcon; } catch { }
@@ -40,9 +40,10 @@ namespace HapiCopi
                 {
                     if (_web.CoreWebView2 != null)
                     {
-                        try { _web.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal; } catch { }
+                        try { _web.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low; } catch { }
                     }
                     RequestReady();
+                    BeginInvoke(new Action(() => _web.Focus()));
                 }
                 else
                 {
@@ -50,7 +51,7 @@ namespace HapiCopi
                     {
                         try { _web.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low; } catch { }
                     }
-                    MemoryOptimizer.OptimizeMemory();
+                    MemoryOptimizer.OptimizeMemory(aggressive: true);
                 }
             };
         }
@@ -114,8 +115,33 @@ namespace HapiCopi
                     {
                         string fragment = $"<img src=\"{png}\" style=\"display:block;\" />";
                         string cfHtml = MarkdownToWordConverter.PackageAsClipboardHtml(fragment);
-                        _setClipboard(source, cfHtml);
-                        Program.Log("[AbcEditor] Đã copy ảnh bản nhạc vào clipboard.");
+
+                        Image? img = null;
+                        try
+                        {
+                            int commaIdx = png.IndexOf(',');
+                            if (commaIdx != -1)
+                            {
+                                byte[] bytes = Convert.FromBase64String(png.Substring(commaIdx + 1));
+                                using var ms = new System.IO.MemoryStream(bytes);
+                                using var temp = new Bitmap(ms);
+                                img = new Bitmap(temp); // Nhân bản Bitmap độc lập khỏi MemoryStream
+                            }
+                        }
+                        catch (Exception exImg)
+                        {
+                            Program.Log($"[AbcEditor] Không tạo được Bitmap từ PNG: {exImg.Message}");
+                        }
+
+                        try
+                        {
+                            _setClipboard(source, cfHtml, img);
+                            Program.Log("[AbcEditor] Đã copy ảnh bản nhạc (HTML + Bitmap) vào clipboard.");
+                        }
+                        finally
+                        {
+                            img?.Dispose();
+                        }
                     }
                 }
             }

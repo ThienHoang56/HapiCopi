@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace HapiCopi
 {
     /// <summary>
-    /// Bộ tối ưu hóa và thu hồi bộ nhớ RAM tự động cho HapiCopi và toàn bộ cây tiến trình Chromium WebView2.
+    /// Bộ tối ưu hóa và thu hồi bộ nhớ RAM tự động cho HapiCopi an toàn, không gây khựng hệ điều hành.
     /// </summary>
     public static class MemoryOptimizer
     {
@@ -15,30 +15,20 @@ namespace HapiCopi
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool EmptyWorkingSet(IntPtr hProcess);
 
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, int processId);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool CloseHandle(IntPtr hObject);
-
-        private const uint PROCESS_SET_QUOTA = 0x0100;
-        private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
-
         private static DateTime _lastTrimTime = DateTime.MinValue;
         private static readonly object _trimLock = new object();
         private static System.Threading.Timer? _idleTimer;
         private static System.Threading.Timer? _debounceTimer;
 
         /// <summary>
-        /// Khởi động bộ giám sát thu hồi RAM định kỳ khi app chạy ngầm (mỗi 3 phút).
+        /// Khởi động bộ giám sát thu hồi RAM định kỳ khi app chạy ngầm (mỗi 3 phút, bắt đầu sau 3 phút khởi động để không ảnh hưởng startup).
         /// </summary>
         public static void StartPeriodicOptimization()
         {
             _idleTimer = new System.Threading.Timer(_ =>
             {
                 OptimizeMemory(aggressive: false);
-            }, null, TimeSpan.FromSeconds(10), TimeSpan.FromMinutes(3));
+            }, null, TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(3));
         }
 
         /// <summary>
@@ -57,13 +47,15 @@ namespace HapiCopi
         }
 
         /// <summary>
-        /// Thu dọn rác .NET và giải phóng Working Set về OS cho cả HapiCopi lẫn các tiến trình msedgewebview2.
+        /// Thu dọn rác .NET và giải phóng Working Set về OS cho HapiCopi.
+        /// Tuyệt đối không gọi EmptyWorkingSet lên các tiến trình msedgewebview2 toàn hệ thống
+        /// để tránh làm nghẽn/lag các phần mềm khác (Teams, Edge, Outlook, Widgets).
         /// </summary>
         public static void OptimizeMemory(bool aggressive = false)
         {
             lock (_trimLock)
             {
-                if (!aggressive && (DateTime.Now - _lastTrimTime).TotalSeconds < 2)
+                if (!aggressive && (DateTime.Now - _lastTrimTime).TotalSeconds < 30)
                 {
                     return;
                 }
@@ -74,61 +66,31 @@ namespace HapiCopi
             {
                 try
                 {
-                    // 1. Dọn rác heap .NET
-                    GC.Collect(1, GCCollectionMode.Optimized, false);
-
-                    // 2. Thu hồi Working Set của chính tiến trình HapiCopi
-                    using (var current = Process.GetCurrentProcess())
+                    if (aggressive)
                     {
-                        EmptyWorkingSet(current.Handle);
-                    }
+                        // 1. Dọn rác heap .NET (Bao gồm Generation 2 và LOH - Large Object Heap nơi chứa mảng byte và chuỗi Base64 lớn)
+                        System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+                        GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+                        GC.WaitForPendingFinalizers();
+                        GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
 
-                    // 3. Thu hồi Working Set của toàn bộ các tiến trình con Chromium WebView2
-                    TrimWebViewProcesses();
+                        // 2. Thu hồi Working Set của chính tiến trình HapiCopi về OS
+                        using (var current = Process.GetCurrentProcess())
+                        {
+                            EmptyWorkingSet(current.Handle);
+                        }
+                    }
+                    else
+                    {
+                        // Dọn dẹp nhẹ định kỳ: không chặn luồng, không nén heap LOH, không ép EmptyWorkingSet
+                        GC.Collect(1, GCCollectionMode.Optimized, blocking: false);
+                    }
                 }
                 catch (Exception ex)
                 {
                     Program.Log($"[MemoryOptimizer LỖI] {ex.Message}");
                 }
             });
-        }
-
-        private static void TrimWebViewProcesses()
-        {
-            try
-            {
-                var webviews = Process.GetProcessesByName("msedgewebview2");
-                foreach (var p in webviews)
-                {
-                    try
-                    {
-                        TrimProcess(p.Id);
-                    }
-                    catch { }
-                    finally
-                    {
-                        p.Dispose();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Program.Log($"[MemoryOptimizer TrimWebView] {ex.Message}");
-            }
-        }
-
-        private static bool TrimProcess(int pid)
-        {
-            IntPtr hProc = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
-            if (hProc == IntPtr.Zero) return false;
-            try
-            {
-                return EmptyWorkingSet(hProc);
-            }
-            finally
-            {
-                CloseHandle(hProc);
-            }
         }
     }
 }

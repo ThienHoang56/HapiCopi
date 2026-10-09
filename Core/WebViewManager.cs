@@ -87,12 +87,20 @@ namespace HapiCopi
             return new CoreWebView2EnvironmentOptions
             {
                 AdditionalBrowserArguments =
-                    "--disable-features=Translate,OptimizationHints,MediaRouter,CalculateNativeWinOcclusion,SpareRendererForSitePerProcess " +
+                    "--disable-gpu " +
+                    "--disable-gpu-compositing " +
+                    "--disable-gpu-rasterization " +
+                    "--disable-gpu-shader-disk-cache " +
+                    "--disable-software-rasterizer " +
+                    "--disable-features=Translate,OptimizationHints,MediaRouter,CalculateNativeWinOcclusion,SpareRendererForSitePerProcess,IsolateOrigins,site-per-process " +
                     "--disable-background-networking " +
                     "--disable-component-update " +
                     "--disable-sync " +
                     "--renderer-process-limit=1 " +
-                    "--js-flags=\"--max-old-space-size=64\""
+                    "--process-per-site " +
+                    "--disk-cache-size=10485760 " +
+                    "--media-cache-size=10485760 " +
+                    "--js-flags=\"--max-old-space-size=48 --expose-gc\""
             };
         }
 
@@ -209,6 +217,7 @@ namespace HapiCopi
             }
 
             await web.EnsureCoreWebView2Async(env);
+            try { web.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low; } catch { }
 
             string localFolder = ResourcePaths.GetWebViewResourcesFolder();
             if (!File.Exists(Path.Combine(localFolder, pageFileName)))

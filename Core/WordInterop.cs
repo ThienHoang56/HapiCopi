@@ -25,8 +25,21 @@ namespace HapiCopi
         [DllImport("ole32.dll", PreserveSig = false)]
         private static extern void GetActiveObject(ref Guid rclsid, IntPtr pvReserved, [MarshalAs(UnmanagedType.IUnknown)] out object ppunk);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+
+        public static bool IsWordRunning()
+        {
+            return FindWindow("OpusApp", null) != IntPtr.Zero;
+        }
+
         public static WordFormatInfo GetCurrentFormatWithTimeout(int timeoutMs = 80)
         {
+            if (!IsWordRunning())
+            {
+                return new WordFormatInfo { IsFromActiveWord = false };
+            }
+
             WordFormatInfo result = null;
             var thread = new System.Threading.Thread(() =>
             {
@@ -48,10 +61,12 @@ namespace HapiCopi
         {
             var info = new WordFormatInfo(); // Khởi tạo với giá trị mặc định làm phương án dự phòng (fallback)
 
+            if (!IsWordRunning()) return info;
+
+            object wordAppObj = null;
             try
             {
                 // Gọi API COM để lấy instance Word đang chạy
-                object wordAppObj = null;
                 try
                 {
                     Guid clsid = WordClsid;
@@ -171,6 +186,13 @@ namespace HapiCopi
             catch (Exception ex)
             {
                 Program.Log($"Lỗi trong WordInterop.GetCurrentFormat: {ex.Message}");
+            }
+            finally
+            {
+                if (wordAppObj != null)
+                {
+                    try { Marshal.ReleaseComObject(wordAppObj); } catch { }
+                }
             }
 
             return info;

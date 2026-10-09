@@ -9,6 +9,7 @@ namespace HapiCopi
 {
     public class FormulaRecord
     {
+        public string Hash { get; set; } = "";
         public string Latex { get; set; } = "";
         public float FontSize { get; set; } = 11f;
         public float WidthPt { get; set; }
@@ -49,6 +50,7 @@ namespace HapiCopi
                 string hash = ComputeHash(bytes);
                 var rec = new FormulaRecord
                 {
+                    Hash = hash,
                     Latex = latex,
                     FontSize = fontSize,
                     WidthPt = widthPt,
@@ -64,7 +66,12 @@ namespace HapiCopi
                     _recentList.Insert(0, rec);
                     while (_recentList.Count > MaxRecent)
                     {
+                        var lastRec = _recentList[_recentList.Count - 1];
                         _recentList.RemoveAt(_recentList.Count - 1);
+                        if (!string.IsNullOrEmpty(lastRec.Hash))
+                        {
+                            _byHash.Remove(lastRec.Hash);
+                        }
                     }
                 }
                 Program.Log($"[FormulaTracker] Đã đăng ký nhận diện công thức: '{latex}' ({w}x{h} px, hash={hash.Substring(0, 8)}...)");
@@ -78,6 +85,13 @@ namespace HapiCopi
         public static void ScanAndRegisterHtml(string html)
         {
             if (string.IsNullOrEmpty(html)) return;
+
+            // Fast-path: Bỏ qua nếu HTML không chứa dấu hiệu nhận biết công thức của HapiCopi
+            if (html.IndexOf("[HapiCopi:Math]", StringComparison.OrdinalIgnoreCase) < 0 &&
+                html.IndexOf("data-latex", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return;
+            }
 
             try
             {

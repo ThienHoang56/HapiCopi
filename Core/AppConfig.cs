@@ -16,20 +16,34 @@ namespace HapiCopi
 
         public static string ConfigPath => Path.Combine(ConfigDirectory, "config.env");
 
+        private static readonly Dictionary<string, string?> _cache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        private static readonly object _cacheLock = new object();
+
         /// <summary>
-        /// Lấy giá trị cấu hình theo thứ tự ưu tiên: ENV > config người dùng > .env dự án.
+        /// Lấy giá trị cấu hình theo thứ tự ưu tiên: ENV > config người dùng > .env dự án (có cache in-memory).
         /// </summary>
         public static string? Get(string key)
         {
+            lock (_cacheLock)
+            {
+                if (_cache.TryGetValue(key, out var cachedVal))
+                {
+                    return cachedVal;
+                }
+            }
+
             var fromEnv = Environment.GetEnvironmentVariable(key);
             if (!string.IsNullOrWhiteSpace(fromEnv))
             {
-                return fromEnv.Trim();
+                string res = fromEnv.Trim();
+                lock (_cacheLock) { _cache[key] = res; }
+                return res;
             }
 
             var fromUserConfig = ReadKeyFromFile(ConfigPath, key);
             if (!string.IsNullOrWhiteSpace(fromUserConfig))
             {
+                lock (_cacheLock) { _cache[key] = fromUserConfig; }
                 return fromUserConfig;
             }
 
@@ -38,19 +52,44 @@ namespace HapiCopi
             var fromDotEnv = ReadKeyFromFile(dotEnvPath, key);
             if (!string.IsNullOrWhiteSpace(fromDotEnv))
             {
+                lock (_cacheLock) { _cache[key] = fromDotEnv; }
                 return fromDotEnv;
             }
 
+            // Fallback dev: tìm file .env ở thư mục gốc dự án
+            try
+            {
+                var dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+                var root = dir.Parent?.Parent?.Parent;
+                if (root != null)
+                {
+                    var devDotEnv = Path.Combine(root.FullName, ".env");
+                    var fromDev = ReadKeyFromFile(devDotEnv, key);
+                    if (!string.IsNullOrWhiteSpace(fromDev))
+                    {
+                        lock (_cacheLock) { _cache[key] = fromDev; }
+                        return fromDev;
+                    }
+                }
+            }
+            catch { }
+
+            lock (_cacheLock) { _cache[key] = null; }
             return null;
         }
 
         /// <summary>
-        /// Ghi (thêm mới hoặc cập nhật) một giá trị cấu hình vào file config người dùng.
+        /// Ghi (thêm mới hoặc cập nhật) một giá trị cấu hình vào file config người dùng và cập nhật cache.
         /// </summary>
         public static void Set(string key, string? value)
         {
             try
             {
+                lock (_cacheLock)
+                {
+                    _cache[key] = value?.Trim();
+                }
+
                 Directory.CreateDirectory(ConfigDirectory);
 
                 var entries = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

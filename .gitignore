@@ -33,6 +33,10 @@ test_*.js
 # Publish / installer artifacts (không commit)
 dist/
 artifacts/
+.prototype/publish/
+.prototype/bin/
+.prototype/obj/
 
 # Ghi chú ý tưởng cá nhân
 idea/
+

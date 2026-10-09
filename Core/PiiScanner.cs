@@ -34,20 +34,27 @@ namespace HapiCopi
         {
             if (!HasPii || string.IsNullOrEmpty(originalText)) return originalText;
 
-            char[] chars = originalText.ToCharArray();
-            // Sắp xếp matches theo vị trí từ cuối lên đầu để tránh lệch index
-            foreach (var match in Matches.OrderByDescending(m => m.StartIndex))
+            var sorted = Matches.OrderBy(m => m.StartIndex).ToList();
+            var sb = new System.Text.StringBuilder(originalText.Length);
+            int cursor = 0;
+
+            foreach (var match in sorted)
             {
-                if (match.StartIndex >= 0 && match.StartIndex + match.Length <= chars.Length)
+                if (match.StartIndex < cursor) continue; // Bỏ qua trùng lặp/overlap
+                if (match.StartIndex > cursor)
                 {
-                    string masked = match.MaskedValue;
-                    string before = new string(chars, 0, match.StartIndex);
-                    string after = new string(chars, match.StartIndex + match.Length, chars.Length - match.StartIndex - match.Length);
-                    string newText = before + masked + after;
-                    chars = newText.ToCharArray();
+                    sb.Append(originalText, cursor, match.StartIndex - cursor);
                 }
+                sb.Append(match.MaskedValue);
+                cursor = match.StartIndex + match.Length;
             }
-            return new string(chars);
+
+            if (cursor < originalText.Length)
+            {
+                sb.Append(originalText, cursor, originalText.Length - cursor);
+            }
+
+            return sb.ToString();
         }
 
         /// <summary>

@@ -40,24 +40,30 @@
 
         /* Top Toolbar */
         .toolbar {
-            display: flex; align-items: center; gap: 10px;
-            padding: 7px 12px; background: #ffffff; border-bottom: 1px solid #e2e8f0;
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            padding: 6px 12px; background: #ffffff; border-bottom: 1px solid #e2e8f0;
             flex-wrap: wrap; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
             user-select: none;
+        }
+        .toolbar-left {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1; min-width: 0;
+        }
+        .toolbar-right {
+            display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto;
         }
 
         /* Mode Switcher Pills */
         .mode-switch {
             display: inline-flex; background: #f1f5f9; padding: 3px;
             border-radius: 8px; border: 1px solid #e2e8f0; gap: 2px;
-            user-select: none;
+            user-select: none; flex-shrink: 0;
         }
         .mode-tab {
             border: none; background: transparent; padding: 5px 11px;
             border-radius: 6px; font-size: 12px; font-weight: 600;
             color: #64748b; cursor: pointer; transition: all 0.15s ease;
             display: inline-flex; align-items: center; gap: 6px;
-            user-select: none;
+            user-select: none; white-space: nowrap;
         }
         .mode-tab svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2; fill: none; }
         .mode-tab:hover { color: #1e293b; background: rgba(255,255,255,0.7); }
@@ -69,14 +75,14 @@
         .tb-item {
             display: inline-flex; align-items: center; gap: 5px;
             font-size: 12px; color: #334155; cursor: pointer;
-            user-select: none;
+            user-select: none; white-space: nowrap; flex-shrink: 0;
         }
         .tb-item input[type="checkbox"] { cursor: pointer; }
 
         .select-input {
             padding: 3px 8px; border: 1px solid #cbd5e1; border-radius: 6px;
             font-size: 12px; background: #fff; color: #1e293b; cursor: pointer;
-            outline: none; transition: border-color 0.15s;
+            outline: none; transition: border-color 0.15s; flex-shrink: 0;
         }
         .select-input:focus { border-color: #2563eb; }
 
@@ -84,18 +90,19 @@
             padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
             background: #ffffff; font-size: 12px; color: #475569; cursor: pointer;
             display: inline-flex; align-items: center; gap: 5px;
-            transition: all 0.15s; user-select: none;
+            transition: all 0.15s; user-select: none; white-space: nowrap; flex-shrink: 0;
         }
         .tb-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; }
         .tb-btn:hover { background: #f1f5f9; color: #1e293b; border-color: #94a3b8; }
         .tb-btn.active { background: #eff6ff; color: #2563eb; border-color: #93c5fd; }
 
         #copyBtn {
-            margin-left: auto; padding: 7px 16px; border: none; border-radius: 7px;
+            padding: 6px 14px; border: none; border-radius: 7px;
             background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
             color: #fff; font-size: 12.5px; font-weight: 600; cursor: pointer;
             box-shadow: 0 2px 4px rgba(37,99,235,0.25);
             display: inline-flex; align-items: center; gap: 6px;
+            white-space: nowrap; flex-shrink: 0;
             transition: all 0.15s ease; user-select: none;
         }
         #copyBtn svg { width: 15px; height: 15px; stroke: currentColor; stroke-width: 2; fill: none; }
@@ -107,13 +114,182 @@
 
         #status { font-size: 12px; color: #64748b; font-weight: 500; }
 
+        /* Ink Canvas / Handwriting */
+        .ink-tool-btn, .ink-action-btn {
+            padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 6px;
+            background: #ffffff; font-size: 11.5px; color: #475569; cursor: pointer;
+            display: inline-flex; align-items: center; gap: 4px;
+            transition: all 0.12s; user-select: none; white-space: nowrap; flex-shrink: 0;
+        }
+        .ink-tool-btn svg, .ink-action-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; }
+        .ink-tool-btn:hover, .ink-action-btn:hover { background: #f1f5f9; color: #0f172a; border-color: #94a3b8; }
+        .ink-tool-btn.active { background: #eff6ff; color: #2563eb; border-color: #3b82f6; font-weight: 600; }
+        .ink-tool-btn:active, .ink-action-btn:active { transform: translateY(1px); }
+
+        .ink-canvas-wrap {
+            position: relative; width: 100%;
+            height: clamp(220px, 34vh, 400px);
+            background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 8px;
+            overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,0.03);
+            background-image: radial-gradient(#e2e8f0 1.2px, transparent 1.2px);
+            background-size: 20px 20px;
+        }
+        .ink-canvas-wrap:focus-within { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+
+        .ink-toolbar {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 6px;
+        }
+        .ink-tools-group {
+            display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+        }
+        .ink-engine-group {
+            display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+        }
+
+        /* Dedicated Recognition Result, Feedback & Relearning Card */
+        .ink-feedback-card {
+            background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px;
+            padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        }
+        .ink-feedback-header {
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 11.5px; color: #475569; gap: 6px; flex-wrap: wrap;
+        }
+        .ink-feedback-title {
+            display: flex; align-items: center; gap: 6px; font-weight: 500;
+        }
+        .dot-indicator {
+            width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block; flex-shrink: 0;
+        }
+        .dot-indicator.analyzing { background: #f59e0b; animation: pulse 1s infinite; }
+        .dot-indicator.error { background: #ef4444; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        .ink-feedback-meta {
+            display: flex; align-items: center; gap: 8px;
+        }
+        .ink-profile-pill {
+            padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 6px;
+            background: #ffffff; font-size: 11px; font-weight: 600; color: #334155;
+            cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+            transition: all 0.15s ease; user-select: none; white-space: nowrap;
+        }
+        .ink-profile-pill:hover {
+            background: #eff6ff; border-color: #3b82f6; color: #1d4ed8;
+            box-shadow: 0 1px 3px rgba(37,99,235,0.15);
+        }
+
+        .ink-correction-bar {
+            display: flex; align-items: center; gap: 6px; width: 100%;
+        }
+        .correction-label {
+            font-size: 11.5px; font-weight: 600; color: #475569; white-space: nowrap; flex-shrink: 0;
+        }
+        .ink-formula-input {
+            flex: 1; min-width: 0; padding: 5px 9px;
+            font-family: 'Consolas', 'Courier New', monospace; font-size: 13.5px;
+            border: 1.5px solid #cbd5e1; border-radius: 6px;
+            background: #ffffff; color: #0f172a; outline: none;
+            transition: all 0.15s ease;
+        }
+        .ink-formula-input:focus {
+            border-color: #2563eb; box-shadow: 0 0 0 2.5px rgba(37,99,235,0.15);
+        }
+        .ink-learn-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 12px; border: 1px solid #cbd5e1; border-radius: 6px;
+            background: #ffffff; color: #334155; font-size: 12px; font-weight: 500;
+            cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all 0.15s ease;
+        }
+        .ink-learn-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; }
+        .ink-learn-btn:hover {
+            background: #eff6ff; border-color: #2563eb; color: #1d4ed8;
+            transform: translateY(-1px); box-shadow: 0 2px 4px rgba(37,99,235,0.12);
+        }
+        .ink-learn-btn:active { transform: translateY(0); }
+        .ink-candidates-bar {
+            display: none; align-items: center; gap: 6px; width: 100%;
+            padding-top: 6px; border-top: 1px dashed #cbd5e1;
+            font-size: 11.5px;
+        }
+        .ink-cand-label {
+            font-size: 11px; font-weight: 600; color: #64748b; white-space: nowrap; flex-shrink: 0;
+        }
+        .ink-cand-pills-list {
+            display: flex; align-items: center; gap: 5px; flex-wrap: wrap; flex: 1; min-width: 0;
+        }
+        .ink-cand-pill {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 2.5px 8px; border: 1px solid #cbd5e1; border-radius: 5px;
+            background: #ffffff; color: #1e293b; font-family: 'Cambria Math', 'Consolas', monospace;
+            font-size: 12.5px; font-weight: 500; cursor: pointer; transition: all 0.12s ease;
+            white-space: nowrap; user-select: none;
+        }
+        .ink-cand-pill:hover {
+            background: #eff6ff; border-color: #2563eb; color: #1d4ed8;
+            transform: translateY(-1px); box-shadow: 0 1px 3px rgba(37,99,235,0.12);
+        }
+        .ink-cand-pill:active { transform: translateY(0); }
+        .ink-cloud-fallback-btn {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 3px 8px; border: 1px solid #cbd5e1; border-radius: 5px;
+            background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 500;
+            cursor: pointer; transition: all 0.12s ease; margin-left: auto; flex-shrink: 0;
+        }
+        .ink-cloud-fallback-btn:hover {
+            background: #e0f2fe; border-color: #0284c7; color: #0369a1;
+            box-shadow: 0 1px 3px rgba(2,132,199,0.15);
+        }
+        .ink-cloud-fallback-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; }
+
+        /* Floating Toast */
+        .ink-toast {
+            position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+            padding: 9px 15px; border-radius: 8px; font-size: 12.5px; font-weight: 500;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.18); opacity: 0; transform: translateY(12px);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); pointer-events: none;
+        }
+        .ink-toast.show { opacity: 1; transform: translateY(0); }
+        .ink-toast.success { background: #065f46; color: #ecfdf5; border: 1px solid #059669; }
+        .ink-toast.warn { background: #92400e; color: #fffbeb; border: 1px solid #d97706; }
+        .ink-toast.info { background: #1e3a8a; color: #eff6ff; border: 1px solid #3b82f6; }
+
         /* Main Workspace */
-        .main { flex: 1; display: flex; min-height: 0; }
+        .main {
+            flex: 1; display: flex; min-height: 0; width: 100%;
+        }
 
         /* Left Column: Editor */
         .editor-col {
-            width: 48%; display: flex; flex-direction: column;
+            flex: 1.15; min-width: 360px; max-width: 62%;
+            display: flex; flex-direction: column;
             border-right: 1px solid #e2e8f0; background: #ffffff;
+            min-height: 0;
+        }
+
+        /* Right Column: Preview */
+        .preview-col {
+            flex: 0.85; min-width: 280px;
+            display: flex; flex-direction: column;
+            background: #ffffff; min-height: 0;
+        }
+
+        /* Responsive Breakpoints */
+        @media (max-width: 860px) {
+            .toolbar { gap: 6px; padding: 5px 8px; }
+            .mode-tab { padding: 4px 7px; font-size: 11px; gap: 4px; }
+            .tb-btn { padding: 3px 7px; font-size: 11px; }
+            #copyBtn { padding: 5px 10px; font-size: 11.5px; }
+            .editor-col { flex: 1.2; min-width: 320px; }
+            .preview-col { flex: 0.8; min-width: 240px; }
+        }
+        @media (max-width: 740px) {
+            .main { flex-direction: column; overflow-y: auto; }
+            .editor-col { max-width: 100%; min-width: 0; border-right: none; border-bottom: 1px solid #e2e8f0; }
+            .preview-col { min-height: 220px; }
+            .ink-canvas-wrap { height: 220px; }
         }
 
         .editor-container {
@@ -238,49 +414,58 @@
 <body>
     <!-- Header Toolbar -->
     <div class="toolbar">
-        <div class="mode-switch">
-            <button class="mode-tab active" data-mode="wysiwyg" title="Soạn thảo trực quan như Word / MathType: gõ phân số /, số mũ ^, căn sqrt, vector, tích phân...">
-                <svg viewBox="0 0 24 24"><path d="M4 19l4-14h4l4 14"/><path d="M6 13h8"/></svg>
-                <span>Soạn trực quan</span>
+        <div class="toolbar-left">
+            <div class="mode-switch">
+                <button class="mode-tab active" data-mode="wysiwyg" title="Soạn thảo trực quan như Word / MathType: gõ phân số /, số mũ ^, căn sqrt, vector, tích phân...">
+                    <svg viewBox="0 0 24 24"><path d="M4 19l4-14h4l4 14"/><path d="M6 13h8"/></svg>
+                    <span>Soạn trực quan</span>
+                </button>
+                <button class="mode-tab" data-mode="latex" title="Xem và chỉnh sửa trực tiếp mã LaTeX">
+                    <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    <span>Mã LaTeX</span>
+                </button>
+                <button class="mode-tab" data-mode="asciimath" title="Cú pháp AsciiMath đơn giản">
+                    <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>
+                    <span>AsciiMath</span>
+                </button>
+                <button class="mode-tab" data-mode="ink" title="Bảng viết tay số và phương trình bằng chuột hoặc bút cảm ứng (AI Vision Pro & Cục bộ)">
+                    <svg viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+                    <span>Bảng viết tay</span>
+                </button>
+            </div>
+
+            <label class="tb-item">
+                <input type="checkbox" id="displayMode" checked> Chế độ khối
+            </label>
+
+            <label class="tb-item" style="margin-left: 2px;">
+                <span style="font-size:11.5px; color:#64748b;">Cỡ chữ:</span>
+                <select id="fontSizeSelect" class="select-input">
+                    <option value="9">9pt (Bảng / Chú thích)</option>
+                    <option value="10">10pt (Nhỏ)</option>
+                    <option value="11" selected>11pt (Chuẩn Word)</option>
+                    <option value="12">12pt (Chuẩn VN)</option>
+                    <option value="13">13pt (Báo cáo)</option>
+                    <option value="14">14pt (Tiêu đề)</option>
+                    <option value="16">16pt (Lớn)</option>
+                    <option value="18">18pt (Tiêu đề lớn)</option>
+                </select>
+            </label>
+
+            <button class="tb-btn" id="kbToggleBtn" title="Bật / tắt bàn phím toán ảo trên màn hình">
+                <svg viewBox="0 0 24 24" stroke-width="1.8"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>
+                <span>Bàn phím ảo</span>
             </button>
-            <button class="mode-tab" data-mode="latex" title="Xem và chỉnh sửa trực tiếp mã LaTeX">
-                <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                <span>Mã LaTeX</span>
-            </button>
-            <button class="mode-tab" data-mode="asciimath" title="Cú pháp AsciiMath đơn giản">
-                <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>
-                <span>AsciiMath</span>
-            </button>
+
+            <span id="status"></span>
         </div>
 
-        <label class="tb-item">
-            <input type="checkbox" id="displayMode" checked> Chế độ khối
-        </label>
-
-        <label class="tb-item" style="margin-left: 2px;">
-            <span style="font-size:11.5px; color:#64748b;">Cỡ chữ:</span>
-            <select id="fontSizeSelect" class="select-input">
-                <option value="9">9pt (Bảng / Chú thích)</option>
-                <option value="10">10pt (Nhỏ)</option>
-                <option value="11" selected>11pt (Chuẩn Word)</option>
-                <option value="12">12pt (Chuẩn VN)</option>
-                <option value="13">13pt (Báo cáo)</option>
-                <option value="14">14pt (Tiêu đề)</option>
-                <option value="16">16pt (Lớn)</option>
-                <option value="18">18pt (Tiêu đề lớn)</option>
-            </select>
-        </label>
-
-        <button class="tb-btn" id="kbToggleBtn" title="Bật / tắt bàn phím toán ảo trên màn hình">
-            <svg viewBox="0 0 24 24" stroke-width="1.8"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>
-            <span>Bàn phím ảo</span>
-        </button>
-
-        <span id="status"></span>
-        <button id="copyBtn">
-            <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-            <span id="copyBtnText">Copy ảnh công thức (Ctrl+Enter)</span>
-        </button>
+        <div class="toolbar-right">
+            <button id="copyBtn">
+                <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                <span id="copyBtnText">Copy ảnh công thức (Ctrl+Enter)</span>
+            </button>
+        </div>
     </div>
 
     <!-- Main Workspace -->
@@ -292,6 +477,92 @@
                 <math-field id="mathField" math-virtual-keyboard-policy="manual">x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}</math-field>
                 <!-- Raw text input for LaTeX / AsciiMath -->
                 <textarea id="input" spellcheck="false" placeholder="Nhập công thức..."></textarea>
+
+                <!-- Handwriting Ink Canvas Area -->
+                <div id="inkContainer" style="display: none; flex-direction: column; gap: 7px;">
+                    <div class="ink-canvas-wrap">
+                        <canvas id="inkCanvas" style="width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair;"></canvas>
+                        <div id="inkPlaceholder" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #94a3b8; font-size: 13px; pointer-events: none; text-align: center; user-select: none;">
+                            <svg style="width: 28px; height: 28px; stroke: #cbd5e1; fill: none; margin: 0 auto 6px auto; display: block;" viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+                            Cầm chuột hoặc bút vẽ phương trình vào đây...
+                        </div>
+                    </div>
+
+                    <!-- Ink Actions Toolbar (Responsive) -->
+                    <div class="ink-toolbar">
+                        <div class="ink-tools-group">
+                            <button class="ink-tool-btn active" id="inkPenBtn" title="Bút vẽ nét">
+                                <svg viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+                                <span>Bút</span>
+                            </button>
+                            <button class="ink-tool-btn" id="inkEraserBtn" title="Tẩy nét chạm">
+                                <svg viewBox="0 0 24 24"><path d="M20 20H7L3 16C2 15 2 13 3 12L13 2L22 11L18 15"/><path d="M18 15L11 8"/></svg>
+                                <span>Tẩy</span>
+                            </button>
+                            <button class="ink-action-btn" id="inkUndoBtn" title="Hoàn tác nét gần nhất (Ctrl+Z)">
+                                <svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M3 13C5 7 11 4 17 6a10 10 0 0 1 4 9 10 10 0 0 1-10 9c-3 0-6-1-8-3"/></svg>
+                                <span>Hoàn tác</span>
+                            </button>
+                            <button class="ink-action-btn" id="inkClearBtn" title="Xóa sạch bảng vẽ">
+                                <svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                <span>Xóa sạch</span>
+                            </button>
+                        </div>
+
+                        <div class="ink-engine-group">
+                            <select id="inkEngineSelect" class="select-input" style="font-weight: 500; color: #1e3a8a; border-color: #cbd5e1; background: #f8fafc;" title="Chọn bộ nhận diện toán">
+                                <option value="local">Cục bộ (Offline)</option>
+                                <option value="ai">Đám mây (Cloud)</option>
+                            </select>
+
+                            <label class="tb-item" style="font-size: 11.5px;" title="Tự động nhận diện sau khi nhấc bút">
+                                <input type="checkbox" id="inkAutoCheck" checked> Tự động
+                            </label>
+
+                            <button class="tb-btn" id="inkRecognizeBtn" style="background: #2563eb; color: #fff; border-color: #2563eb; font-weight: 500;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"/><circle cx="12" cy="12" r="3"/></svg>
+                                <span id="inkRecognizeText">Nhận diện</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Dedicated Recognition Result, Feedback & Relearning Card -->
+                    <div class="ink-feedback-card">
+                        <div class="ink-feedback-header">
+                            <div class="ink-feedback-title">
+                                <span class="dot-indicator" id="inkDotStatus"></span>
+                                <span id="inkStatusText">Sẵn sàng nhận diện nét vẽ.</span>
+                            </div>
+                            <div class="ink-feedback-meta">
+                                <button type="button" class="ink-profile-pill" id="inkProfileBadge" title="Mở thư mục hồ sơ nét chữ cá nhân (%LOCALAPPDATA%\HapiCopi\profiles)">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                    <span id="inkProfileText">Hồ sơ: 108 mẫu</span>
+                                </button>
+                                <span id="inkLatencyText" style="font-family: monospace; color: #2563eb; font-weight: 600;"></span>
+                            </div>
+                        </div>
+
+                        <!-- Editable Formula Input + Relearn Feedback Button -->
+                        <div class="ink-correction-bar">
+                            <span class="correction-label">Kết quả:</span>
+                            <input type="text" id="inkFormulaInput" class="ink-formula-input" placeholder="Kết quả nhận diện (gõ sửa trực tiếp nếu chưa chính xác)..." spellcheck="false" />
+                            <button type="button" class="ink-learn-btn" id="inkLearnBtn" title="Lưu mẫu nét chữ cho công thức này vào hồ sơ cá nhân (Enter)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                                <span>Lưu mẫu nét</span>
+                            </button>
+                        </div>
+
+                        <!-- 1-Click Alternative Candidate Pills & Cloud Fallback -->
+                        <div class="ink-candidates-bar" id="inkCandidatesBar">
+                            <span class="ink-cand-label">Gợi ý khác:</span>
+                            <div class="ink-cand-pills-list" id="inkCandPillsList"></div>
+                            <button type="button" class="ink-cloud-fallback-btn" id="inkCloudFallbackBtn" title="Nếu các gợi ý trên đều chưa đúng, bấm để hỏi trực tiếp AI Cloud (tự động phân tích và học ngầm vào máy)">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                                <span>Hỏi Đám Mây</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Helpful Tips Banner -->
                 <div class="tips-banner" id="tipsBanner">
@@ -597,7 +868,7 @@
         }
 
         function getActiveFormula() {
-            if (activeMode === 'wysiwyg') {
+            if (activeMode === 'wysiwyg' || activeMode === 'ink') {
                 return mathField ? mathField.getValue('latex') : '';
             } else {
                 return input ? input.value : '';
@@ -872,23 +1143,34 @@
             });
 
             // Toggle visibility
+            var inkContainer = document.getElementById('inkContainer');
             if (activeMode === 'wysiwyg') {
                 mathField.style.display = 'block';
                 input.style.display = 'none';
+                if (inkContainer) inkContainer.style.display = 'none';
                 tipsText.innerHTML = '<b>Phím tắt:</b> Gõ <code>/</code> (phân số) • <code>^</code> (số mũ) • <code>_</code> (chỉ số dưới) • Gõ <code>vec</code>, <code>int</code>, <code>nabla</code>, <code>times</code>, <code>alpha</code>... + <b>Space</b> • <code>Fvec</code> + <b>Space</b> hoặc <code>Alt+V</code> (Vector) • <b>Ctrl+M</b> đổi sang gõ LaTeX.';
                 mathField.focus();
             } else if (activeMode === 'latex') {
                 mathField.style.display = 'none';
                 input.style.display = 'block';
+                if (inkContainer) inkContainer.style.display = 'none';
                 input.placeholder = 'Nhập mã LaTeX (ví dụ: \\oint_C \\vec{F} \\cdot d\\vec{r} = \\iint_S (\\nabla \\times \\vec{F}) \\cdot d\\vec{S})...';
                 tipsText.innerHTML = '<b>Chế độ mã nguồn LaTeX:</b> Gõ trực tiếp mã lệnh bằng 10 ngón tay hoặc click thanh công cụ bên dưới • Nhấn <b>Ctrl+M</b> để quay lại Trực quan.';
                 input.focus();
             } else if (activeMode === 'asciimath') {
                 mathField.style.display = 'none';
                 input.style.display = 'block';
+                if (inkContainer) inkContainer.style.display = 'none';
                 input.placeholder = 'Nhập cú pháp AsciiMath (ví dụ: (-b +- sqrt(b^2 - 4ac)) / (2a))...';
                 tipsText.innerHTML = '<b>Cú pháp AsciiMath:</b> Gõ công thức mộc không cần gạch chéo ngược (\\). Ví dụ: <code>(a+b)/(c+d)</code>, <code>sqrt(x)</code>, <code>sum_(i=1)^n</code>.';
                 input.focus();
+            } else if (activeMode === 'ink') {
+                mathField.style.display = 'none';
+                input.style.display = 'none';
+                if (inkContainer) inkContainer.style.display = 'flex';
+                if (inkFormulaInput) inkFormulaInput.value = getActiveFormula();
+                tipsText.innerHTML = '<b>Bảng viết tay AI:</b> Cầm chuột hoặc bút vẽ • Nhấc bút 0.7s nhận diện tự động • <b>Sửa ô kết quả & click Học lại nét</b> nếu máy đoán sai • <b>Ctrl+Enter</b> copy ảnh.';
+                setTimeout(resizeInkCanvas, 40);
             }
 
             render();
@@ -939,6 +1221,17 @@
             var btn = e.target.closest ? e.target.closest('button') : null;
             if (!btn) return;
             e.preventDefault();
+
+            if (activeMode === 'ink' || document.activeElement === inkFormulaInput) {
+                var latexSnip = btn.getAttribute('data-latex') || btn.getAttribute('data-ascii');
+                if (latexSnip && inkFormulaInput) {
+                    insertSnippetIntoText(latexSnip, inkFormulaInput);
+                    if (mathField) mathField.setValue(inkFormulaInput.value);
+                    if (input) input.value = inkFormulaInput.value;
+                    scheduleRender();
+                    return;
+                }
+            }
 
             if (activeMode === 'wysiwyg') {
                 var cmd = btn.getAttribute('data-cmd');
@@ -1171,8 +1464,608 @@
             render();
         };
 
-        // Keyboard Shortcuts: Ctrl+Enter to copy, Esc to close
+        // ==========================================
+        // --- HIGH-SPEED INK CANVAS (HANDWRITING) ---
+        // ==========================================
+        var inkCanvas = document.getElementById('inkCanvas');
+        var inkCtx = inkCanvas ? inkCanvas.getContext('2d') : null;
+        var inkPlaceholder = document.getElementById('inkPlaceholder');
+        var inkPenBtn = document.getElementById('inkPenBtn');
+        var inkEraserBtn = document.getElementById('inkEraserBtn');
+        var inkUndoBtn = document.getElementById('inkUndoBtn');
+        var inkClearBtn = document.getElementById('inkClearBtn');
+        var inkRecognizeBtn = document.getElementById('inkRecognizeBtn');
+        var inkRecognizeText = document.getElementById('inkRecognizeText');
+        var inkEngineSelect = document.getElementById('inkEngineSelect');
+        var inkAutoCheck = document.getElementById('inkAutoCheck');
+        var inkStatusText = document.getElementById('inkStatusText');
+        var inkLatencyText = document.getElementById('inkLatencyText');
+        var inkFormulaInput = document.getElementById('inkFormulaInput');
+        var inkDotStatus = document.getElementById('inkDotStatus');
+        var inkProfileBadge = document.getElementById('inkProfileBadge');
+        var inkLearnBtn = document.getElementById('inkLearnBtn');
+
+        var inkTool = 'pen'; // 'pen' | 'eraser'
+        var isInkDrawing = false;
+        var inkStrokes = []; // Array of strokes: [ [ {x, y}, ... ], ... ]
+        var currentInkStroke = null;
+        var inkDebounceTimer = null;
+        var isInkRecognizing = false;
+
+        function resizeInkCanvas() {
+            if (!inkCanvas || !inkCanvas.parentElement) return;
+            var rect = inkCanvas.parentElement.getBoundingClientRect();
+            if (!rect.width || !rect.height) return;
+            var dpr = window.devicePixelRatio || 1;
+            
+            // Set canvas buffer size for Retina/Hi-DPI display
+            inkCanvas.width = Math.round(rect.width * dpr);
+            inkCanvas.height = Math.round(rect.height * dpr);
+            
+            redrawInkCanvas();
+        }
+
+        window.addEventListener('resize', function() {
+            if (activeMode === 'ink') {
+                resizeInkCanvas();
+            }
+        });
+
+        function getCanvasPoint(e) {
+            var rect = inkCanvas.getBoundingClientRect();
+            var dpr = window.devicePixelRatio || 1;
+            return {
+                x: (e.clientX - rect.left) * dpr,
+                y: (e.clientY - rect.top) * dpr
+            };
+        }
+
+        function redrawInkCanvas() {
+            if (!inkCtx || !inkCanvas) return;
+            inkCtx.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
+
+            if (inkStrokes.length === 0 && (!currentInkStroke || currentInkStroke.length === 0)) {
+                if (inkPlaceholder) inkPlaceholder.style.display = 'block';
+                return;
+            }
+            if (inkPlaceholder) inkPlaceholder.style.display = 'none';
+
+            var dpr = window.devicePixelRatio || 1;
+            inkCtx.save();
+            inkCtx.strokeStyle = '#0f172a';
+            inkCtx.lineWidth = 3.2 * dpr;
+            inkCtx.lineCap = 'round';
+            inkCtx.lineJoin = 'round';
+
+            for (var s = 0; s < inkStrokes.length; s++) {
+                var pts = inkStrokes[s];
+                if (!pts || pts.length === 0) continue;
+                inkCtx.beginPath();
+                if (pts.length === 1) {
+                    inkCtx.arc(pts[0].x, pts[0].y, (1.6 * dpr), 0, Math.PI * 2);
+                    inkCtx.fillStyle = '#0f172a';
+                    inkCtx.fill();
+                    continue;
+                }
+                inkCtx.moveTo(pts[0].x, pts[0].y);
+                for (var i = 1; i < pts.length; i++) {
+                    var midX = (pts[i - 1].x + pts[i].x) / 2;
+                    var midY = (pts[i - 1].y + pts[i].y) / 2;
+                    inkCtx.quadraticCurveTo(pts[i - 1].x, pts[i - 1].y, midX, midY);
+                }
+                inkCtx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+                inkCtx.stroke();
+            }
+            inkCtx.restore();
+        }
+
+        function distToSegmentSquared(p, v, w) {
+            var l2 = (v.x - w.x) * (v.x - w.x) + (v.y - w.y) * (v.y - w.y);
+            if (l2 === 0) return (p.x - v.x) * (p.x - v.x) + (p.y - v.y) * (p.y - v.y);
+            var t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            var projX = v.x + t * (w.x - v.x);
+            var projY = v.y + t * (w.y - v.y);
+            return (p.x - projX) * (p.x - projX) + (p.y - projY) * (p.y - projY);
+        }
+
+        function eraseStrokesNear(pt, radius) {
+            var r2 = radius * radius;
+            var modified = false;
+            for (var s = inkStrokes.length - 1; s >= 0; s--) {
+                var pts = inkStrokes[s];
+                var hit = false;
+                if (pts.length === 1) {
+                    var d2 = (pt.x - pts[0].x) * (pt.x - pts[0].x) + (pt.y - pts[0].y) * (pt.y - pts[0].y);
+                    if (d2 <= r2) hit = true;
+                } else {
+                    for (var i = 1; i < pts.length; i++) {
+                        if (distToSegmentSquared(pt, pts[i - 1], pts[i]) <= r2) {
+                            hit = true;
+                            break;
+                        }
+                    }
+                }
+                if (hit) {
+                    inkStrokes.splice(s, 1);
+                    modified = true;
+                }
+            }
+            if (modified) {
+                redrawInkCanvas();
+                scheduleInkAutoRecognition();
+            }
+        }
+
+        if (inkCanvas) {
+            inkCanvas.addEventListener('pointerdown', function(e) {
+                if (e.button !== 0 && e.button !== 2) return;
+                inkCanvas.setPointerCapture(e.pointerId);
+                isInkDrawing = true;
+                var pt = getCanvasPoint(e);
+
+                if (inkTool === 'eraser' || e.button === 2) {
+                    var dpr = window.devicePixelRatio || 1;
+                    eraseStrokesNear(pt, 16 * dpr);
+                } else {
+                    currentInkStroke = [pt];
+                    inkStrokes.push(currentInkStroke);
+                    if (inkPlaceholder) inkPlaceholder.style.display = 'none';
+
+                    // Draw first point dot immediately
+                    var dpr = window.devicePixelRatio || 1;
+                    inkCtx.save();
+                    inkCtx.fillStyle = '#0f172a';
+                    inkCtx.beginPath();
+                    inkCtx.arc(pt.x, pt.y, (1.6 * dpr), 0, Math.PI * 2);
+                    inkCtx.fill();
+                    inkCtx.restore();
+                }
+            });
+
+            inkCanvas.addEventListener('pointermove', function(e) {
+                if (!isInkDrawing) return;
+                var pt = getCanvasPoint(e);
+
+                if (inkTool === 'eraser' || (e.buttons & 2)) {
+                    var dpr = window.devicePixelRatio || 1;
+                    eraseStrokesNear(pt, 16 * dpr);
+                } else if (currentInkStroke) {
+                    var prevPt = currentInkStroke[currentInkStroke.length - 1];
+                    currentInkStroke.push(pt);
+
+                    // Sub-millisecond incremental drawing (zero lag, 60-120fps)
+                    var dpr = window.devicePixelRatio || 1;
+                    inkCtx.save();
+                    inkCtx.strokeStyle = '#0f172a';
+                    inkCtx.lineWidth = 3.2 * dpr;
+                    inkCtx.lineCap = 'round';
+                    inkCtx.lineJoin = 'round';
+                    inkCtx.beginPath();
+                    inkCtx.moveTo(prevPt.x, prevPt.y);
+                    inkCtx.lineTo(pt.x, pt.y);
+                    inkCtx.stroke();
+                    inkCtx.restore();
+                }
+            });
+
+            function endInkPointer(e) {
+                if (!isInkDrawing) return;
+                isInkDrawing = false;
+                currentInkStroke = null;
+                redrawInkCanvas();
+                scheduleInkAutoRecognition();
+            }
+
+            inkCanvas.addEventListener('pointerup', endInkPointer);
+            inkCanvas.addEventListener('pointercancel', endInkPointer);
+            inkCanvas.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+        }
+
+        function setInkTool(tool) {
+            inkTool = tool;
+            if (inkPenBtn) inkPenBtn.classList.toggle('active', tool === 'pen');
+            if (inkEraserBtn) inkEraserBtn.classList.toggle('active', tool === 'eraser');
+            if (inkCanvas) inkCanvas.style.cursor = tool === 'eraser' ? 'cell' : 'crosshair';
+        }
+
+        if (inkPenBtn) inkPenBtn.addEventListener('click', function() { setInkTool('pen'); });
+        if (inkEraserBtn) inkEraserBtn.addEventListener('click', function() { setInkTool('eraser'); });
+
+        if (inkUndoBtn) inkUndoBtn.addEventListener('click', function() {
+            if (inkStrokes.length > 0) {
+                inkStrokes.pop();
+                redrawInkCanvas();
+                scheduleInkAutoRecognition();
+            }
+        });
+
+        if (inkClearBtn) inkClearBtn.addEventListener('click', function() {
+            inkStrokes = [];
+            redrawInkCanvas();
+            if (inkStatusText) inkStatusText.textContent = 'Đã xóa sạch bảng vẽ.';
+            if (inkLatencyText) inkLatencyText.textContent = '';
+        });
+
+        function scheduleInkAutoRecognition() {
+            clearTimeout(inkDebounceTimer);
+            if (!inkAutoCheck || !inkAutoCheck.checked) return;
+            if (inkStrokes.length === 0) return;
+            inkDebounceTimer = setTimeout(triggerInkRecognition, 700);
+        }
+
+        if (inkRecognizeBtn) {
+            inkRecognizeBtn.addEventListener('click', function() {
+                clearTimeout(inkDebounceTimer);
+                triggerInkRecognition();
+            });
+        }
+
+        var inkLearnBtn = document.getElementById('inkLearnBtn');
+        var inkProfileBadge = document.getElementById('inkProfileBadge');
+
+        function exportStrokesPngDataUrl() {
+            if (inkStrokes.length === 0) return null;
+            var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (var s = 0; s < inkStrokes.length; s++) {
+                var pts = inkStrokes[s];
+                for (var p = 0; p < pts.length; p++) {
+                    if (pts[p].x < minX) minX = pts[p].x;
+                    if (pts[p].y < minY) minY = pts[p].y;
+                    if (pts[p].x > maxX) maxX = pts[p].x;
+                    if (pts[p].y > maxY) maxY = pts[p].y;
+                }
+            }
+            if (minX === Infinity || (maxX - minX < 4 && maxY - minY < 4)) return null;
+
+            var rawW = maxX - minX;
+            var rawH = maxY - minY;
+            var pad = 20;
+            var boxW = rawW + pad * 2;
+            var boxH = rawH + pad * 2;
+
+            // Downsample to max 360px for ultra-fast network upload & AI inference
+            var scale = 1.0;
+            var maxDim = Math.max(boxW, boxH);
+            if (maxDim > 360) {
+                scale = 360 / maxDim;
+            }
+
+            var w = Math.max(64, Math.round(boxW * scale));
+            var h = Math.max(48, Math.round(boxH * scale));
+
+            var offCanvas = document.createElement('canvas');
+            offCanvas.width = w;
+            offCanvas.height = h;
+            var offCtx = offCanvas.getContext('2d');
+
+            // Solid pure white background
+            offCtx.fillStyle = '#ffffff';
+            offCtx.fillRect(0, 0, w, h);
+
+            offCtx.scale(scale, scale);
+            offCtx.translate(pad - minX, pad - minY);
+            offCtx.strokeStyle = '#000000';
+            offCtx.lineWidth = 3.6 / scale;
+            offCtx.lineCap = 'round';
+            offCtx.lineJoin = 'round';
+
+            for (var s = 0; s < inkStrokes.length; s++) {
+                var pts = inkStrokes[s];
+                if (!pts || pts.length === 0) continue;
+                offCtx.beginPath();
+                if (pts.length === 1) {
+                    offCtx.arc(pts[0].x, pts[0].y, (1.8 / scale), 0, Math.PI * 2);
+                    offCtx.fillStyle = '#000000';
+                    offCtx.fill();
+                    continue;
+                }
+                offCtx.moveTo(pts[0].x, pts[0].y);
+                for (var i = 1; i < pts.length; i++) {
+                    var midX = (pts[i - 1].x + pts[i].x) / 2;
+                    var midY = (pts[i - 1].y + pts[i].y) / 2;
+                    offCtx.quadraticCurveTo(pts[i - 1].x, pts[i - 1].y, midX, midY);
+                }
+                offCtx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+                offCtx.stroke();
+            }
+
+            var url = offCanvas.toDataURL('image/png');
+            offCanvas.width = 1;
+            offCanvas.height = 1;
+            return url;
+        }
+
+        function triggerInkRecognition() {
+            if (isInkRecognizing) return;
+            if (inkStrokes.length === 0) {
+                if (inkStatusText) inkStatusText.textContent = 'Hãy vẽ nét phương trình trước khi nhận diện.';
+                return;
+            }
+
+            var engine = inkEngineSelect ? inkEngineSelect.value : 'local';
+            var imgData = exportStrokesPngDataUrl();
+
+            isInkRecognizing = true;
+            if (inkRecognizeText) inkRecognizeText.textContent = 'Đang nhận...';
+            if (inkDotStatus) inkDotStatus.className = 'dot-indicator analyzing';
+            if (inkStatusText) {
+                inkStatusText.textContent = engine === 'ai' 
+                    ? 'Đang gửi phân tích đám mây...' 
+                    : 'Đang đối chiếu hồ sơ nét chữ cục bộ...';
+            }
+            if (inkLatencyText) inkLatencyText.textContent = '';
+
+            // Clean vector strokes representation (array of {x, y})
+            var simplifiedStrokes = inkStrokes.map(function(stroke) {
+                return stroke.map(function(p) {
+                    return { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
+                });
+            });
+
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage(JSON.stringify({
+                    type: 'recognizeInk',
+                    image: imgData,
+                    strokes: simplifiedStrokes,
+                    engine: engine
+                }));
+            } else {
+                setTimeout(function() {
+                    window.onInkRecognized(true, '5x', ['5s', 'Sx'], '', 120);
+                }, 150);
+            }
+        }
+
+        // Live input editing: user can fix mistakes directly in the formula input box
+        if (inkFormulaInput) {
+            inkFormulaInput.addEventListener('input', function() {
+                var val = inkFormulaInput.value.trim();
+                if (val) {
+                    if (mathField) mathField.setValue(val);
+                    if (input) input.value = val;
+                    scheduleRender();
+                }
+            });
+
+            inkFormulaInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (inkLearnBtn) inkLearnBtn.click();
+                }
+            });
+        }
+
+        // --- PERSONALIZED LEARNING (DẠY NÉT CHỮ CHO MÁY / HỌC LẠI NÉT) ---
+        var lastRecognizedLatex = '';
+
+        function selectCandidate(cand) {
+            if (!cand) return;
+            var wrong = lastRecognizedLatex;
+            lastRecognizedLatex = cand;
+            if (inkFormulaInput) inkFormulaInput.value = cand;
+            if (mathField) mathField.setValue(cand);
+            if (input) input.value = cand;
+            scheduleRender();
+
+            if (inkStrokes.length > 0) {
+                var simplifiedStrokes = inkStrokes.map(function(stroke) {
+                    return stroke.map(function(p) {
+                        return { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
+                    });
+                });
+
+                if (inkDotStatus) inkDotStatus.className = 'dot-indicator analyzing';
+                if (inkStatusText) {
+                    inkStatusText.innerHTML = '<span style="color:#2563eb; font-weight:600;">Hiệu chỉnh:</span> ' + cand + (wrong ? ' (Phạt: ' + wrong + ')' : '');
+                }
+
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({
+                        type: 'learnInk',
+                        label: cand,
+                        wrongLabel: wrong,
+                        strokes: simplifiedStrokes
+                    }));
+                }
+            }
+        }
+
+        var inkCloudFallbackBtn = document.getElementById('inkCloudFallbackBtn');
+        if (inkCloudFallbackBtn) {
+            inkCloudFallbackBtn.addEventListener('click', function() {
+                if (inkEngineSelect) inkEngineSelect.value = 'ai';
+                if (inkAutoCheck) inkAutoCheck.checked = false;
+                showInkToast('Đang chuyển sang AI Đám mây để giải mã...', 'info');
+                triggerInkRecognition();
+            });
+        }
+
+        if (inkLearnBtn) {
+            inkLearnBtn.addEventListener('click', function() {
+                if (inkStrokes.length === 0) {
+                    showInkToast('Hãy vẽ nét chữ lên bảng vẽ trước khi nhấn Lưu mẫu nét.', 'warn');
+                    return;
+                }
+                var curFormula = inkFormulaInput ? inkFormulaInput.value.trim() : getActiveFormula();
+                if (!curFormula) {
+                    showInkToast('Vui lòng gõ công thức đúng vào ô kết quả để dạy máy.', 'warn');
+                    if (inkFormulaInput) inkFormulaInput.focus();
+                    return;
+                }
+
+                var wrongLabel = (lastRecognizedLatex && curFormula !== lastRecognizedLatex) ? lastRecognizedLatex : '';
+                lastRecognizedLatex = curFormula;
+
+                var simplifiedStrokes = inkStrokes.map(function(stroke) {
+                    return stroke.map(function(p) {
+                        return { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
+                    });
+                });
+
+                if (inkDotStatus) inkDotStatus.className = 'dot-indicator analyzing';
+                if (inkStatusText) inkStatusText.textContent = 'Đang lưu nét & học tập...';
+
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({
+                        type: 'learnInk',
+                        label: curFormula,
+                        wrongLabel: wrongLabel,
+                        strokes: simplifiedStrokes
+                    }));
+                }
+            });
+        }
+
+        // Click on profile badge opens the directory in Windows Explorer
+        if (inkProfileBadge) {
+            inkProfileBadge.addEventListener('click', function() {
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({ type: 'openProfileFolder' }));
+                }
+            });
+        }
+
+        function showInkToast(message, type) {
+            var t = document.getElementById('inkToast');
+            if (!t) return;
+            t.textContent = message;
+            t.className = 'ink-toast show ' + (type || 'info');
+            clearTimeout(t._timer);
+            t._timer = setTimeout(function() {
+                t.className = 'ink-toast';
+            }, 3600);
+        }
+
+        function updateProfileBadgeCount(count) {
+            var txt = document.getElementById('inkProfileText');
+            if (txt) {
+                txt.textContent = 'Hồ sơ: ' + count + ' mẫu';
+            }
+        }
+
+        window.onInkLearned = function(success, count, label) {
+            updateProfileBadgeCount(count);
+            if (inkDotStatus) inkDotStatus.className = 'dot-indicator';
+            if (inkStatusText) {
+                inkStatusText.innerHTML = '<span style="color:#2563eb; font-weight:600;">Đã lưu mẫu:</span> ' + label;
+            }
+            showInkToast('Đã lưu mẫu viết tay cho "' + label + '" (Tổng ' + count + ' mẫu).', 'success');
+
+            // Tự động nhận diện lại ngay lập tức để kiểm chứng mô hình đã học thành công
+            setTimeout(function() {
+                triggerInkRecognition();
+            }, 350);
+        };
+
+        window.onInkProfileLoaded = function(count) {
+            updateProfileBadgeCount(count);
+        };
+
+        window.onInkDistilled = function(count, label) {
+            updateProfileBadgeCount(count);
+            if (inkProfileBadge) {
+                inkProfileBadge.style.transform = 'scale(1.05)';
+                setTimeout(function() { inkProfileBadge.style.transform = ''; }, 300);
+            }
+            showInkToast('Đã chắt lọc và cập nhật mẫu cho "' + label + '" (Tổng ' + count + ' mẫu).', 'info');
+        };
+
+        // Tự động tắt "Tự động" khi chuyển sang Đám mây (Cloud) để bảo vệ hạn ngạch API
+        if (inkEngineSelect) {
+            inkEngineSelect.addEventListener('change', function() {
+                if (inkEngineSelect.value === 'ai') {
+                    if (inkAutoCheck) inkAutoCheck.checked = false;
+                    if (inkStatusText) inkStatusText.textContent = 'Chế độ Đám mây. Vẽ xong hãy bấm "Nhận diện" để tối ưu hạn mức gọi API.';
+                } else {
+                    if (inkAutoCheck) inkAutoCheck.checked = true;
+                    if (inkStatusText) inkStatusText.textContent = 'Chế độ Cục bộ (Offline). Nhận diện tự động tức thì 0ms trên máy.';
+                }
+            });
+        }
+
+        // Query initial personal profile size on startup
+        setTimeout(function() {
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage(JSON.stringify({ type: 'getInkProfile' }));
+            }
+        }, 300);
+
+        // Callback from C# MathVisionService
+        window.onInkRecognized = function(success, latex, candidates, errorMsg, elapsedMs) {
+            isInkRecognizing = false;
+            if (inkRecognizeText) inkRecognizeText.textContent = 'Nhận diện';
+            if (inkLatencyText) inkLatencyText.textContent = (elapsedMs || 0) + 'ms';
+
+            var candsBar = document.getElementById('inkCandidatesBar');
+            var candsList = document.getElementById('inkCandPillsList');
+            var cloudBtn = document.getElementById('inkCloudFallbackBtn');
+
+            if (success && latex) {
+                lastRecognizedLatex = latex;
+                if (inkDotStatus) inkDotStatus.className = 'dot-indicator';
+                if (inkStatusText) {
+                    inkStatusText.innerHTML = '<span style="color:#16a34a; font-weight:600;">Nhận diện:</span> ' + latex;
+                }
+                if (inkFormulaInput) inkFormulaInput.value = latex;
+                if (mathField) mathField.setValue(latex);
+                if (input) input.value = latex;
+                render();
+
+                // Render candidate pills
+                if (candsBar && candsList) {
+                    candsList.innerHTML = '';
+                    var isLocal = (inkEngineSelect ? inkEngineSelect.value : 'local') === 'local';
+                    var hasCands = Array.isArray(candidates) && candidates.length > 0;
+
+                    if (hasCands) {
+                        candidates.forEach(function(cand) {
+                            if (!cand || cand === latex) return;
+                            var pill = document.createElement('button');
+                            pill.type = 'button';
+                            pill.className = 'ink-cand-pill';
+                            pill.textContent = cand;
+                            pill.title = 'Bấm để chọn "' + cand + '" (tự động phạt nhãn sai & học nhãn đúng)';
+                            pill.addEventListener('click', function() {
+                                selectCandidate(cand);
+                            });
+                            candsList.appendChild(pill);
+                        });
+                    }
+
+                    if (candsList.children.length > 0 || isLocal) {
+                        candsBar.style.display = 'flex';
+                        if (cloudBtn) cloudBtn.style.display = isLocal ? 'inline-flex' : 'none';
+                    } else {
+                        candsBar.style.display = 'none';
+                    }
+                }
+            } else {
+                lastRecognizedLatex = '';
+                if (inkDotStatus) inkDotStatus.className = 'dot-indicator error';
+                if (inkStatusText) {
+                    inkStatusText.innerHTML = '<span style="color:#dc2626; font-weight:600;">Lỗi:</span> ' + (errorMsg || 'Không nhận diện được');
+                }
+                if (candsBar) {
+                    var isLocal = (inkEngineSelect ? inkEngineSelect.value : 'local') === 'local';
+                    if (isLocal && cloudBtn) {
+                        candsBar.style.display = 'flex';
+                        cloudBtn.style.display = 'inline-flex';
+                        if (candsList) candsList.innerHTML = '';
+                    } else {
+                        candsBar.style.display = 'none';
+                    }
+                }
+            }
+        };
+
+        // Keyboard Shortcuts: Ctrl+Enter to copy, Esc to close, Ctrl+Z to undo ink
         document.addEventListener('keydown', function(e) {
+            if (activeMode === 'ink' && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                if (inkUndoBtn) inkUndoBtn.click();
+                return;
+            }
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
                 copyImage();
@@ -1240,6 +2133,7 @@
             }
         }, 80);
     </script>
+    <div id="inkToast" class="ink-toast"></div>
 </body>
 
 </html>
