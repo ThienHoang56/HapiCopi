@@ -11,11 +11,16 @@ namespace HapiCopi
     {
         public static void PrepareOffscreen(Form form)
         {
+            IntPtr prev = ActiveWindowHelper.GetForegroundWindow();
             form.ShowInTaskbar = false;
             form.Opacity = 0;
             form.StartPosition = FormStartPosition.Manual;
             form.Location = new Point(-20000, -20000);
             form.Show();
+            if (prev != IntPtr.Zero && prev != form.Handle)
+            {
+                ActiveWindowHelper.SetForegroundWindow(prev);
+            }
         }
 
         public static void Present(Form form)

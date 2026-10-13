@@ -19,6 +19,7 @@ namespace HapiCopi
         private bool _isDocsMode;
         private IntPtr _docsSourceWindow = IntPtr.Zero;
         private (string formula, string mode, float fontSize, bool isWord, bool isDocs)? _pendingFormula;
+        private Panel? _loadingPanel;
 
         public MathEditorForm(Action<string, string> setClipboard)
         {
@@ -34,14 +35,20 @@ namespace HapiCopi
 
             try { Icon = UiTheme.AppIcon; } catch { }
 
+            DoubleBuffered = true;
             BackColor = Color.FromArgb(248, 250, 252);
 
             _web = new Microsoft.Web.WebView2.WinForms.WebView2
             {
                 Dock = DockStyle.Fill,
+                Visible = false,
                 DefaultBackgroundColor = Color.FromArgb(248, 250, 252)
             };
             Controls.Add(_web);
+
+            _loadingPanel = CreateLoadingPanel();
+            Controls.Add(_loadingPanel);
+            _loadingPanel.BringToFront();
 
             HandwritingProfileService.OnProfileUpdated += (count, label) =>
             {
@@ -99,19 +106,22 @@ namespace HapiCopi
             try
             {
                 await WebViewManager.AttachEditorAsync(_web, "matheditor.html", OnWebMessage);
-                _ready = true;
+
                 if (!Visible && _web.CoreWebView2 != null)
                 {
                     try { _web.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low; } catch { }
                 }
                 SyncWordFontSize();
 
-                if (_pendingFormula.HasValue)
+                // Bộ đếm thời gian dự phòng: nếu sau 3.5 giây trang chưa gửi 'ready' thì tự động mở webview
+                var fallbackTimer = new System.Windows.Forms.Timer { Interval = 3500 };
+                fallbackTimer.Tick += (s, e) =>
                 {
-                    var pending = _pendingFormula.Value;
-                    _pendingFormula = null;
-                    SendFormulaToWebView(pending.formula, pending.mode, pending.fontSize, pending.isWord, pending.isDocs);
-                }
+                    fallbackTimer.Stop();
+                    fallbackTimer.Dispose();
+                    HideLoadingScreen();
+                };
+                fallbackTimer.Start();
             }
             catch (Exception ex)
             {
@@ -123,6 +133,128 @@ namespace HapiCopi
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
+        }
+
+        private void HideLoadingScreen()
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(HideLoadingScreen));
+                return;
+            }
+
+            if (_ready) return;
+            _ready = true;
+            _attaching = false;
+
+            _web.Visible = true;
+            _web.BringToFront();
+            _web.Focus();
+
+            if (_loadingPanel != null)
+            {
+                _loadingPanel.Visible = false;
+            }
+
+            if (_pendingFormula.HasValue)
+            {
+                var pending = _pendingFormula.Value;
+                _pendingFormula = null;
+                SendFormulaToWebView(pending.formula, pending.mode, pending.fontSize, pending.isWord, pending.isDocs);
+            }
+        }
+
+        private Panel CreateLoadingPanel()
+        {
+            var panel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(248, 250, 252)
+            };
+
+            var card = new Panel
+            {
+                Size = new Size(380, 220),
+                BackColor = Color.White
+            };
+
+            card.Paint += (s, pe) =>
+            {
+                using var pen = new Pen(Color.FromArgb(226, 232, 240), 1.5f);
+                pe.Graphics.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
+            };
+
+            void CenterCard()
+            {
+                card.Location = new Point(
+                    Math.Max(10, (panel.Width - card.Width) / 2),
+                    Math.Max(10, (panel.Height - card.Height) / 2));
+            }
+            panel.Resize += (s, e) => CenterCard();
+
+            var picIcon = new PictureBox
+            {
+                Size = new Size(48, 48),
+                Location = new Point((card.Width - 48) / 2, 22),
+                SizeMode = PictureBoxSizeMode.Zoom
+            };
+            try
+            {
+                picIcon.Image = UiTheme.AppIcon.ToBitmap();
+            }
+            catch
+            {
+                try { picIcon.Image = SystemIcons.Application.ToBitmap(); } catch { }
+            }
+
+            var lblTitle = new Label
+            {
+                Text = "HapiCopi — Soạn công thức toán",
+                Font = UiTheme.PageTitle,
+                ForeColor = UiTheme.TextPrimary,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Size = new Size(card.Width - 20, 26),
+                Location = new Point(10, 78)
+            };
+
+            var lblSubtitle = new Label
+            {
+                Text = "Đang nạp công cụ toán học & AI...",
+                Font = UiTheme.Small,
+                ForeColor = UiTheme.TextMuted,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Size = new Size(card.Width - 20, 20),
+                Location = new Point(10, 108)
+            };
+
+            var progress = new ProgressBar
+            {
+                Style = ProgressBarStyle.Marquee,
+                MarqueeAnimationSpeed = 30,
+                Size = new Size(260, 6),
+                Location = new Point((card.Width - 260) / 2, 140)
+            };
+
+            var lblHint = new Label
+            {
+                Text = "Sẵn sàng hỗ trợ Word, Docs & viết tay thời gian thực",
+                Font = UiTheme.Small,
+                ForeColor = Color.FromArgb(148, 163, 184),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Size = new Size(card.Width - 20, 18),
+                Location = new Point(10, 168)
+            };
+
+            card.Controls.Add(picIcon);
+            card.Controls.Add(lblTitle);
+            card.Controls.Add(lblSubtitle);
+            card.Controls.Add(progress);
+            card.Controls.Add(lblHint);
+
+            panel.Controls.Add(card);
+            CenterCard();
+
+            return panel;
         }
 
         public void OpenForWordFormula(WordFormulaInfo info)
@@ -231,6 +363,12 @@ namespace HapiCopi
                 if (type == "close")
                 {
                     Hide();
+                    return;
+                }
+
+                if (type == "ready")
+                {
+                    HideLoadingScreen();
                     return;
                 }
 

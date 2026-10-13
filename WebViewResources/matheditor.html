@@ -2601,7 +2601,11 @@
                 window.MathfieldElement.soundsDirectory = null;
             }
             render();
-            dismissLoadingScreen();
+            if (window.chrome && window.chrome.webview) {
+                try {
+                    window.chrome.webview.postMessage(JSON.stringify({ type: 'ready' }));
+                } catch (e) { }
+            }
         }
 
         function tryMarkReady() {
@@ -2623,6 +2627,7 @@
             MathJax.startup.promise.then(markReady).catch(function(err) {
                 if (!tryMarkReady()) {
                     statusEl.innerHTML = '<span class="err">MathJax lỗi: ' + (err && err.message ? err.message : err) + '</span>';
+                    markReady();
                 }
             });
         }
@@ -2634,8 +2639,7 @@
                 clearInterval(poll);
                 if (!ready) {
                     statusEl.innerHTML = '<span class="err">Không nạp được MathJax. Đóng cửa sổ rồi mở lại.</span>';
-                    updateProgress(100, 'Không nạp được đầy đủ. Mở với chế độ dự phòng...');
-                    setTimeout(dismissLoadingScreen, 900);
+                    markReady();
                 }
             }
         }, 80);
