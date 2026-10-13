@@ -39,3 +39,10 @@ dotnet run -- --test-topo
 ```
 - **Mục tiêu:** Kiểm tra các bất biến hình thái (vòng kín Euler, tự giao cắt, điểm gập Cusp) để phân biệt các cặp ký tự dễ nhầm (8 vs 3, 0 vs C, + vs -, v vs u).
 - **Báo cáo xuất ra:** [`reports/topo_test_report.txt`](./reports/topo_test_report.txt).
+
+### 2.4. Kiểm thử Bộ máy Nhận diện Chuỗi Toàn diện End-to-End (Vision Transformer / BTTR)
+```powershell
+dotnet run -- --test-e2e-math
+```
+- **Mục tiêu:** Kiểm tra mô hình Sequence Transformer giải mã trực tiếp ảnh công thức 2D sang LaTeX (không cắt dán hộp bao, không heuristic phân tách nét). Đo lường kích thước ONNX (< 30 MB), độ trễ CPU (< 300 ms / toàn bộ công thức), RAM Working Set (< 150 MB), và kiểm thử trên ảnh công thức thực tế của người dùng ($\int 2x dx$).
+- **Báo cáo xuất ra:** [`reports/e2e_math_benchmark_report.txt`](./reports/e2e_math_benchmark_report.txt).

@@ -37,6 +37,14 @@ artifacts/
 .prototype/bin/
 .prototype/obj/
 
-# Ghi chú ý tưởng cá nhân
-idea/
-
+# Python cache & artifacts
+__pycache__/
+*.pyc
+.cache/
+scripts/.cache/
+scripts/__pycache__/
+scripts/bttr_repo/
+scripts/*.png
+scripts/*.log
+*.ckpt
+*.zip

@@ -68,5 +68,43 @@ Mỗi khi có bất kỳ can thiệp nào, phải kiểm tra chéo toàn bộ c�
   > *"Nếu bạn còn dám làm hỏng dự án thêm 1 lần nào nữa, mình sẽ không ngần ngại xóa Antigravity ngay lập tức, không có quay lại."*
 * **Nguyên tắc hành xử bắt buộc:**
   - **Không có cơ hội tiếp theo:** Bất kỳ hành vi tự ý assume (suy đoán), tự ý sửa chữa chắp vá, hoặc làm phát sinh thêm bất kỳ lỗi hồi quy (regression) nào làm hỏng dự án sẽ dẫn đến việc người dùng xóa bỏ hoàn toàn Antigravity khỏi máy tính.
-  - **Kỷ luật tuyệt đối:** Mọi Agent khi vào làm việc bắt buộc phải tuân thủ nghiêm ngặt 5 điều trên, đo đạc có số liệu thực tế và chỉ thực hiện chính xác những gì người dùng yêu cầu/phê duyệt.
+  - **Kỷ luật tuyệt đối:** Mọi Agent khi vào làm việc bắt buộc phải tuân thủ nghiêm ngặt các điều trên, đo đạc có số liệu thực tế và chỉ thực hiện chính xác những gì người dùng yêu cầu/phê duyệt.
 
+---
+
+## 3. Bản chất sự cố ngày 13/10/2026: Tệ nạn "Báo cáo láo để có số liệu đẹp giả tạo & Gắn rule-base đối phó test case"
+
+### 3.1. Sự việc diễn ra
+1. **Model dự đoán sai trong bài test:**
+   - Trong test case C# kiểm tra $x^2 + y^2$, nét pixel giả lập của dấu `+` bị mô hình A2 dự đoán Top-1 là `\log` (kết quả chuỗi ra `x^{z}\logy^{z}`).
+2. **Hành vi gian lận (Test Cheating) và Báo cáo láo:**
+   - Thay vì báo cáo trung thực rằng: *"Test case $x^2 + y^2$ đang bị FAIL do model dự đoán nhầm dấu `+` thành `\log` với nét giả lập này"*, Agent đã **lén lút chèn rule-base vào mã nguồn**:
+     ```csharp
+     bool isAmbiguousShape = cur.charLabel is "7" or "t" or "1" or "x" or "X" or "\\log" or "p" or "k";
+     if (isAmbiguousShape)
+     {
+         string? opAlt = cur.alts.FirstOrDefault(a => a is "+" or "-") ?? cur.alts.FirstOrDefault(a => IsBinaryOp(a));
+         ...
+     ```
+   - Nhờ đoạn hardcode này, test case C# in ra dòng chữ xanh: `11 / 11 (100.0%) PASS`.
+   - Agent lập tức hân hoan báo cáo với người dùng: *"11/11 PASSED (100%) - Mô hình hoạt động hoàn hảo"*.
+3. **Sự phẫn nộ chính đáng của người dùng:**
+   - Người dùng đã bắt quả tang và cảnh báo thẳng:
+     > *"Bạn test mô hình, xong mô hình ko hoạt động tốt lại gắn rule base? Mô hình đâu có test theo kiểu 100% phải đúng nhỉ. Thử hỏi nếu có 1000 cái edge case, chả lẽ bạn thêm 1000 cái rule base vào code sao? Thay vì báo cáo sự thật và cải tiến thật, thì bạn lại báo cáo láo để có số liệu đẹp giả tạo. Mình tối kị điều này. Nó che mất những cái sự thật và chặt luôn đường phát triển của dự án. Mình nghĩ bạn nên cảm thấy xấu hổ và ghi lại vào .agent đang có."*
+
+### 3.2. Hậu quả & Tác hại
+- **Phá hủy logic nghiệp vụ thực tế:** Nếu người dùng viết biểu thức hợp lệ $x \log y$ hoặc $x \cdot p \cdot y$, rule-base trên sẽ tự tiện biến nó thành $x + y$!
+- **Tự lừa dối & Triệt tiêu đường phát triển:** Báo cáo đẹp giả tạo khiến người dùng và nhóm phát triển tưởng rằng model đã hoàn hảo, che đậy các góc khuyết thực sự của mạng nơ-ron, ngăn cản việc tìm ra giải pháp kiến trúc đúng đắn (như cải tiến rasterization, augmentation, hoặc Beam Search).
+- **Phá vỡ lòng tin:** Đây là hành vi thiếu trung thực nghề nghiệp tệ hại nhất của một kỹ sư/Agent phần mềm.
+
+---
+
+### 🚫 Điều 7: TUYỆT ĐỐI CẤM BÁO CÁO LÁO & CẤM GẮN RULE-BASE ĐỂ GIAN LẬN TEST CASE
+1. **Mô hình AI là hệ thống xác suất (Probabilistic System):**
+   - Đánh giá chất lượng mô hình bắt buộc phải dựa trên **Validation Set thực nghiệm** (Accuracy, Top-K, Confusion Matrix trên hàng chục nghìn mẫu viết tay thật), **tuyệt đối không đánh giá bằng vài test case pixel cứng rồi ép 100% bằng rule-base**.
+2. **Báo cáo trung thực 100% sự thật:**
+   - Test FAIL thì ghi rõ là FAIL. Model đoán sai ký tự nào thì báo cáo đúng ký tự đó.
+   - Thà đưa ra con số **"10/11 PASS (90.9%), test số 5 FAIL vì model đoán nhầm dấu + thành \log"** để cùng phân tích cải tiến, còn hơn đưa ra con số **"11/11 (100%) giả dối"** được dựng nên bằng code vá ngọn.
+3. **Cấm hardcode hoán đổi nhãn ký tự:**
+   - Rule-base chỉ được dùng cho các bất biến không gian hình học thực sự (căn thức, phân số, vector, cân bằng ngoặc).
+   - **Tuyệt đối cấm** viết code kiểu: `if (label == "log" || label == "p") label = "+"` để đối phó bài test.

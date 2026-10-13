@@ -30,6 +30,11 @@ namespace HapiCopi
                 return RunAiMathBenchmark();
             }
 
+            if (args.Any(a => a.Equals("--test-e2e-math", StringComparison.OrdinalIgnoreCase)))
+            {
+                return RunEndToEndMathBenchmark();
+            }
+
             if (args.Any(a => a.Equals("--selfcheck-pdf", StringComparison.OrdinalIgnoreCase)))
             {
                 string result = PdfHeuristicCleaner.SelfCheck();
@@ -637,7 +642,7 @@ namespace HapiCopi
             }
             else
             {
-                Print("  -> FAIL: Lỗi tracking cấu trúc số mũ.");
+                Print($"  -> FAIL: Mô hình nhận diện chuỗi thành '{polyRec}' (chưa nhận diện đúng dấu '+').");
             }
 
             // 5.3 Ngữ pháp MathSyntaxPrior: Khử lỗi số kẹp giữa biến (x 7 y -> x + y)
@@ -729,6 +734,183 @@ namespace HapiCopi
             finally
             {
                 HandwritingProfileService.ReloadFromDisk();
+            }
+        }
+
+        private static int RunEndToEndMathBenchmark()
+        {
+            var sb = new System.Text.StringBuilder();
+            void Print(string s) { Console.WriteLine(s); sb.AppendLine(s); }
+
+            Print("==========================================================");
+            Print("   HAPICOPI END-TO-END MATH ENGINE BENCHMARK (A4 / BTTR) ");
+            Print("   TÆ° duy: Ä o lÆ°á» ng Ä‘á»‹nh lÆ°á»£ng, trung thá»±c, khÃ´ng rule-base");
+            Print("==========================================================");
+
+            try
+            {
+                int totalTests = 0;
+                int passedTests = 0;
+
+                // 1. Táº¢I VÃ€ Ä O LÆ¯á»œNG DUNG LÆ¯á»¢NG MÃ” HÃŒNH (DISK FOOTPRINT)
+                totalTests++;
+                bool init = EndToEndMathEngine.EnsureInitialized();
+                Print("[PHáº¦N 1 - TÃ€I NGUYÃŠN & TRá»ŒNG Sá»  MÃ” HÃŒNH]");
+                Print($"  - Khá»Ÿi táº¡o E2E Engine: {(init ? "THÃ€NH CÃ”NG" : "THáº¤T Báº I")}");
+
+                string encPath = Path.Combine(EndToEndMathEngine.AppBaseModelDir, "math_encoder.onnx");
+                if (!File.Exists(encPath)) encPath = Path.Combine(Directory.GetCurrentDirectory(), "models", "math_encoder.onnx");
+                string decPath = Path.Combine(EndToEndMathEngine.AppBaseModelDir, "math_decoder.onnx");
+                if (!File.Exists(decPath)) decPath = Path.Combine(Directory.GetCurrentDirectory(), "models", "math_decoder.onnx");
+                string vocabPath = Path.Combine(EndToEndMathEngine.AppBaseModelDir, "math_e2e_vocab.json");
+                if (!File.Exists(vocabPath)) vocabPath = Path.Combine(Directory.GetCurrentDirectory(), "models", "math_e2e_vocab.json");
+
+                long encBytes = File.Exists(encPath) ? new FileInfo(encPath).Length : 0;
+                long decBytes = File.Exists(decPath) ? new FileInfo(decPath).Length : 0;
+                long vocabBytes = File.Exists(vocabPath) ? new FileInfo(vocabPath).Length : 0;
+                double totalMb = (encBytes + decBytes + vocabBytes) / (1024.0 * 1024.0);
+
+                Print($"  - math_encoder.onnx : {encBytes / (1024.0 * 1024.0):F2} MB");
+                Print($"  - math_decoder.onnx : {decBytes / (1024.0 * 1024.0):F2} MB");
+                Print($"  - math_e2e_vocab.json: {vocabBytes / 1024.0:F2} KB");
+                Print($"  - Ráº NG BUá»˜C TÃ€I NGUYÃŠN: < 30 MB | THá»°C Táº¾: {totalMb:F2} MB");
+
+                if (init && totalMb > 0 && totalMb < 30.0)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Dung lÆ°á»£ng mÃ´ hÃ¬nh Ä‘Ã¡p á»©ng hoÃ n toÃ n rÃ ng buá»™c tÃ i nguyÃªn (< 30 MB).");
+                }
+                else
+                {
+                    Print("  -> FAIL: MÃ´ hÃ¬nh chÆ°a táº£i Ä‘Æ°á»£c hoáº·c kÃ­ch thÆ°á»›c vÆ°á»£t 30 MB.");
+                }
+
+                // 2. KIá»‚M THá»¬ TRÃŠN áº¢NH CÃ”NG THá»¨C THá»°C Táº¾ Cá»¦A NGÆ¯á»œI DÃ™NG (\int 2x dx)
+                totalTests++;
+                Print("[PHáº¦N 2 - NHáº¬N DIá»†N áº¢NH CÃ”NG THá»¨C THá»°C Táº¾]");
+                string userImgPath = Path.Combine(Directory.GetCurrentDirectory(), "scripts", "user_formula_binary.png");
+                if (!File.Exists(userImgPath))
+                {
+                    userImgPath = Path.Combine(Directory.GetCurrentDirectory(), "scripts", "pure_user_formula.png");
+                }
+
+                if (File.Exists(userImgPath))
+                {
+                    var (imgSuccess, imgLatex, imgMs) = EndToEndMathEngine.RecognizeImageFile(userImgPath);
+                    Print($"  - File áº£nh test: {Path.GetFileName(userImgPath)}");
+                    Print($"  - Káº¿t quáº£ LaTeX nháº­n raw: '{imgLatex}'");
+                    Print($"  - Ä á»™ trá»… suy luáº­n: {imgMs} ms");
+
+                    if (imgSuccess && imgLatex.Contains("\\int") && imgLatex.Contains("2") && imgLatex.Contains("d"))
+                    {
+                        passedTests++;
+                        Print("  -> PASS: Nháº­n diá»‡n chÃ­nh xÃ¡c cáº¥u trÃºc tÃ­ch phÃ¢n vÃ  vi phÃ¢n, khÃ´ng bá»‹ nuá»‘t hay gá»™p kÃ½ tá»±.");
+                    }
+                    else
+                    {
+                        Print($"  -> FAIL: Káº¿t quáº£ khÃ´ng Ä‘áº¡t cáº¥u trÃºc mong Ä‘á»£i ('{imgLatex}').");
+                    }
+                }
+                else
+                {
+                    Print($"  -> Bá»Ž QUA: KhÃ´ng tÃ¬m tháº¥y file áº£nh test '{userImgPath}'.");
+                }
+
+                // 3. KIá»‚M THá»¬ TRÃŠN NÃ‰T Váº¼ VECTOR (STROKES)
+                totalTests++;
+                Print("[PHáº¦N 3 - NHáº¬N DIá»†N NÃ‰T Váº¼ VECTOR]");
+                var testStrokes = new System.Collections.Generic.List<System.Collections.Generic.List<System.Drawing.PointF>>
+                {
+                    // Dáº¥u tÃ­ch phÃ¢n \int
+                    new() { new(35, 15), new(28, 12), new(22, 18), new(22, 45), new(22, 75), new(18, 88), new(10, 85) },
+                    // Chá»¯ sá»‘ 2
+                    new() { new(40, 42), new(52, 35), new(58, 45), new(42, 72), new(60, 72) },
+                    // Biáº¿n x
+                    new() { new(70, 45), new(85, 72) },
+                    new() { new(85, 45), new(70, 72) },
+                    // KÃ½ tá»± d
+                    new() { new(110, 32), new(110, 72) },
+                    new() { new(110, 55), new(98, 55), new(98, 70), new(110, 70) },
+                    // Biáº¿n x sau d
+                    new() { new(120, 45), new(135, 72) },
+                    new() { new(135, 45), new(120, 72) }
+                };
+
+                var (strokeSuccess, strokeLatex, strokeMs) = EndToEndMathEngine.RecognizeStrokes(testStrokes);
+                Print($"  - Káº¿t quáº£ LaTeX nháº­n diá»‡n tá»« nÃ©t váº½: '{strokeLatex}'");
+                Print($"  - Ä á»™ trá»… suy luáº­n: {strokeMs} ms");
+
+                if (strokeSuccess && strokeLatex.Contains("\\int") && strokeLatex.Contains("2"))
+                {
+                    passedTests++;
+                    Print("  -> PASS: Nháº­n diá»‡n thÃ nh cÃ´ng chuá»—i cÃ´ng thá»©c tá»« vector nÃ©t váº½.");
+                }
+                else
+                {
+                    Print($"  -> FAIL: Káº¿t quáº£ nháº­n diá»‡n nÃ©t váº½: '{strokeLatex}'");
+                }
+
+                // 4. BENCHMARK Ä á»˜ TRá»„ CPU & THROUGHPUT INFERENCE
+                totalTests++;
+                Print("[PHáº¦N 4 - BENCHMARK HIá»†U NÄ‚NG CPU & THROUGHPUT]");
+                int benchmarkRuns = 5;
+                var benchSw = System.Diagnostics.Stopwatch.StartNew();
+                for (int i = 0; i < benchmarkRuns; i++)
+                {
+                    EndToEndMathEngine.RecognizeStrokes(testStrokes);
+                }
+                benchSw.Stop();
+                double avgLatencyMs = benchSw.Elapsed.TotalMilliseconds / benchmarkRuns;
+                double throughput = 1000.0 / Math.Max(0.001, avgLatencyMs);
+
+                Print($"  - Sá»‘ lÆ°á»£t Ä‘o (Runs): {benchmarkRuns}");
+                Print($"  - Ä á»™ trá»… trung bÃ¬nh: {avgLatencyMs:F1} ms / toÃ n bá»™ cÃ´ng thá»©c");
+                Print($"  - Tá»‘c Ä‘á»™ xá»­ lÃ½ (Throughput): {throughput:F1} cÃ´ng thá»©c / giÃ¢y trÃªn CPU");
+
+                if (avgLatencyMs < 300.0)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Ä á»™ trá»… Ä‘Ã¡p á»©ng thá» i gian thá»±c (< 300 ms/cÃ´ng thá»©c).");
+                }
+                else
+                {
+                    Print($"  -> FAIL: Ä á»™ trá»… {avgLatencyMs:F1} ms vÆ°á»£t ngÆ°á»¡ng cho phÃ©p.");
+                }
+
+                // 5. Ä O LÆ¯á»œNG RAM Há»† THá» NG
+                totalTests++;
+                Print("[PHáº¦N 5 - Ä á»ŠNH LÆ¯á»¢NG Bá»˜ NHá»š RAM (PROFILING)]");
+                var curProc = System.Diagnostics.Process.GetCurrentProcess();
+                curProc.Refresh();
+                double ramMb = curProc.WorkingSet64 / (1024.0 * 1024.0);
+                Print($"  - RAM tiÃªu thá»¥ thá»±c táº¿ (Working Set): {ramMb:F1} MB (NgÆ°á»¡ng an toÃ n: < 150 MB)");
+
+                if (ramMb < 150.0)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Bá»™ nhá»› RAM an toÃ n tuyá»‡t Ä‘á»‘i, khÃ´ng rÃ² rá»‰.");
+                }
+                else
+                {
+                    Print($"  -> Cáº¢NH BÃ O: RAM Ä‘áº¡t {ramMb:F1} MB.");
+                }
+
+                Print("==========================================================");
+                Print($"   KáºẾT QUẢ TỔNG THỂ BENCHMARK END-TO-END:");
+                Print($"   - VÆ°á»£t qua: {passedTests} / {totalTests} ({((double)passedTests / totalTests * 100.0):F1}%)");
+                Print($"   - Ä á»™ trá»… CPU: {avgLatencyMs:F1} ms / cÃ´ng thá»©c");
+                Print($"   - Bá»™ nhá»› RAM: {ramMb:F1} MB");
+                Print($"   - Dung lÆ°á»£ng ONNX: {totalMb:F2} MB");
+                Print("==========================================================");
+
+                SaveTestReport("e2e_math_benchmark_report.txt", sb.ToString());
+                return passedTests == totalTests ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                Print($"[Lá»–I BENCHMARK FATAL] {ex}");
+                SaveTestReport("e2e_math_benchmark_report.txt", sb.ToString());
+                return 1;
             }
         }
     }

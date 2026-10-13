@@ -32,18 +32,20 @@ namespace HapiCopi
         public static string ModelFileName => "math_rec.onnx";
 
         /// <summary>
-        /// Bảng từ vựng ký hiệu toán học chuẩn hóa (Math Vocabulary).
-        /// Bao gồm các chữ số (Tầng 1), biến số, toán tử và ký hiệu toán phổ biến (Tầng 2).
+        /// Bảng từ vựng ký hiệu toán học chuẩn hóa (Math Vocabulary) - 82 classes CROHME handwriting dataset.
+        /// Bao gồm: 0-9, chữ cái Latin (thường và hoa hình học), hàm giải tích, ký tự Hy Lạp, toán tử và hệ ngoặc.
         /// </summary>
         public static readonly string[] Vocabulary = new[]
         {
-            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-            "x", "y", "z", "a", "b", "c", "d", "e", "f", "g",
-            "k", "m", "n", "p", "q", "r", "s", "t", "u", "v",
-            "+", "-", "=", "\\times", "/", "\\pm", "<", ">",
-            "\\le", "\\ge", "\\neq", "(", ")", "[", "]",
-            "\\alpha", "\\beta", "\\gamma", "\\theta", "\\pi",
-            "\\sqrt", "\\int", "\\sum", "\\infty"
+            "!", "(", ")", "+", ",", "-", "0", "1", "2", "3",
+            "4", "5", "6", "7", "8", "9", "=", "A", "C", "\\Delta",
+            "G", "H", "M", "N", "R", "S", "T", "x", "[", "]",
+            "\\alpha", "|", "b", "\\beta", "\\cos", "d", "\\div", "e", "\\exists", "f",
+            "\\forall", "/", "\\gamma", "\\ge", ">", "i", "\\in", "\\infty", "\\int", "j",
+            "k", "l", "\\lambda", "\\dots", "\\le", "\\lim", "\\log", "<", "\\mu", "\\neq",
+            "o", "p", "\\phi", "\\pi", "\\pm", "'", "q", "\\to", "\\sigma", "\\sin",
+            "\\sqrt", "\\sum", "\\tan", "\\theta", "\\times", "u", "v", "w", "y", "z",
+            "\\{", "\\}"
         };
 
         static OnnxMathVisionEngine()

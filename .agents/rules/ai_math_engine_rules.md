@@ -49,6 +49,7 @@
 
 - Mọi thay đổi thuật toán toán học bắt buộc phải chạy benchmark:
   ```powershell
+  dotnet run -- --test-e2e-math
   dotnet run -- --test-ai-math
   dotnet run -- --test-distill
   dotnet run -- --test-topo

@@ -37,7 +37,6 @@
     <PackageReference Include="Markdig" Version="1.2.0" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.30.0" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3967.48" />
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>

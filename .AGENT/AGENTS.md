@@ -45,20 +45,17 @@ Tuyệt đối tuân thủ phân vùng thư mục, **cấm xả file test, file 
   - **Tầng 3 — Quan hệ cấu trúc 2D:** Phân số ($\frac{a}{b}$), căn thức ($\sqrt{x}$), số mũ với Baseline Tracking ($x^2 + y^2$), vector ($\vec{v}$), ma trận ($\begin{pmatrix}\dots\end{pmatrix}$), ngữ pháp sửa lỗi `MathSyntaxPrior`.
   - **Cơ chế tự thích ứng:** Tự sinh 7 biến thể hình học cho nét mới, ưu tiên 75% nét cá nhân hóa, phạt đẩy lùi (Contrastive Repulsion) khi nhận diện sai.
 
-### 2.3. Trụ cột 3: MuseScore-Grade Music Engine
-- **Mục tiêu:** Xóa bỏ hoàn toàn lỗi import MusicXML/MXL, lệch nhịp synth, hoặc crash `undefined`.
-- **Máy trạng thái hữu hạn (FSM Lifecycle):**
-  - Hủy sạch bài cũ (dừng âm thanh, reset buffer, gỡ highlight).
-  - Vẽ sheet mới tức thì (60 FPS).
-  - Lập lịch tổng hợp âm thanh mới (Debounce 300 ms).
-- **Cấm code chắp vá:** Không vá ngọn regex thô sơ; bám sát [`document/BAO_CAO_LOGIC_AM_THANH.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/document/BAO_CAO_LOGIC_AM_THANH.md).
+### 2.3. Trụ cột 3: Music Engine (ĐÓNG BĂNG TẠM THỜI / ARCHIVED)
+- **Trạng thái:** Đã đóng băng và lưu trữ tài liệu vào `.AGENT/archive/music/` và `document/archive/music/`.
+- **Định hướng:** Toàn bộ nguồn lực kỹ thuật hiện tại **tập trung 100% vào Trụ cột 2: AI Math Engine**, phần Music Engine sẽ kích hoạt lại sau.
 
 ---
 
 ## 3. Nguyên tắc Kỹ thuật Bất di Bất dịch (Non-Negotiable Rules)
 
-1. **Đo lường & Định lượng rõ ràng:**
-   - Mọi kết luận về hiệu năng, tốc độ, bộ nhớ phải có **số liệu thực nghiệm**.
+1. **Đo lường & Định lượng rõ ràng (TRUNG THỰC 100% SỰ THẬT):**
+   - Mọi kết luận về hiệu năng, tốc độ, bộ nhớ, độ chính xác phải có **số liệu thực nghiệm đo đạc thực tế**.
+   - **TUYỆT ĐỐI CẤM BÁO CÁO LÁO & CẤM DÙNG RULE-BASE GIAN LẬN TEST CASE:** AI là hệ thống xác suất. Test FAIL thì ghi rõ là FAIL. Thà báo cáo kết quả thật bị trượt để cùng nhau tìm giải pháp kiến trúc, tuyệt đối cấm hardcode `if-else` trên nhãn ký tự để làm đẹp test case rồi báo cáo "100% pass giả dối".
    - Chưa đo đạc trên máy thật thì ghi rõ là chưa có số liệu, **tuyệt đối không võ đoán (No Assumptions)**.
 2. **Tối ưu Tổng thể thay vì Cục bộ:**
    - Thấy rõ toàn bộ bài toán đánh đổi: Dung lượng $\leftrightarrow$ Độ trễ $\leftrightarrow$ RAM/CPU $\leftrightarrow$ Độ chính xác cá nhân.
@@ -67,7 +64,8 @@ Tuyệt đối tuân thủ phân vùng thư mục, **cấm xả file test, file 
    - Code phải tường minh, kiến trúc phân tầng rõ ràng, dễ bảo trì lâu dài.
 4. **Quy trình Kiểm thử bắt buộc trước khi kết luận:**
    ```powershell
-   dotnet run -- --test-ai-math   # Kiểm tra mô hình ONNX, độ trễ, RAM, 3 tầng toán học
+   dotnet run -- --test-e2e-math  # Kiểm tra mô hình End-to-End Sequence (A4 / Vision Transformer BTTR), RAM, Latency, Output
+   dotnet run -- --test-ai-math   # Kiểm tra mô hình ONNX, độ trễ, RAM, 3 tầng toán học (TRUNG THỰC, KHÔNG CHE GIẤU)
    dotnet run -- --test-distill   # Kiểm tra học nét cá nhân, ma trận 2D, phạt nhãn sai
    dotnet run -- --test-topo      # Kiểm tra các bất biến hình thái học
    ```
@@ -78,11 +76,8 @@ Tuyệt đối tuân thủ phân vùng thư mục, **cấm xả file test, file 
 ## 4. Danh mục Quy chuẩn Kỹ thuật bắt buộc (Mandatory Reference Links)
 
 Trước khi can thiệp bất kỳ mã nguồn nào, mọi Agent bắt buộc phải đọc:
-* [`.agents/rules/incident-and-working-rules.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/.agents/rules/incident-and-working-rules.md): **BẢN GHI SỰ CỐ MẤT NIỀM TIN & QUY TẮC CẤM ASSUME, CẤM CODE CHẮP VÁ, PROFILE TRƯỚC KHI CAN THIỆP TÀI NGUYÊN.**
+* [`.agents/rules/incident-and-working-rules.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/.agents/rules/incident-and-working-rules.md): **BẢN GHI SỰ CỐ MẤT NIỀM TIN: CẤM ASSUME, CẤM CODE CHẮP VÁ, CẤM BÁO CÁO LÁO & DÙNG RULE-BASE ĐỐI PHÓ TEST CASE.**
 * [`.agents/rules/ai_math_engine_rules.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/.agents/rules/ai_math_engine_rules.md): Quy chuẩn kỹ thuật AI Toán học.
-* [`.agents/rules/music_engine_rules.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/.agents/rules/music_engine_rules.md): Quy chuẩn kỹ thuật Music Engine & Audio Lifecycle.
 * [`.AGENT/architecture.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/.AGENT/architecture.md): Kiến trúc HapiCopi Desktop DLP.
 * [`document/KE_HOACH_PHAT_TRIEN_AI_TOAN_HOC_TOPO_NGU_PHAP.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/document/KE_HOACH_PHAT_TRIEN_AI_TOAN_HOC_TOPO_NGU_PHAP.md): Lộ trình chi tiết bộ máy nhận diện công thức toán.
-* [`document/musescore_grade_music_engine_plan.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/document/musescore_grade_music_engine_plan.md): Kế hoạch nâng cấp Music Engine chuẩn MuseScore.
-* [`document/BAO_CAO_LOGIC_AM_THANH.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/document/BAO_CAO_LOGIC_AM_THANH.md): Báo cáo FSM âm thanh & Web Audio buffer.
 * [`testing/README.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/testing/README.md): Hướng dẫn kiểm thử và báo cáo định lượng.

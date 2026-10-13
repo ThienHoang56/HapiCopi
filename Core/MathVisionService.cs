@@ -195,12 +195,44 @@ namespace HapiCopi
         {
             if (strokes == null || strokes.Count == 0)
             {
+                if (!string.IsNullOrWhiteSpace(pureBase64) && EndToEndMathEngine.IsAvailable)
+                {
+                    try
+                    {
+                        string cleanB64 = pureBase64;
+                        int commaIdx = cleanB64.IndexOf(',');
+                        if (commaIdx >= 0) cleanB64 = cleanB64.Substring(commaIdx + 1);
+
+                        byte[] bytes = Convert.FromBase64String(cleanB64);
+                        using var ms = new MemoryStream(bytes);
+                        using var bmp = new Bitmap(ms);
+                        var (bmpOk, bmpLatex, bmpMs) = EndToEndMathEngine.RecognizeBitmap(bmp);
+                        if (bmpOk && !string.IsNullOrEmpty(bmpLatex))
+                        {
+                            sw.Stop();
+                            return (true, bmpLatex, new List<string>(), "", sw.ElapsedMilliseconds);
+                        }
+                    }
+                    catch { }
+                }
+
                 sw.Stop();
-                return (false, "", new List<string>(), "Chưa có nét vẽ để nhận diện cục bộ.", sw.ElapsedMilliseconds);
+                return (false, "", new List<string>(), "ChÆ°a cÃ³ nÃ©t váº½ Ä‘á»ƒ nháº­n diá»‡n cá»¥c bá»™.", sw.ElapsedMilliseconds);
             }
 
             try
             {
+                // Ưu tiên 1: Chạy mô hình End-to-End Sequence (A4 - Vision Transformer / BTTR)
+                if (EndToEndMathEngine.IsAvailable)
+                {
+                    var (e2eSuccess, e2eLatex, e2eMs) = EndToEndMathEngine.RecognizeStrokes(strokes);
+                    if (e2eSuccess && !string.IsNullOrEmpty(e2eLatex))
+                    {
+                        sw.Stop();
+                        return (true, e2eLatex, new List<string>(), "", sw.ElapsedMilliseconds);
+                    }
+                }
+
                 // Khởi tạo ONNX engine nếu chưa nạp
                 OnnxMathVisionEngine.EnsureInitialized();
 
@@ -416,8 +448,9 @@ namespace HapiCopi
                 var intBox = strokeBoxes[i];
                 if (intBox.H >= 36 && intBox.H >= intBox.W * 1.6f && strokeBoxes.Count > 1)
                 {
-                    var (candLabel, _) = HandwritingProfileService.ClassifyCluster(new List<List<PointF>> { intBox.Stroke });
-                    if (candLabel == "\\int" || candLabel.Equals("s", StringComparison.OrdinalIgnoreCase))
+                    var intCands = HandwritingProfileService.ClassifyClusterWithCandidates(new List<List<PointF>> { intBox.Stroke }, 3);
+                    string candLabel = intCands.Count > 0 ? intCands[0].label : "";
+                    if (candLabel == "\\int" || intCands.Any(c => c.label == "\\int"))
                     {
                         var prefixStrokes = new List<List<PointF>>();
                         var lowerStrokes = new List<List<PointF>>();
@@ -509,7 +542,7 @@ namespace HapiCopi
             var tokenList = new List<(string charLabel, List<string> alts, RectangleF box)>();
             for (int i = 0; i < clusters.Count; i++)
             {
-                var cands = HandwritingProfileService.ClassifyClusterWithCandidates(clusters[i], topK: 3);
+                var cands = HandwritingProfileService.ClassifyClusterWithCandidates(clusters[i], topK: 5);
                 string lbl = cands.Count > 0 ? cands[0].label : "x";
                 var alts = cands.Skip(1).Select(c => c.label).ToList();
                 tokenList.Add((lbl, alts, clusterBoxes[i]));
@@ -741,15 +774,17 @@ namespace HapiCopi
 
         private static readonly HashSet<string> Variables = new HashSet<string>(new[]
         {
-            "x", "y", "z", "a", "b", "c", "d", "e", "f", "g",
-            "k", "m", "n", "p", "q", "r", "s", "t", "u", "v",
-            "\\alpha", "\\beta", "\\gamma", "\\theta", "\\pi", "\\infty"
+            "x", "y", "z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
+            "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w",
+            "A", "C", "G", "H", "M", "N", "R", "S", "T",
+            "\\alpha", "\\beta", "\\gamma", "\\theta", "\\pi", "\\infty",
+            "\\Delta", "\\lambda", "\\mu", "\\phi", "\\sigma"
         }, StringComparer.OrdinalIgnoreCase);
 
         private static readonly HashSet<string> BinaryOps = new HashSet<string>(new[]
         {
-            "+", "-", "=", "\\times", "/", "\\pm", "<", ">",
-            "\\le", "\\ge", "\\neq"
+            "+", "-", "=", "\\times", "/", "\\div", "\\pm", "<", ">",
+            "\\le", "\\ge", "\\neq", "\\to", "\\in"
         });
 
         private static readonly HashSet<string> PrefixFuncs = new HashSet<string>(new[]
@@ -801,7 +836,7 @@ namespace HapiCopi
 
                 if (prevIsTerm && nextIsTerm && curIsNotOp)
                 {
-                    bool isAmbiguousShape = cur.charLabel is "7" or "t" or "1" or "x" or "X";
+                    bool isAmbiguousShape = cur.charLabel is "7" or "t";
                     if (isAmbiguousShape)
                     {
                         string? opAlt = cur.alts.FirstOrDefault(a => IsBinaryOp(a));
@@ -811,12 +846,6 @@ namespace HapiCopi
                             newAlts.Remove(opAlt);
                             newAlts.Insert(0, cur.charLabel);
                             refined[i] = (opAlt, newAlts, cur.box);
-                        }
-                        else if (cur.charLabel is "7" or "t")
-                        {
-                            var newAlts = new List<string>(cur.alts);
-                            newAlts.Insert(0, cur.charLabel);
-                            refined[i] = ("+", newAlts, cur.box);
                         }
                     }
                 }
