@@ -1,0 +1,40 @@
+==========================================================
+   HAPICOPI TOPOLOGICAL INVARIANTS & MORPHOLOGY BENCHMARK  
+==========================================================
+[CASE 1] Ky tu '8': Loops=1, Du doan='8'
+  -> PASS (Khong bi nham voi '3' hay 'B')
+[CASE 2] Ky tu '3': Loops=0, Du doan='3'
+  -> PASS (Khong bi nham voi '8')
+[CASE 3] Ky tu '0': Loops=1, Du doan='0'
+  -> PASS (Khong bi nham voi 'c' hay '(')
+[CASE 4] Ky tu 'c': Loops=0, Du doan='c'
+  -> PASS (Khong bi nham voi '0')
+[CASE 5] Toan tu '+': Crossings=1, Du doan='+'
+  -> PASS (Khong bi nham voi '-')
+[CASE 6] Toan tu '-': Crossings=0, Du doan='-'
+  -> PASS (Khong bi nham voi '+')
+[CASE 7] Ky tu 'v': Cusps=1, Du doan='v'
+  -> PASS (Khong bi nham voi 'u')
+[CASE 8] Ky tu 'u': Cusps=0, Du doan='u'
+  -> PASS (Khong bi nham voi 'v')
+----------------------------------------------------------
+   BENCHMARK TẦNG 1: NHẬN DIỆN TRỌN BỘ 10 CHỮ SỐ (0 - 9)  
+----------------------------------------------------------
+  Digit '0' -> '0' [PASS]
+  Digit '1' -> '1' [PASS]
+  Digit '2' -> '2' [PASS]
+  Digit '3' -> '3' [PASS]
+  Digit '4' -> '4' [PASS]
+  Digit '5' -> '5' [PASS]
+  Digit '6' -> '6' [PASS]
+  Digit '7' -> '7' [PASS]
+  Digit '8' -> '8' [PASS]
+  Digit '9' -> '9' [PASS]
+==========================================================
+   KẾT QUẢ ĐỊNH LƯỢNG BENCHMARK TOPO (PHASE 1):
+   - Tổng số test cases: 18
+   - Số test case thành công: 18 / 18
+   - Độ chính xác Top-1 (Accuracy): 100.0%
+   - Độ trễ CPU trung bình / ký tự: 0.440 ms
+   - Tiêu thụ thêm bộ nhớ (Installer / RAM): 0 MB
+==========================================================

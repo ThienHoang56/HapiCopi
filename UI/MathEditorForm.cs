@@ -34,7 +34,13 @@ namespace HapiCopi
 
             try { Icon = UiTheme.AppIcon; } catch { }
 
-            _web = new Microsoft.Web.WebView2.WinForms.WebView2 { Dock = DockStyle.Fill };
+            BackColor = Color.FromArgb(248, 250, 252);
+
+            _web = new Microsoft.Web.WebView2.WinForms.WebView2
+            {
+                Dock = DockStyle.Fill,
+                DefaultBackgroundColor = Color.FromArgb(248, 250, 252)
+            };
             Controls.Add(_web);
 
             HandwritingProfileService.OnProfileUpdated += (count, label) =>
@@ -302,7 +308,8 @@ namespace HapiCopi
 
                         bool learned = HandwritingProfileService.LearnSample(label, strokeList);
                         int count = HandwritingProfileService.GetSampleCount();
-                        string script = $"if (typeof onInkLearned === 'function') onInkLearned({(learned ? "true" : "false")}, {count}, {System.Text.Json.JsonSerializer.Serialize(label)});";
+                        int labelCount = HandwritingProfileService.GetSampleCountForLabel(label);
+                        string script = $"if (typeof onInkLearned === 'function') onInkLearned({(learned ? "true" : "false")}, {count}, {System.Text.Json.JsonSerializer.Serialize(label)}, {labelCount});";
                         BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(script)));
                     }
                     return;
@@ -312,6 +319,31 @@ namespace HapiCopi
                 {
                     int count = HandwritingProfileService.GetSampleCount();
                     string script = $"if (typeof onInkProfileLoaded === 'function') onInkProfileLoaded({count});";
+                    BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(script)));
+                    return;
+                }
+
+                if (type == "getProfileSummary")
+                {
+                    var summary = HandwritingProfileService.GetProfileSummary();
+                    int totalCount = HandwritingProfileService.GetSampleCount();
+                    string summaryJson = System.Text.Json.JsonSerializer.Serialize(summary);
+                    string script = $"if (typeof onProfileSummaryLoaded === 'function') onProfileSummaryLoaded({summaryJson}, {totalCount});";
+                    BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(script)));
+                    return;
+                }
+
+                if (type == "deleteLabelProfile")
+                {
+                    string targetLabel = root.TryGetProperty("label", out var tl) ? (tl.GetString() ?? "") : "";
+                    if (!string.IsNullOrEmpty(targetLabel))
+                    {
+                        HandwritingProfileService.DeleteSamplesForLabel(targetLabel);
+                    }
+                    var summary = HandwritingProfileService.GetProfileSummary();
+                    int totalCount = HandwritingProfileService.GetSampleCount();
+                    string summaryJson = System.Text.Json.JsonSerializer.Serialize(summary);
+                    string script = $"if (typeof onProfileSummaryLoaded === 'function') onProfileSummaryLoaded({summaryJson}, {totalCount});";
                     BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(script)));
                     return;
                 }
@@ -340,7 +372,9 @@ namespace HapiCopi
                 {
                     HandwritingProfileService.ClearProfile();
                     int count = HandwritingProfileService.GetSampleCount();
-                    string script = $"if (typeof onInkProfileLoaded === 'function') onInkProfileLoaded({count});";
+                    var summary = HandwritingProfileService.GetProfileSummary();
+                    string summaryJson = System.Text.Json.JsonSerializer.Serialize(summary);
+                    string script = $"if (typeof onInkProfileLoaded === 'function') onInkProfileLoaded({count}); if (typeof onProfileSummaryLoaded === 'function') onProfileSummaryLoaded({summaryJson}, {count});";
                     BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(script)));
                     Program.Log("[MathEditor] Đã xóa hồ sơ nét chữ cá nhân về mặc định.");
                     return;

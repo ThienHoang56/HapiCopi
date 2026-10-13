@@ -9,12 +9,19 @@
 
 `AppConfig` đọc `.env` từ `BaseDirectory` (thư mục chạy app), không từ `Backend/`.
 
+## Đã dọn dẹp & sắp xếp lại (2026-10-09)
+
+| Mục | Trạng thái mới | Lý do |
+|-----|----------------|-------|
+| `test-diagrams/` | Chuyển vào [`testing/diagrams/`](../testing/diagrams/) | Gom toàn bộ dữ liệu kiểm thử về thư mục `testing/` |
+| `*.txt` báo cáo test ở root (`ai_math_benchmark_report.txt`, `distill_test_report.txt`, `topo_test_report.txt`) | Chuyển vào [`testing/reports/`](../testing/reports/) | Tránh làm bừa bộn thư mục gốc khi chạy benchmark |
+| `musescore_grade_music_engine_plan.md` | Chuyển vào [`document/`](../document/musescore_grade_music_engine_plan.md) | Thống nhất toàn bộ tài liệu đặc tả kỹ thuật vào `document/` |
+
 ## Chưa xóa (cố ý)
 
 | Mục | Ghi chú |
 |-----|---------|
 | `dist/` | ~163MB publish output — **local only**, chưa gitignore; **không commit** |
-| `test-diagrams/` | Fixture test render sơ đồ — hữu ích, không phải rác bắt buộc |
 
 ## Nên làm khi dọn tiếp
 

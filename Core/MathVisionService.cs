@@ -201,19 +201,11 @@ namespace HapiCopi
 
             try
             {
-                // 1. Kiểm tra nếu có file ONNX Model Deep Learning đặt sẵn trong app
-                string modelPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "math_rec.onnx");
-                if (File.Exists(modelPath))
-                {
-                    string? onnxResult = RunOnnxInference(pureBase64, modelPath);
-                    if (!string.IsNullOrEmpty(onnxResult))
-                    {
-                        sw.Stop();
-                        return (true, onnxResult, new List<string>(), "", sw.ElapsedMilliseconds);
-                    }
-                }
+                // Khởi tạo ONNX engine nếu chưa nạp
+                OnnxMathVisionEngine.EnsureInitialized();
 
-                // 2. Chạy Engine Học máy cá nhân hóa (Personalized Prototype Cache & Feature Matcher)
+                // Chạy toàn diện pipeline phân tầng (Tầng 1 -> Tầng 2 -> Tầng 3):
+                // Topo + Prototype Adapter + Deep Learning ONNX + Spatial Layout + Cú pháp toán học (MathSyntaxPrior)
                 var (result, candidates) = RecognizeWithPersonalizedProfileWithCandidates(strokes);
                 sw.Stop();
 
@@ -386,7 +378,119 @@ namespace HapiCopi
                 }
             }
 
-            // 3. Gom cụm các nét theo thứ tự viết từ trái sang phải bằng thuật toán chuẩn hóa chung
+            // 3. Nhận diện Căn thức (\sqrt{X}): Nét căn thức có thanh ngang dài che phủ phần tử bên trong
+            for (int i = 0; i < strokeBoxes.Count; i++)
+            {
+                var sqrtBox = strokeBoxes[i];
+                if (sqrtBox.W >= 24 && strokeBoxes.Count > 1)
+                {
+                    var insideStrokes = new List<List<PointF>>();
+                    for (int j = 0; j < strokeBoxes.Count; j++)
+                    {
+                        if (i == j) continue;
+                        var other = strokeBoxes[j];
+                        // Nằm bên trong phạm vi ngang của dấu căn (sau phần móc và dưới xà ngang)
+                        if (other.MinX >= sqrtBox.MinX + 6 && other.MaxX <= sqrtBox.MaxX + 8 &&
+                            other.MinY >= sqrtBox.MinY - 4 && other.MaxY <= sqrtBox.MaxY + 14)
+                        {
+                            insideStrokes.Add(other.Stroke);
+                        }
+                    }
+
+                    if (insideStrokes.Count > 0 && insideStrokes.Count == strokeBoxes.Count - 1)
+                    {
+                        var (candLabel, _) = HandwritingProfileService.ClassifyCluster(new List<List<PointF>> { sqrtBox.Stroke });
+                        if (candLabel == "\\sqrt" || (sqrtBox.W > sqrtBox.H * 1.05f))
+                        {
+                            string inner = RecognizeWithPersonalizedProfile(insideStrokes);
+                            if (string.IsNullOrEmpty(inner)) inner = "x";
+                            return ($"\\sqrt{{{inner}}}", new List<string>());
+                        }
+                    }
+                }
+            }
+
+            // 3.1 Nhận diện Tích phân (\int) & Cận: Dấu tích phân có chiều cao lớn
+            for (int i = 0; i < strokeBoxes.Count; i++)
+            {
+                var intBox = strokeBoxes[i];
+                if (intBox.H >= 36 && intBox.H >= intBox.W * 1.6f && strokeBoxes.Count > 1)
+                {
+                    var (candLabel, _) = HandwritingProfileService.ClassifyCluster(new List<List<PointF>> { intBox.Stroke });
+                    if (candLabel == "\\int" || candLabel.Equals("s", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var prefixStrokes = new List<List<PointF>>();
+                        var lowerStrokes = new List<List<PointF>>();
+                        var upperStrokes = new List<List<PointF>>();
+                        var bodyStrokes = new List<List<PointF>>();
+
+                        float intTop = intBox.MinY;
+                        float intBottom = intBox.MaxY;
+                        float intLeft = intBox.MinX;
+                        float intRight = intBox.MaxX;
+
+                        for (int j = 0; j < strokeBoxes.Count; j++)
+                        {
+                            if (i == j) continue;
+                            var other = strokeBoxes[j];
+
+                            // 1. Tiền tố bên trái dấu tích phân (ví dụ: 3x \int hoặc 2 \int)
+                            if (other.MaxX <= intLeft + 2f)
+                            {
+                                prefixStrokes.Add(other.Stroke);
+                            }
+                            // 2. Cận trên: nằm phía trên dấu tích phân hoặc góc trên bên phải
+                            else if (other.MinY <= intTop + intBox.H * 0.38f && other.MinX <= intRight + intBox.W * 1.5f && other.MaxX >= intLeft - 6f)
+                            {
+                                upperStrokes.Add(other.Stroke);
+                            }
+                            // 3. Cận dưới: nằm phía dưới dấu tích phân hoặc góc dưới bên phải
+                            else if (other.MaxY >= intBottom - intBox.H * 0.38f && other.MinX <= intRight + intBox.W * 1.5f && other.MaxX >= intLeft - 6f)
+                            {
+                                lowerStrokes.Add(other.Stroke);
+                            }
+                            // 4. Biểu thức dưới dấu tích phân (Body)
+                            else if (other.MinX >= intRight - 10f)
+                            {
+                                bodyStrokes.Add(other.Stroke);
+                            }
+                        }
+
+                        if (bodyStrokes.Count > 0 && (prefixStrokes.Count + lowerStrokes.Count + upperStrokes.Count + bodyStrokes.Count + 1 == strokeBoxes.Count))
+                        {
+                            string prefix = prefixStrokes.Count > 0 ? RecognizeWithPersonalizedProfile(prefixStrokes) : "";
+                            string body = RecognizeWithPersonalizedProfile(bodyStrokes);
+                            if (string.IsNullOrEmpty(body)) body = "x";
+
+                            string lower = lowerStrokes.Count > 0 ? RecognizeWithPersonalizedProfile(lowerStrokes) : "";
+                            string upper = upperStrokes.Count > 0 ? RecognizeWithPersonalizedProfile(upperStrokes) : "";
+
+                            string intPart;
+                            if (!string.IsNullOrEmpty(lower) && !string.IsNullOrEmpty(upper))
+                            {
+                                intPart = $"\\int_{{{lower}}}^{{{upper}}} {body}";
+                            }
+                            else if (!string.IsNullOrEmpty(lower))
+                            {
+                                intPart = $"\\int_{{{lower}}} {body}";
+                            }
+                            else if (!string.IsNullOrEmpty(upper))
+                            {
+                                intPart = $"\\int^{{{upper}}} {body}";
+                            }
+                            else
+                            {
+                                intPart = $"\\int {body}";
+                            }
+
+                            string finalResult = string.IsNullOrEmpty(prefix) ? intPart : $"{prefix} {intPart}";
+                            return (finalResult, new List<string>());
+                        }
+                    }
+                }
+            }
+
+            // 4. Gom cụm các nét theo thứ tự viết từ trái sang phải bằng thuật toán chuẩn hóa chung
             var clusteredItems = HandwritingProfileService.ClusterStrokesWithBoxes(strokes);
             var clusters = clusteredItems.Select(x => x.cluster).ToList();
             var clusterBoxes = clusteredItems.Select(x => x.box).ToList();
@@ -401,15 +505,7 @@ namespace HapiCopi
                 return (singlePrimary, singleAlts);
             }
 
-            // Kiểm tra xem toàn bộ nét vẽ có khớp trực tiếp với một mẫu biểu thức nguyên vẹn không
-            var wholeCands = HandwritingProfileService.ClassifyClusterWithCandidates(strokes, topK: 3);
-            if (wholeCands.Count > 0 && wholeCands[0].confidence > 0.85f && wholeCands[0].label.Length > 1)
-            {
-                var alts = wholeCands.Skip(1).Select(c => c.label).ToList();
-                return (wholeCands[0].label, alts);
-            }
-
-            // 4. Nhận diện từng ký tự qua hồ sơ cá nhân hóa (HandwritingProfileService) kèm ứng viên thay thế
+            // 5. Nhận diện từng ký tự qua hồ sơ cá nhân hóa (HandwritingProfileService) kèm ứng viên thay thế
             var tokenList = new List<(string charLabel, List<string> alts, RectangleF box)>();
             for (int i = 0; i < clusters.Count; i++)
             {
@@ -419,20 +515,12 @@ namespace HapiCopi
                 tokenList.Add((lbl, alts, clusterBoxes[i]));
             }
 
-            // 5. Ghép nối biểu thức toán học chính
+            // 6. Ghép nối biểu thức toán học chính kèm theo ngữ pháp MathSyntaxPrior và baseline tracking
             string primaryResult = BuildFormulaFromTokens(tokenList);
 
-            // 6. Xây dựng danh sách biểu thức ứng viên thay thế (Alternative Candidate Formulas)
+            // 7. Xây dựng danh sách biểu thức ứng viên thay thế (Alternative Candidate Formulas)
             var candidateFormulas = new List<string>();
 
-            // Thêm các gợi ý từ wholeCands nếu có độ tin cậy tốt
-            foreach (var wc in wholeCands.Where(w => !string.IsNullOrEmpty(w.label) && w.confidence > 0.45f))
-            {
-                if (!candidateFormulas.Contains(wc.label) && !wc.label.Equals(primaryResult, StringComparison.OrdinalIgnoreCase))
-                {
-                    candidateFormulas.Add(wc.label);
-                }
-            }
 
             // Sinh biến thể biểu thức bằng cách thế ứng viên á quân của từng ký tự
             for (int i = 0; i < tokenList.Count && candidateFormulas.Count < 3; i++)
@@ -458,47 +546,97 @@ namespace HapiCopi
             int replaceIdx = -1,
             string replacement = "")
         {
+            if (tokens == null || tokens.Count == 0) return "";
+
+            // Áp dụng bộ lọc ngữ pháp toán học để khử nhầm lẫn (ví dụ x 7 y -> x + y, khử ++ cạnh nhau)
+            var preparedTokens = new List<(string charLabel, List<string> alts, RectangleF box)>(tokens.Count);
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                string lbl = (i == replaceIdx) ? replacement : tokens[i].charLabel;
+                preparedTokens.Add((lbl, tokens[i].alts, tokens[i].box));
+            }
+            var refinedTokens = MathSyntaxPrior.DisambiguateTokens(preparedTokens);
+
             var sb = new StringBuilder();
-            string[] mathOps = { "+", "-", "=", "<", ">" };
+            string[] mathOps = { "+", "-", "=", "<", ">", "\\times", "/", "\\pm", "\\le", "\\ge", "\\neq" };
             float expShift = HandwritingProfileService.Spatial.ExponentMinVerticalShift;
             float expMaxRatio = HandwritingProfileService.Spatial.ExponentMaxHeightRatio;
             float subShift = HandwritingProfileService.Spatial.SubscriptMinVerticalShift;
             float subMaxRatio = HandwritingProfileService.Spatial.SubscriptMaxHeightRatio;
+            float effectiveExpMaxRatio = Math.Max(0.78f, expMaxRatio);
+            float effectiveSubMaxRatio = Math.Max(0.78f, subMaxRatio);
 
-            for (int i = 0; i < tokens.Count; i++)
+            // Baseline Tracking: Theo dõi dòng cơ sở để không bị dồn số mũ/chỉ số dưới sai lệch
+            float baselineCy = refinedTokens[0].box.Y + refinedTokens[0].box.Height / 2f;
+            float baselineH = refinedTokens[0].box.Height;
+            bool inExp = false;
+            bool inSub = false;
+
+            for (int i = 0; i < refinedTokens.Count; i++)
             {
-                var cur = tokens[i];
-                string label = (i == replaceIdx) ? replacement : cur.charLabel;
+                var cur = refinedTokens[i];
+                string label = cur.charLabel;
+                float curCy = cur.box.Y + cur.box.Height / 2f;
 
-                if (i > 0)
+                if (i == 0)
                 {
-                    var prev = tokens[i - 1];
-                    float prevCy = prev.box.Y + prev.box.Height / 2f;
-                    float curCy = cur.box.Y + cur.box.Height / 2f;
-
-                    // Nhận diện số mũ (Superscript)
-                    if (curCy < prevCy - prev.box.Height * expShift && cur.box.Height <= prev.box.Height * expMaxRatio)
-                    {
-                        sb.Append("^{" + label + "}");
-                        continue;
-                    }
-
-                    // Nhận diện chỉ số dưới (Subscript)
-                    if (curCy > prevCy + prev.box.Height * subShift && cur.box.Height <= prev.box.Height * subMaxRatio)
-                    {
-                        sb.Append("_{" + label + "}");
-                        continue;
-                    }
-
-                    // Khoảng trắng quanh dấu toán học
-                    if (mathOps.Contains(label) || mathOps.Contains(prev.charLabel))
-                    {
-                        sb.Append(" " + label + " ");
-                        continue;
-                    }
+                    baselineCy = curCy;
+                    baselineH = cur.box.Height;
+                    sb.Append(label);
+                    continue;
                 }
 
-                sb.Append(label);
+                // Kiểm tra xem nét này có hạ về baseline không (ví dụ gặp dấu +, -, = hoặc ký tự nằm ngang baselineCy)
+                bool isBackToBaseline = Math.Abs(curCy - baselineCy) < baselineH * 0.45f || mathOps.Contains(label);
+
+                if (isBackToBaseline)
+                {
+                    inExp = false;
+                    inSub = false;
+                    baselineCy = (baselineCy * 0.7f) + (curCy * 0.3f);
+                    baselineH = (baselineH * 0.7f) + (cur.box.Height * 0.3f);
+
+                    if (mathOps.Contains(label))
+                    {
+                        sb.Append(" " + label + " ");
+                    }
+                    else
+                    {
+                        sb.Append(label);
+                    }
+                    continue;
+                }
+
+                // Kiểm tra số mũ (Superscript)
+                if (!inSub && (curCy < baselineCy - baselineH * expShift) && (cur.box.Height <= baselineH * effectiveExpMaxRatio))
+                {
+                    sb.Append("^{" + label + "}");
+                    inExp = true;
+                    continue;
+                }
+
+                // Kiểm tra chỉ số dưới (Subscript)
+                if (!inExp && (curCy > baselineCy + baselineH * subShift) && (cur.box.Height <= baselineH * effectiveSubMaxRatio))
+                {
+                    sb.Append("_{" + label + "}");
+                    inSub = true;
+                    continue;
+                }
+
+                // Nằm trên dòng thông thường
+                inExp = false;
+                inSub = false;
+                baselineCy = (baselineCy * 0.7f) + (curCy * 0.3f);
+                baselineH = (baselineH * 0.7f) + (cur.box.Height * 0.3f);
+
+                if (mathOps.Contains(label))
+                {
+                    sb.Append(" " + label + " ");
+                }
+                else
+                {
+                    sb.Append(label);
+                }
             }
 
             string result = sb.ToString();
@@ -507,20 +645,22 @@ namespace HapiCopi
                 result = result.Replace("  ", " ");
             }
 
+            // Cân bằng ngoặc mở/đóng qua ngữ pháp
+            result = MathSyntaxPrior.BalanceBrackets(result);
+
             return result.Trim();
         }
 
         /// <summary>
-        /// Khung chạy suy luận mô hình Deep Learning ONNX (khi người dùng đặt file math_rec.onnx vào thư mục models).
+        /// Khung chạy suy luận mô hình Deep Learning ONNX qua OnnxMathVisionEngine.
         /// </summary>
-        private static string? RunOnnxInference(string pureBase64, string modelPath)
+        public static string? RunOnnxInference(List<List<PointF>> strokes)
         {
             try
             {
-                using var session = new Microsoft.ML.OnnxRuntime.InferenceSession(modelPath);
-                Program.Log($"[ONNX Engine] Đã nạp thành công mô hình ONNX từ {modelPath}");
-                // Khi có file weights ONNX được phân phối, tensor sẽ được feed tại đây.
-                return null;
+                if (!OnnxMathVisionEngine.IsModelLoaded) return null;
+                var predictions = OnnxMathVisionEngine.Predict(strokes, topK: 1);
+                return predictions.Count > 0 ? predictions[0].label : null;
             }
             catch (Exception ex)
             {
@@ -568,6 +708,186 @@ namespace HapiCopi
             }
 
             return text;
+        }
+    }
+
+    /// <summary>
+    /// Phân loại nhóm cú pháp toán học cho các token ký hiệu.
+    /// </summary>
+    public enum MathTokenType
+    {
+        Digit,
+        Variable,
+        BinaryOp,
+        PrefixFunc,
+        OpenBracket,
+        CloseBracket,
+        Other
+    }
+
+    /// <summary>
+    /// Bộ lọc tiên nghiệm cú pháp toán học (Math Syntax Prior & Grammar Disambiguation).
+    /// Áp dụng các ràng buộc toán học để loại bỏ trạng thái vô nghĩa và tự sửa lỗi nhầm nét:
+    /// 1. Khử hai toán tử hai ngôi đứng liền kề (+ + -> chọn biến thể tiếp theo).
+    /// 2. Sửa lỗi số kẹp giữa 2 biến (x 7 y -> x + y).
+    /// 3. Cân bằng ngoặc mở/đóng (Bracket Balance).
+    /// </summary>
+    public static class MathSyntaxPrior
+    {
+        private static readonly HashSet<string> Digits = new HashSet<string>(new[]
+        {
+            "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"
+        });
+
+        private static readonly HashSet<string> Variables = new HashSet<string>(new[]
+        {
+            "x", "y", "z", "a", "b", "c", "d", "e", "f", "g",
+            "k", "m", "n", "p", "q", "r", "s", "t", "u", "v",
+            "\\alpha", "\\beta", "\\gamma", "\\theta", "\\pi", "\\infty"
+        }, StringComparer.OrdinalIgnoreCase);
+
+        private static readonly HashSet<string> BinaryOps = new HashSet<string>(new[]
+        {
+            "+", "-", "=", "\\times", "/", "\\pm", "<", ">",
+            "\\le", "\\ge", "\\neq"
+        });
+
+        private static readonly HashSet<string> PrefixFuncs = new HashSet<string>(new[]
+        {
+            "\\sqrt", "\\int", "\\sum", "\\sin", "\\cos", "\\tan", "\\log", "\\ln", "\\lim"
+        });
+
+        public static MathTokenType GetTokenType(string token)
+        {
+            if (string.IsNullOrEmpty(token)) return MathTokenType.Other;
+            if (Digits.Contains(token)) return MathTokenType.Digit;
+            if (Variables.Contains(token)) return MathTokenType.Variable;
+            if (BinaryOps.Contains(token)) return MathTokenType.BinaryOp;
+            if (PrefixFuncs.Contains(token)) return MathTokenType.PrefixFunc;
+            if (token is "(" or "[" or "{") return MathTokenType.OpenBracket;
+            if (token is ")" or "]" or "}") return MathTokenType.CloseBracket;
+            return MathTokenType.Other;
+        }
+
+        public static bool IsBinaryOp(string token) => BinaryOps.Contains(token);
+        public static bool IsVariable(string token) => Variables.Contains(token);
+        public static bool IsDigit(string token) => Digits.Contains(token);
+        public static bool IsTerm(string token) => IsVariable(token) || IsDigit(token) || token is ")" or "]";
+
+        /// <summary>
+        /// Áp dụng các ràng buộc cú pháp toán học để khử nhiễu và tự sửa lỗi nhầm nhãn.
+        /// </summary>
+        public static List<(string charLabel, List<string> alts, RectangleF box)> DisambiguateTokens(
+            List<(string charLabel, List<string> alts, RectangleF box)> tokens)
+        {
+            if (tokens == null || tokens.Count <= 1) return tokens ?? new List<(string, List<string>, RectangleF)>();
+
+            var refined = new List<(string charLabel, List<string> alts, RectangleF box)>(tokens.Count);
+            for (int i = 0; i < tokens.Count; i++)
+            {
+                refined.Add((tokens[i].charLabel, new List<string>(tokens[i].alts), tokens[i].box));
+            }
+
+            // Quy tắc 1: Ký tự gây nhầm lẫn kẹp giữa 2 số hạng / biến (ví dụ x 7 y -> x + y, hoặc x^2 x y -> x^2 + y)
+            for (int i = 1; i < refined.Count - 1; i++)
+            {
+                var prev = refined[i - 1];
+                var cur = refined[i];
+                var next = refined[i + 1];
+
+                bool prevIsTerm = IsTerm(prev.charLabel);
+                bool nextIsTerm = IsTerm(next.charLabel);
+                bool curIsNotOp = !IsBinaryOp(cur.charLabel);
+
+                if (prevIsTerm && nextIsTerm && curIsNotOp)
+                {
+                    bool isAmbiguousShape = cur.charLabel is "7" or "t" or "1" or "x" or "X";
+                    if (isAmbiguousShape)
+                    {
+                        string? opAlt = cur.alts.FirstOrDefault(a => IsBinaryOp(a));
+                        if (opAlt != null)
+                        {
+                            var newAlts = new List<string>(cur.alts);
+                            newAlts.Remove(opAlt);
+                            newAlts.Insert(0, cur.charLabel);
+                            refined[i] = (opAlt, newAlts, cur.box);
+                        }
+                        else if (cur.charLabel is "7" or "t")
+                        {
+                            var newAlts = new List<string>(cur.alts);
+                            newAlts.Insert(0, cur.charLabel);
+                            refined[i] = ("+", newAlts, cur.box);
+                        }
+                    }
+                }
+            }
+
+            // Quy tắc 2: Hai toán tử hai ngôi đứng liền kề (ví dụ: + + hoặc + =)
+            for (int i = 0; i < refined.Count - 1; i++)
+            {
+                var cur = refined[i];
+                var next = refined[i + 1];
+
+                if (IsBinaryOp(cur.charLabel) && IsBinaryOp(next.charLabel))
+                {
+                    // Thử chuyển next sang ứng viên phi-toán-tử (ví dụ + biến thành t)
+                    string? nonOpAlt = next.alts.FirstOrDefault(a => !IsBinaryOp(a));
+                    if (nonOpAlt != null)
+                    {
+                        var newAlts = new List<string>(next.alts);
+                        newAlts.Remove(nonOpAlt);
+                        newAlts.Insert(0, next.charLabel);
+                        refined[i + 1] = (nonOpAlt, newAlts, next.box);
+                    }
+                    else
+                    {
+                        string? curNonOp = cur.alts.FirstOrDefault(a => !IsBinaryOp(a));
+                        if (curNonOp != null)
+                        {
+                            var newAlts = new List<string>(cur.alts);
+                            newAlts.Remove(curNonOp);
+                            newAlts.Insert(0, cur.charLabel);
+                            refined[i] = (curNonOp, newAlts, cur.box);
+                        }
+                    }
+                }
+            }
+
+            return refined;
+        }
+
+        /// <summary>
+        /// Cân bằng các cặp ngoặc mở chưa có ngoặc đóng.
+        /// </summary>
+        public static string BalanceBrackets(string expr)
+        {
+            if (string.IsNullOrEmpty(expr)) return expr;
+
+            int roundOpen = 0, roundClose = 0;
+            int squareOpen = 0, squareClose = 0;
+
+            for (int i = 0; i < expr.Length; i++)
+            {
+                char c = expr[i];
+                if (c == '(') roundOpen++;
+                else if (c == ')') roundClose++;
+                else if (c == '[') squareOpen++;
+                else if (c == ']') squareClose++;
+            }
+
+            var sb = new StringBuilder(expr);
+            while (roundClose < roundOpen)
+            {
+                sb.Append(")");
+                roundClose++;
+            }
+            while (squareClose < squareOpen)
+            {
+                sb.Append("]");
+                squareClose++;
+            }
+
+            return sb.ToString();
         }
     }
 }

@@ -8,6 +8,17 @@ using System.Text.Json;
 namespace HapiCopi
 {
     /// <summary>
+    /// Đặc trưng cấu trúc topo hình thái học bất biến (Euler loops, crossings, cusps, endpoints).
+    /// </summary>
+    public class TopologicalProfile
+    {
+        public int Loops { get; set; } = 0;       // Số vòng kín Euler (0, 1, 2)
+        public int Crossings { get; set; } = 0;   // Số điểm giao cắt giữa các nét (X/T junction)
+        public int Cusps { get; set; } = 0;       // Số góc gập nhọn đột ngột (>110 độ)
+        public int Endpoints { get; set; } = 0;   // Số đầu mút tự do
+    }
+
+    /// <summary>
     /// Bản ghi một mẫu nét chữ viết tay cá nhân của người dùng.
     /// </summary>
     public class HandwritingPrototype
@@ -22,6 +33,11 @@ namespace HapiCopi
         public bool IsUserTrained { get; set; } = false;
         public bool IsAugmented { get; set; } = false;
         public string Source { get; set; } = "base"; // "base", "user", "distilled", "user_aug", "distilled_aug"
+
+        // Thuộc tính Topo bất biến
+        public int LoopCount { get; set; } = 0;
+        public int CrossingCount { get; set; } = 0;
+        public int CuspCount { get; set; } = 0;
     }
 
     /// <summary>
@@ -105,6 +121,28 @@ namespace HapiCopi
                 {
                     LoadDefaultBasePrototypes();
                 }
+                else
+                {
+                    // Tự động dọn sạch các mẫu học vẹt nguyên khối cũ (như "14 + 32", "18", "213+", "35"...)
+                    int removedComposites = _prototypes.RemoveAll(p => !IsValidAtomicLabel(p.Label));
+                    if (removedComposites > 0)
+                    {
+                        Program.Log($"[HandwritingProfile] Đã loại bỏ {removedComposites} mẫu học vẹt nguyên khối không hợp lệ khỏi profile.");
+                        SaveProfile();
+                    }
+
+                    // Đảm bảo các mẫu cơ sở hoặc mẫu đã nạp đều có Topo hợp lệ nếu chưa được gán
+                    foreach (var p in _prototypes)
+                    {
+                        if (p.LoopCount == 0 && p.CrossingCount == 0 && p.CuspCount == 0)
+                        {
+                            if (p.Label == "8") p.LoopCount = 2;
+                            else if (p.Label is "0" or "6" or "9" or "b" or "d" or "p" or "q" or "o") p.LoopCount = 1;
+                            else if (p.Label is "+" or "\\times") p.CrossingCount = 1;
+                            else if (p.Label is "v" or "V" or "7") p.CuspCount = 1;
+                        }
+                    }
+                }
             }
         }
 
@@ -114,6 +152,12 @@ namespace HapiCopi
             {
                 try
                 {
+                    if (_isTestingMode)
+                    {
+                        Program.Log("[HandwritingProfile] Đang ở chế độ Test Benchmark in-memory - Bỏ qua ghi đĩa để bảo vệ dữ liệu người dùng.");
+                        return;
+                    }
+
                     if (!Directory.Exists(ProfileDirectory))
                     {
                         Directory.CreateDirectory(ProfileDirectory);
@@ -131,6 +175,84 @@ namespace HapiCopi
                 {
                     Program.Log($"[HandwritingProfile] Lỗi lưu profile: {ex.Message}");
                 }
+            }
+        }
+
+        private static bool _isTestingMode = false;
+
+        /// <summary>
+        /// Khởi tạo phiên test in-memory cho benchmark: nạp bộ mẫu chuẩn và ngăn không cho ghi đè lên file đĩa người dùng.
+        /// </summary>
+        public static void ResetInMemoryForTesting()
+        {
+            lock (_lock)
+            {
+                _isTestingMode = true;
+                _prototypes.Clear();
+                Spatial = new SpatialCalibration();
+                LoadDefaultBasePrototypes();
+                Program.Log("[HandwritingProfile] Đã kích hoạt môi trường Test Benchmark cách ly trong RAM (bảo vệ file người dùng).");
+            }
+        }
+
+        /// <summary>
+        /// Kết thúc test benchmark và nạp lại nguyên vẹn hồ sơ thực tế của người dùng từ ổ đĩa.
+        /// </summary>
+        public static void ReloadFromDisk()
+        {
+            lock (_lock)
+            {
+                _isTestingMode = false;
+                _isLoaded = false;
+                _prototypes.Clear();
+                EnsureLoaded();
+                Program.Log($"[HandwritingProfile] Đã khôi phục hồ sơ người dùng thực tế từ đĩa ({_prototypes.Count} mẫu).");
+            }
+        }
+
+        /// <summary>
+        /// Lấy thống kê số lượng mẫu phân bổ theo từng ký tự (Label Breakdown).
+        /// </summary>
+        public static Dictionary<string, int> GetProfileSummary()
+        {
+            lock (_lock)
+            {
+                return _prototypes
+                    .GroupBy(p => p.Label)
+                    .OrderBy(g => g.Key)
+                    .ToDictionary(g => g.Key, g => g.Count());
+            }
+        }
+
+        /// <summary>
+        /// Lấy số lượng mẫu nét đã lưu của một ký tự cụ thể.
+        /// </summary>
+        public static int GetSampleCountForLabel(string label)
+        {
+            if (string.IsNullOrWhiteSpace(label)) return 0;
+            lock (_lock)
+            {
+                return _prototypes.Count(p => p.Label.Equals(label.Trim(), StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        /// <summary>
+        /// Xóa sạch các mẫu nét của một ký tự cụ thể để người dùng có thể dạy lại từ đầu.
+        /// </summary>
+        public static int DeleteSamplesForLabel(string label)
+        {
+            if (string.IsNullOrWhiteSpace(label)) return 0;
+            lock (_lock)
+            {
+                string clean = label.Trim();
+                int removed = _prototypes.RemoveAll(p => p.Label.Equals(clean, StringComparison.OrdinalIgnoreCase));
+                if (removed > 0)
+                {
+                    SaveProfile();
+                    OnProfileUpdated?.Invoke(_prototypes.Count, clean);
+                    Program.Log($"[HandwritingProfile] Đã xóa {removed} mẫu nét của ký tự '{clean}'. Còn lại {_prototypes.Count} mẫu.");
+                }
+                return removed;
             }
         }
 
@@ -185,7 +307,63 @@ namespace HapiCopi
         }
 
         /// <summary>
+        /// Kiểm tra xem nhãn có phải là một ký hiệu toán học nguyên tử hợp lệ (Atomic Symbol) hay không.
+        /// Chống hiện tượng học vẹt cả cụm đa ký tự (như "14 + 32", "18", "abc", ma trận nguyên khối).
+        /// </summary>
+        public static bool IsValidAtomicLabel(string label)
+        {
+            if (string.IsNullOrWhiteSpace(label)) return false;
+            string s = label.Trim();
+            if (s.Length == 1) return true;
+            if (s.StartsWith("\\") && 
+                !s.Contains("{") && !s.Contains("}") && 
+                !s.Contains(" ") && !s.Contains("\\\\") && 
+                !s.Contains("+") && !s.Contains("-") && !s.Contains("*"))
+            {
+                return true;
+            }
+            return false;
+        }
+
+        private static bool StrokesIntersect(List<List<PointF>> cluster, List<PointF> stroke)
+        {
+            foreach (var s in cluster)
+            {
+                for (int i = 0; i < s.Count - 1; i++)
+                {
+                    for (int j = 0; j < stroke.Count - 1; j++)
+                    {
+                        if (DoSegmentsIntersect(s[i], s[i + 1], stroke[j], stroke[j + 1]))
+                            return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private static bool StrokesTouch(List<List<PointF>> cluster, List<PointF> stroke, float threshold = 5.0f)
+        {
+            float threshSq = threshold * threshold;
+            foreach (var s in cluster)
+            {
+                foreach (var p1 in s)
+                {
+                    foreach (var p2 in stroke)
+                    {
+                        float dx = p1.X - p2.X;
+                        float dy = p1.Y - p2.Y;
+                        if (dx * dx + dy * dy <= threshSq)
+                            return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Gom cụm các nét vẽ theo vị trí không gian (từ trái sang phải) kèm khung bao chữ nhật.
+        /// Bóc tách độc lập: Hai nét chỉ thuộc cùng một ký tự nếu giao nhau, chạm nhau, hoặc chồng lấn thẳng đứng.
+        /// Tuyệt đối KHÔNG gộp nếu đứng cạnh nhau (gapX > 1.5px) mà không giao/chạm (như số 1 và số 8 trong 18).
         /// </summary>
         public static List<(List<List<PointF>> cluster, RectangleF box)> ClusterStrokesWithBoxes(List<List<PointF>> strokes)
         {
@@ -226,10 +404,19 @@ namespace HapiCopi
                 float gapY = Math.Max(0f, Math.Max(curMinY, cur.MinY) - Math.Min(curMaxY, cur.MaxY));
                 bool nearY = overlapY > 0 || gapY < avgH * 0.60f;
 
-                // Nét thuộc cùng ký tự nếu chạm nhau, giao nhau hoặc khoảng cách X rất gần VÀ cùng dòng Y
-                bool belongs = (overlapX > 4 || (overlapX > -6 && gapX < avgH * 0.35f)) && nearY;
+                // Kiểm tra xem nét cur có cắt (intersect) hoặc chạm (touch) nét nào trong currentCluster không
+                bool doIntersect = StrokesIntersect(currentCluster, cur.Stroke);
+                bool doTouch = StrokesTouch(currentCluster, cur.Stroke, 5.0f);
 
-                if (belongs && currentCluster.Count < 4)
+                // Chồng lấn phương ngang đáng kể (như dấu = hai nét song song, dấu : hai chấm, hoặc dấu gạch ngang số 7)
+                float minW = Math.Min(curMaxX - curMinX, cur.W);
+                bool verticalStack = overlapX >= Math.Max(4f, minW * 0.40f) && nearY;
+
+                // Chỉ thuộc cùng ký tự nếu: Giao nhau, Chạm nhau, hoặc Chồng lấn thẳng đứng đáng kể.
+                // TUYỆT ĐỐI KHÔNG GỘP nếu tách biệt về hoành độ (gapX > 1.5px) mà không cắt/chạm!
+                bool belongs = (doIntersect || doTouch || verticalStack) && currentCluster.Count < 4;
+
+                if (belongs)
                 {
                     currentCluster.Add(cur.Stroke);
                     curMinX = Math.Min(curMinX, cur.MinX);
@@ -477,9 +664,11 @@ namespace HapiCopi
             {
                 learnedCount += LearnClusterWithAugmentation(tokens[0], clustersWithBoxes[0].cluster, isFromCloud);
             }
-
-            // Luôn lưu cả cụm nguyên vẹn (Composite Prototype)
-            learnedCount += LearnSinglePrototype(cleanLabel, strokes, isDistilled: isFromCloud, isAugmented: false) ? 1 : 0;
+            else if (IsValidAtomicLabel(cleanLabel))
+            {
+                // Fallback chỉ chạy khi không bóc tách được cụm đơn lẻ nhưng cả biểu thức là 1 ký hiệu nguyên tử
+                learnedCount += LearnSinglePrototype(cleanLabel, strokes, isDistilled: isFromCloud, isAugmented: false) ? 1 : 0;
+            }
 
             if (learnedCount > 0 || spatialChanged)
             {
@@ -495,69 +684,110 @@ namespace HapiCopi
             return DistillAndAugmentSample(label, strokes, isFromCloud: false) > 0;
         }
 
+        public const int MaxPrototypesPerLabel = 14;
+        public const float MergeThresholdDistance = 0.38f;
+
         private static bool LearnSinglePrototype(string label, List<List<PointF>> strokes, bool isDistilled = false, bool isAugmented = false)
         {
             if (string.IsNullOrWhiteSpace(label) || strokes == null || strokes.Count == 0)
                 return false;
 
+            string cleanLabel = label.Trim();
+            if (!IsValidAtomicLabel(cleanLabel))
+            {
+                Program.Log($"[HandwritingProfile] Từ chối lưu nhãn không phải nguyên tử: '{cleanLabel}' để chống học vẹt cả cụm.");
+                return false;
+            }
+
             float[] features = ExtractStrokeFeatures(strokes, out float aspect);
             if (features.Length == 0) return false;
 
+            var topo = ExtractTopologicalProfile(strokes);
+
             lock (_lock)
             {
-                // Kiểm tra xem đã có mẫu tương tự chưa để củng cố trọng số
+                // QUY TẮC NGHIỆP VỤ 1: Kiểm tra xem nét mới có gần như trùng khớp hoàn toàn với một mẫu ĐÃ CÓ CỦA RIÊNG KÝ TỰ NÀY không (dist < 0.38f)
                 var existing = _prototypes.FirstOrDefault(p =>
-                    p.Label.Equals(label, StringComparison.OrdinalIgnoreCase) &&
-                    ComputeDistance(p.Features, features) < 1.6f);
+                    p.Label.Equals(cleanLabel, StringComparison.OrdinalIgnoreCase) &&
+                    ComputeDistance(p.Features, features) < MergeThresholdDistance);
 
                 if (existing != null)
                 {
+                    // Nét tương đồng cao -> Củng cố mẫu hiện có thay vì tạo rác trùng lặp
                     existing.HitCount++;
-                    existing.MissCount = Math.Max(0, existing.MissCount - 1); // Giảm điểm phạt khi đoán đúng
+                    existing.MissCount = Math.Max(0, existing.MissCount - 1);
                     existing.IsUserTrained = true;
+                    existing.LoopCount = topo.Loops;
+                    existing.CrossingCount = topo.Crossings;
+                    existing.CuspCount = topo.Cusps;
                     if (!isAugmented)
                     {
                         existing.Source = isDistilled ? "distilled" : "user";
                     }
-                    // Làm mượt trọng số vector theo nét mới của người dùng
+                    // Cập nhật trung bình động nhẹ (80% nét cũ, 20% nét mới) để giữ ổn định
                     for (int i = 0; i < features.Length; i++)
                     {
-                        existing.Features[i] = (existing.Features[i] * 0.65f) + (features[i] * 0.35f);
+                        existing.Features[i] = (existing.Features[i] * 0.80f) + (features[i] * 0.20f);
                     }
+                    return true;
                 }
-                else
+
+                // QUY TẮC NGHIỆP VỤ 2: Nét vẽ là một biến thể mới (dist >= 0.38f).
+                // Kiểm tra hạn ngạch mẫu (Quota) CỦA RIÊNG KÝ TỰ NÀY.
+                var labelProtos = _prototypes
+                    .Where(p => p.Label.Equals(cleanLabel, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                if (labelProtos.Count >= MaxPrototypesPerLabel)
                 {
-                    int currentLabelCount = _prototypes.Count(p => p.Label.Equals(label, StringComparison.OrdinalIgnoreCase));
-                    if (isAugmented && currentLabelCount >= 14)
+                    // Nếu là nét sinh biến thể (augmented) và đã đủ quota thì dừng lại
+                    if (isAugmented)
                     {
                         return false;
                     }
 
-                    _prototypes.Add(new HandwritingPrototype
+                    // Nếu là nét do người dùng trực tiếp dạy: thay thế 1 mẫu cũ nhất/ít tin cậy nhất CỦA RIÊNG KÝ TỰ NÀY (FIFO / Low-Hit).
+                    // TUYỆT ĐỐI KHÔNG ĐƯỢC XÓA MẪU CỦA KÝ TỰ KHÁC!
+                    var candidateToRemove = labelProtos
+                        .OrderBy(p => p.HitCount - p.MissCount)
+                        .ThenBy(p => p.CreatedAt)
+                        .FirstOrDefault();
+
+                    if (candidateToRemove != null)
                     {
-                        Label = label.Trim(),
-                        Features = features,
-                        StrokeCount = strokes.Count,
-                        AspectRatio = aspect,
-                        CreatedAt = DateTime.Now,
-                        HitCount = isAugmented ? 1 : 2,
-                        MissCount = 0,
-                        IsUserTrained = true,
-                        IsAugmented = isAugmented,
-                        Source = isAugmented ? (isDistilled ? "distilled_aug" : "user_aug") : (isDistilled ? "distilled" : "user")
-                    });
+                        _prototypes.Remove(candidateToRemove);
+                    }
                 }
+
+                // Thêm mẫu biến thể mới cho ký tự này
+                _prototypes.Add(new HandwritingPrototype
+                {
+                    Label = cleanLabel,
+                    Features = features,
+                    StrokeCount = strokes.Count,
+                    AspectRatio = aspect,
+                    CreatedAt = DateTime.Now,
+                    HitCount = isAugmented ? 1 : 2,
+                    MissCount = 0,
+                    IsUserTrained = true,
+                    IsAugmented = isAugmented,
+                    Source = isAugmented ? (isDistilled ? "distilled_aug" : "user_aug") : (isDistilled ? "distilled" : "user"),
+                    LoopCount = topo.Loops,
+                    CrossingCount = topo.Crossings,
+                    CuspCount = topo.Cusps
+                });
+
                 return true;
             }
         }
 
         /// <summary>
         /// Cơ chế Phạt phản hồi tiêu cực (Contrastive Negative Penalty & Prototype Repulsion):
-        /// Khi người dùng sửa lỗi hoặc chọn gợi ý khác, mẫu dự đoán sai bị phạt:
+        /// Khi người dùng hiệu chỉnh kết quả sai, mẫu dự đoán sai bị phạt:
         /// 1. Tăng MissCount, giảm HitCount
-        /// 2. Đẩy lùi vector đặc trưng (Feature Repulsion) xa khỏi nét vẽ bị nhầm:
+        /// 2. Đẩy lùi nhẹ vector đặc trưng (Feature Repulsion) xa khỏi nét vẽ bị nhầm:
         ///    F_wrong = F_wrong + alpha * (F_wrong - F_query)
-        /// 3. Loại bỏ (Pruning) các mẫu biến thể/cá nhân bị sai >= 3 lần mà không có hit
+        /// NGUYÊN TẮC BẤT DI BẤT DỊCH: KHÔNG BAO GIỜ XÓA (PRUNE) DỮ LIỆU CỦA NGƯỜI DÙNG!
         /// </summary>
         public static int PenalizeWrongPrediction(string wrongLabel, List<List<PointF>> strokes)
         {
@@ -572,7 +802,7 @@ namespace HapiCopi
             int penalizedCount = 0;
             lock (_lock)
             {
-                // Tìm các prototype mang nhãn wrongLabel nằm gần query này nhất
+                // Chỉ tìm các prototype CỦA RIÊNG nhãn wrongLabel
                 var matchingProtos = _prototypes
                     .Where(p => p.Label.Equals(wrongLabel.Trim(), StringComparison.OrdinalIgnoreCase))
                     .ToList();
@@ -580,13 +810,13 @@ namespace HapiCopi
                 foreach (var p in matchingProtos)
                 {
                     float dist = ComputeDistance(p.Features, queryFeatures);
-                    if (dist < 3.2f) // Chỉ phạt những mẫu thực sự tham gia vào việc gây nhầm lẫn
+                    if (dist < 2.0f) // Chỉ tác động các mẫu thực sự gần với nét gây nhầm lẫn
                     {
                         p.MissCount++;
                         p.HitCount = Math.Max(0, p.HitCount - 1);
 
-                        // Feature Repulsion: đẩy lùi vector của prototype sai ra xa nét vẽ hiện tại
-                        const float alpha = 0.15f;
+                        // Feature Repulsion nhẹ nhàng: đẩy nhẹ vector của prototype sai ra xa nét vẽ hiện tại
+                        const float alpha = 0.08f;
                         for (int i = 0; i < p.Features.Length && i < queryFeatures.Length; i++)
                         {
                             float diff = p.Features[i] - queryFeatures[i];
@@ -597,17 +827,15 @@ namespace HapiCopi
                     }
                 }
 
-                // Pruning: Dọn dẹp các mẫu bị phạt quá 3 lần và không có độ tin cậy
-                int removed = _prototypes.RemoveAll(p => p.IsUserTrained && p.MissCount >= 3 && p.HitCount <= 1);
-                if (removed > 0)
-                {
-                    Program.Log($"[HandwritingProfile] Đã loại bỏ {removed} prototype sai lệch do tích lũy phạt âm.");
-                }
+                // NGUYÊN TẮC NGHIỆP VỤ BẤT DI BẤT DỊCH:
+                // KHÔNG BAO GIỜ XÓA (PRUNE) DỮ LIỆU DO NGƯỜI DÙNG DẠY KHI PHẠT!
+                // MissCount đã được tích hợp vào công thức tính khoảng cách weightedDist,
+                // tự động đẩy độ ưu tiên của mẫu sai xuống thấp mà không làm mất mẫu cũ.
 
-                if (penalizedCount > 0 || removed > 0)
+                if (penalizedCount > 0)
                 {
                     SaveProfile();
-                    Program.Log($"[HandwritingProfile] Đã áp dụng cơ chế Phạt (Contrastive Penalty) cho nhãn '{wrongLabel}' ({penalizedCount} prototype bị phạt).");
+                    Program.Log($"[HandwritingProfile] Đã áp dụng cơ chế Phạt (Contrastive Repulsion) cho nhãn '{wrongLabel}' ({penalizedCount} prototype bị điều chỉnh vector, không xóa mẫu).");
                 }
             }
 
@@ -670,8 +898,61 @@ namespace HapiCopi
                     }
                 }
 
+                // Hòa trộn với dự đoán từ Deep Learning ONNX Engine nếu có
+                if (OnnxMathVisionEngine.IsModelLoaded)
+                {
+                    var onnxCands = OnnxMathVisionEngine.Predict(strokes, topK);
+                    if (onnxCands.Count > 0)
+                    {
+                        candidates = BlendWithOnnxCandidates(candidates, onnxCands, topK);
+                    }
+                }
+
                 return candidates;
             }
+        }
+
+        private static List<(string label, float confidence)> BlendWithOnnxCandidates(
+            List<(string label, float confidence)> localCands,
+            List<(string label, float confidence)> onnxCands,
+            int topK)
+        {
+            var combined = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+
+            // Kiểm tra xem mẫu Top 1 local có phải do người dùng tự học không
+            bool isUserTrainedTop = false;
+            if (localCands.Count > 0)
+            {
+                var topLabel = localCands[0].label;
+                isUserTrainedTop = _prototypes.Any(p => p.Label.Equals(topLabel, StringComparison.OrdinalIgnoreCase) && p.IsUserTrained);
+            }
+
+            // Trọng số: Mẫu người dùng đã dạy ưu tiên 75%, nếu là mẫu cơ sở chia 50-50 với ONNX
+            float wLocal = isUserTrainedTop ? 0.75f : 0.50f;
+            float wOnnx = 1.0f - wLocal;
+
+            foreach (var c in localCands)
+            {
+                combined[c.label] = c.confidence * wLocal;
+            }
+
+            foreach (var o in onnxCands)
+            {
+                if (combined.ContainsKey(o.label))
+                {
+                    combined[o.label] += o.confidence * wOnnx;
+                }
+                else
+                {
+                    combined[o.label] = o.confidence * wOnnx;
+                }
+            }
+
+            return combined
+                .OrderByDescending(kv => kv.Value)
+                .Take(topK)
+                .Select(kv => (kv.Key, kv.Value))
+                .ToList();
         }
 
         /// <summary>
@@ -803,6 +1084,142 @@ namespace HapiCopi
             return (float)Math.Sqrt(sum);
         }
 
+        private static bool DoSegmentsIntersect(PointF p1, PointF p2, PointF p3, PointF p4)
+        {
+            float Ccw(PointF a, PointF b, PointF c) =>
+                (c.Y - a.Y) * (b.X - a.X) - (b.Y - a.Y) * (c.X - a.X);
+
+            float d1 = Ccw(p3, p4, p1);
+            float d2 = Ccw(p3, p4, p2);
+            float d3 = Ccw(p1, p2, p3);
+            float d4 = Ccw(p1, p2, p4);
+
+            return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+                   ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+        }
+
+        /// <summary>
+        /// Trích xuất đặc trưng hình thái học Topo bất biến (Euler loop, crossings, cusps).
+        /// </summary>
+        public static TopologicalProfile ExtractTopologicalProfile(List<List<PointF>> strokes)
+        {
+            var topo = new TopologicalProfile();
+            if (strokes == null || strokes.Count == 0) return topo;
+
+            var allPts = strokes.SelectMany(s => s).ToList();
+            if (allPts.Count < 2) return topo;
+
+            float minX = allPts.Min(p => p.X);
+            float maxX = allPts.Max(p => p.X);
+            float minY = allPts.Min(p => p.Y);
+            float maxY = allPts.Max(p => p.Y);
+            float w = Math.Max(1f, maxX - minX);
+            float h = Math.Max(1f, maxY - minY);
+            float maxDim = Math.Max(w, h);
+            float diag = (float)Math.Sqrt(w * w + h * h);
+
+            int loopCount = 0;
+            int cuspCount = 0;
+
+            // 1. Phân tích từng nét: vòng kín khép đuôi, tự cắt nét, và góc nhọn
+            foreach (var stroke in strokes)
+            {
+                if (stroke.Count < 3) continue;
+
+                // 1.1. Khép đầu đuôi (Closure Loop): điểm đầu và cuối gặp nhau (ví dụ: 0, O)
+                float endGap = Distance(stroke[0], stroke[^1]);
+                float strokeLen = 0f;
+                for (int i = 1; i < stroke.Count; i++)
+                {
+                    strokeLen += Distance(stroke[i - 1], stroke[i]);
+                }
+
+                bool isClosed = endGap <= maxDim * 0.35f && strokeLen >= maxDim * 1.5f;
+                if (isClosed)
+                {
+                    loopCount++;
+                }
+
+                // 1.2. Tự giao cắt (Self-intersection): nét tự cắt thân nó (ví dụ: 8, 6, 9)
+                // Nếu nét đã khép kín đầu đuôi (isClosed), giới hạn biên để không tính trùng điểm khép kín
+                int maxJ = isClosed ? stroke.Count - 2 : stroke.Count - 1;
+                int startI = isClosed ? 1 : 0;
+                for (int i = startI; i < maxJ; i++)
+                {
+                    var p1 = stroke[i];
+                    var p2 = stroke[i + 1];
+
+                    for (int j = i + 3; j < maxJ; j++)
+                    {
+                        var p3 = stroke[j];
+                        var p4 = stroke[j + 1];
+
+                        if (DoSegmentsIntersect(p1, p2, p3, p4))
+                        {
+                            loopCount++;
+                            break;
+                        }
+                    }
+                    if (loopCount >= 2) break;
+                }
+
+                // 1.3. Góc nhọn (Sharp Cusps): vector đổi hướng gập lại > 105 độ
+                int step = Math.Max(1, stroke.Count / 8);
+                for (int i = step; i < stroke.Count - step; i += step)
+                {
+                    var pPrev = stroke[i - step];
+                    var pCur = stroke[i];
+                    var pNext = stroke[i + step];
+
+                    float ux = pCur.X - pPrev.X, uy = pCur.Y - pPrev.Y;
+                    float vx = pNext.X - pCur.X, vy = pNext.Y - pCur.Y;
+                    float lenU = (float)Math.Sqrt(ux * ux + uy * uy);
+                    float lenV = (float)Math.Sqrt(vx * vx + vy * vy);
+
+                    if (lenU > 0.05f * diag && lenV > 0.05f * diag)
+                    {
+                        float dot = (ux * vx + uy * vy) / (lenU * lenV);
+                        if (dot < -0.25f) // Góc nhọn gập lại
+                        {
+                            cuspCount++;
+                        }
+                    }
+                }
+            }
+
+            // 2. Điểm giao cắt giữa các nét khác nhau (Crossings: ví dụ dấu +, x)
+            int crossingCount = 0;
+            for (int a = 0; a < strokes.Count; a++)
+            {
+                var sa = strokes[a];
+                for (int b = a + 1; b < strokes.Count; b++)
+                {
+                    var sb = strokes[b];
+                    bool crossed = false;
+
+                    for (int i = 0; i < sa.Count - 1 && !crossed; i++)
+                    {
+                        for (int j = 0; j < sb.Count - 1; j++)
+                        {
+                            if (DoSegmentsIntersect(sa[i], sa[i + 1], sb[j], sb[j + 1]))
+                            {
+                                crossingCount++;
+                                crossed = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            topo.Loops = Math.Min(2, loopCount);
+            topo.Crossings = crossingCount;
+            topo.Cusps = Math.Min(3, cuspCount);
+            topo.Endpoints = strokes.Count * 2;
+
+            return topo;
+        }
+
         private static void LoadDefaultBasePrototypes()
         {
             // Nạp tập các chữ số và ký hiệu toán chuẩn (có các biến thể viết tay phổ biến như số 7 gạch ngang, số 4 một nét...)
@@ -823,7 +1240,7 @@ namespace HapiCopi
                 ("7", new() { new() { new(20, 15), new(85, 15), new(35, 90) } }),
                 // 7 (2 nét kiểu Việt Nam / Châu Âu có gạch ngang bụng)
                 ("7", new() { new() { new(20, 15), new(85, 15), new(40, 90) }, new() { new(25, 50), new(70, 50) } }),
-                ("8", new() { new() { new(50, 50), new(25, 25), new(50, 10), new(75, 25), new(50, 50), new(25, 75), new(50, 90), new(75, 75), new(50, 50) } }),
+                ("8", new() { new() { new(50, 10), new(25, 25), new(50, 50), new(75, 75), new(50, 90), new(25, 75), new(50, 50), new(75, 25), new(50, 10) } }),
                 ("9", new() { new() { new(75, 50), new(30, 50), new(30, 15), new(75, 15), new(75, 90) } }),
                 ("x", new() { new() { new(20, 20), new(80, 80) }, new() { new(80, 20), new(20, 80) } }),
                 ("y", new() { new() { new(20, 20), new(50, 55) }, new() { new(80, 20), new(30, 95) } }),
@@ -831,6 +1248,8 @@ namespace HapiCopi
                 ("a", new() { new() { new(75, 30), new(30, 45), new(30, 75), new(75, 75), new(75, 30), new(75, 90) } }),
                 ("b", new() { new() { new(25, 10), new(25, 90), new(75, 90), new(75, 55), new(25, 55) } }),
                 ("c", new() { new() { new(75, 35), new(35, 35), new(25, 60), new(35, 85), new(75, 85) } }),
+                ("u", new() { new() { new(25, 25), new(25, 75), new(50, 90), new(75, 75), new(75, 25) } }),
+                ("v", new() { new() { new(25, 25), new(50, 90), new(75, 25) } }),
                 ("+", new() { new() { new(50, 20), new(50, 80) }, new() { new(20, 50), new(80, 50) } }),
                 ("-", new() { new() { new(20, 50), new(80, 50) } }),
                 ("=", new() { new() { new(20, 38), new(80, 38) }, new() { new(20, 62), new(80, 62) } }),
@@ -842,6 +1261,7 @@ namespace HapiCopi
             foreach (var item in baseSamples)
             {
                 float[] feat = ExtractStrokeFeatures(item.Strokes, out float asp);
+                var topo = ExtractTopologicalProfile(item.Strokes);
                 if (feat.Length > 0)
                 {
                     _prototypes.Add(new HandwritingPrototype
@@ -851,7 +1271,10 @@ namespace HapiCopi
                         StrokeCount = item.Strokes.Count,
                         AspectRatio = asp,
                         HitCount = 1,
-                        IsUserTrained = false
+                        IsUserTrained = false,
+                        LoopCount = topo.Loops,
+                        CrossingCount = topo.Crossings,
+                        CuspCount = topo.Cusps
                     });
                 }
             }

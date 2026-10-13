@@ -30,6 +30,12 @@
 
 Từ thời điểm này, mọi Agent can thiệp vào repo HapiCopi **BẮT BUỘC PHẢI TUÂN THỦ TUYỆT ĐỐI**:
 
+### 🎯 Điều 0: TƯ DUY CỐT LÕI CỦA NGƯỜI DÙNG (CORE MINDSET)
+> **"Tư duy của mình nói chung là đo lường, định lượng được, thấy được sự đánh đổi tốt nhất cho tổng thể, không phải tốt nhất ở cục bộ. Có số liệu, rõ ràng, cách làm dễ hiểu, make sense."**
+* Mọi đề xuất kiến trúc, tối ưu tài nguyên (CPU, RAM, dung lượng) hay thuật toán phải luôn nhìn vào sự **đánh đổi tốt nhất cho tổng thể** (Global Trade-offs), không được tối ưu mù quáng hay chắp vá cục bộ.
+* Mọi kết luận phải dựa trên **số liệu định lượng đo đạc thực tế**, không được võ đoán (no assumptions) khi chưa chạy thực nghiệm.
+* Giải pháp kỹ thuật phải rõ ràng, giải thích dễ hiểu và hoàn toàn make sense.
+
 ### 🚫 Điều 1: TUYỆT ĐỐI CẤM ASSUME (KHÔNG SUY ĐOÁN BỪA BÃI)
 * Không được phép tự suy đoán nguyên nhân lỗi, hành vi người dùng, hay kiến trúc ngầm của thư viện bên thứ 3.
 * Nếu không có số liệu thực tế hoặc không chắc chắn về yêu cầu: **Bắt buộc phải hỏi người dùng hoặc đo đạc bằng công cụ chuyên dụng**, không được tự ý hành động rồi làm hỏng luồng làm việc.

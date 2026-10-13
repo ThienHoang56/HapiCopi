@@ -41,6 +41,7 @@ VersionInfoProductName={#MyAppName}
 ; App chạy ẩn ở khay hệ thống, không có cửa sổ để Restart Manager gửi WM_CLOSE tới.
 ; Việc đóng app do mục [Code] bên dưới lo, qua kênh lệnh --quit của chính app.
 CloseApplications=no
+AppMutex=Global\HapiCopi_SingleInstance_Mutex_9912
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -65,8 +66,10 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; Cache WebView2, log, bộ cài đã tải về — rác của app, xoá thẳng.
-Type: filesandordirs; Name: "{localappdata}\HapiCopi"
+; Cache WebView2, log, bộ cài đã tải về — rác của app, xoá thẳng. Bảo vệ thư mục profiles và models.
+Type: filesandordirs; Name: "{localappdata}\HapiCopi\WebViewCache"
+Type: filesandordirs; Name: "{localappdata}\HapiCopi\Updates"
+Type: filesandordirs; Name: "{localappdata}\HapiCopi\Logs"
 Type: filesandordirs; Name: "{localappdata}\HapiCopiWebViewCache"
 ; App có thể sinh file ngay cạnh exe lúc chạy; không quét cả thư mục thì nó sẽ nằm lại.
 Type: filesandordirs; Name: "{app}"
@@ -74,19 +77,12 @@ Type: filesandordirs; Name: "{app}"
 [Code]
 const
   AppExeName = 'HapiCopi.exe';
+  AppMutexName = 'Global\HapiCopi_SingleInstance_Mutex_9912';
 
 function AppIsRunning(): Boolean;
-var
-  ResultCode: Integer;
 begin
-  Result := False;
-
-  if Exec(ExpandConstant('{cmd}'),
-          '/C tasklist /FI "IMAGENAME eq ' + AppExeName + '" /NH | find /I "' + AppExeName + '" > nul',
-          '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-  begin
-    Result := (ResultCode = 0);
-  end;
+  // Kiểm tra tức thì trong RAM qua Win32 Mutex, triệt tiêu 100% hiện tượng lag CPU do tasklist.exe
+  Result := CheckForMutexes(AppMutexName);
 end;
 
 /// Đóng app đang chạy. Trả về False nếu tới cuối vẫn còn tiến trình.
@@ -109,8 +105,7 @@ begin
     Exec(ExePath, '--quit', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 
-  // Không tin mã thoát: bản cũ chưa biết --quit cũng trả về 0 rồi thoát ngay,
-  // trong khi app vẫn đang chạy. Chỉ danh sách tiến trình mới nói thật.
+  // Kiểm tra mutex trong RAM (tối đa 3 giây, kiểm tra mỗi 150ms mà không tốn CPU)
   for I := 1 to 20 do
   begin
     if not AppIsRunning() then
@@ -118,14 +113,14 @@ begin
       Result := True;
       Exit;
     end;
-    Sleep(500);
+    Sleep(150);
   end;
 
   // App treo hoặc quá cũ: buộc phải tắt, nếu không file exe còn bị khoá và
   // thư mục cài đặt sẽ nằm lại sau khi gỡ.
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM ' + AppExeName, '',
        SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Sleep(2000);
+  Sleep(500);
   Result := not AppIsRunning();
 end;
 

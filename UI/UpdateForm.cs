@@ -471,7 +471,7 @@ namespace HapiCopi
             }
         }
 
-        private void OnFileUpdateClicked(object? sender, EventArgs e)
+        private async void OnFileUpdateClicked(object? sender, EventArgs e)
         {
             using var dlg = new OpenFileDialog
             {
@@ -509,12 +509,8 @@ namespace HapiCopi
                 return;
             }
 
-            MessageBox.Show(
-                message + "\n\nNhấn OK để thoát HapiCopi và bắt đầu cài.",
-                "HapiCopi",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-
+            _statusLabel.Text = "Đang khởi động bộ cài và đóng HapiCopi...";
+            await Task.Delay(400);
             Application.Exit();
         }
 
@@ -681,14 +677,8 @@ namespace HapiCopi
                 return;
             }
 
-            _statusLabel.Text = message;
-
-            MessageBox.Show(
-                message + "\n\nNhấn OK để thoát HapiCopi và bắt đầu cài.",
-                "HapiCopi",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-
+            _statusLabel.Text = "Đang khởi động bộ cài và đóng HapiCopi...";
+            await Task.Delay(400);
             Application.Exit();
         }
 

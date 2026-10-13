@@ -66,7 +66,13 @@ namespace HapiCopi
             }
 
             string? folder = Path.GetDirectoryName(manifest);
-            return Path.Combine(folder ?? "", fileName);
+            string direct = Path.Combine(folder ?? "", fileName);
+            if (System.IO.File.Exists(direct)) return direct;
+
+            string besideRepo = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "artifacts", "installer", fileName);
+            if (System.IO.File.Exists(besideRepo)) return Path.GetFullPath(besideRepo);
+
+            return direct;
         }
 
         public static async Task<UpdateManifest?> ReadManifestAsync(string feed, CancellationToken token = default)
@@ -86,8 +92,16 @@ namespace HapiCopi
                 {
                     if (!System.IO.File.Exists(location))
                     {
-                        Program.Log($"[Update] Chưa có {location}.");
-                        return null;
+                        string besideRepo = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "artifacts", "installer", ManifestFileName);
+                        if (System.IO.File.Exists(besideRepo))
+                        {
+                            location = Path.GetFullPath(besideRepo);
+                        }
+                        else
+                        {
+                            Program.Log($"[Update] Chưa có {location}.");
+                            return null;
+                        }
                     }
 
                     var info = new FileInfo(location);

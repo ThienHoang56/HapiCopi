@@ -62,8 +62,13 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish thất bại." }
 
 $exe = Join-Path $publishDir "HapiCopi.exe"
 $wv = Join-Path $publishDir "WebViewResources"
+$md = Join-Path $publishDir "models"
 if (-not (Test-Path $exe)) { throw "Thiếu HapiCopi.exe trong $publishDir" }
 if (-not (Test-Path (Join-Path $wv "index.html"))) { throw "Thiếu WebViewResources sau publish." }
+if (-not (Test-Path (Join-Path $md "math_rec.onnx")) -and (Test-Path (Join-Path $root "models\math_rec.onnx"))) {
+    New-Item -ItemType Directory -Path $md -Force | Out-Null
+    Copy-Item (Join-Path $root "models\*") $md -Recurse -Force
+}
 if (Test-Path (Join-Path $root ".env")) { Copy-Item (Join-Path $root ".env") (Join-Path $publishDir ".env") -Force }
 
 Write-Host "Publish OK: $publishDir" -ForegroundColor Green
@@ -154,6 +159,8 @@ $sorted = @($releases | Sort-Object -Property @{ Expression = { [version]$_.vers
 [pscustomobject]@{ app = "HapiCopi"; releases = $sorted } |
     ConvertTo-Json -Depth 5 |
     Set-Content -Path $manifestPath -Encoding UTF8
+
+Copy-Item $manifestPath (Join-Path $installerDir "versions.json") -Force
 
 Write-Host "versions.json OK — $($sorted.Count) bản trong nguồn:" -ForegroundColor Green
 for ($i = 0; $i -lt $sorted.Count; $i++) {

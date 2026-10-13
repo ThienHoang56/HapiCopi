@@ -404,9 +404,18 @@ namespace HapiCopi
 $ErrorActionPreference = 'Stop'
 
 if ($TargetPid -gt 0) {
-    Wait-Process -Id $TargetPid -Timeout 60 -ErrorAction SilentlyContinue
+    try {
+        $proc = Get-Process -Id $TargetPid -ErrorAction SilentlyContinue
+        if ($proc) {
+            # Chờ app thoát sạch trong tối đa 8 giây
+            $null = $proc.WaitForExit(8000)
+            if (-not $proc.HasExited) {
+                Stop-Process -Id $TargetPid -Force -ErrorAction SilentlyContinue
+            }
+        }
+    } catch { }
 }
-Start-Sleep -Milliseconds 800
+Start-Sleep -Milliseconds 600
 
 try {
     $arguments = @('/SILENT', '/NORESTART', '/SUPPRESSMSGBOXES', '/NOCANCEL')
@@ -417,6 +426,7 @@ catch {
     # Bỏ qua: dù cài hỏng vẫn phải bật lại app ở bước dưới.
 }
 finally {
+    Start-Sleep -Milliseconds 500
     # Tuyệt đối không để người dùng còn lại tay trắng khi bộ cài thất bại.
     $exe = if (Test-Path $AppExe) { $AppExe } elseif (Test-Path $FallbackExe) { $FallbackExe } else { $null }
     if ($exe) { Start-Process -FilePath $exe -ErrorAction SilentlyContinue }

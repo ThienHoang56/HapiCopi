@@ -229,7 +229,7 @@ namespace HapiCopi
                 "hapicopi.local", localFolder, CoreWebView2HostResourceAccessKind.Allow);
             web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             web.CoreWebView2.Settings.AreDevToolsEnabled = false;
-            web.DefaultBackgroundColor = Color.White;
+            web.DefaultBackgroundColor = Color.FromArgb(248, 250, 252);
             web.CoreWebView2.WebMessageReceived += onMessage;
             web.Source = new Uri("http://hapicopi.local/" + pageFileName + "?v=5");
         }
