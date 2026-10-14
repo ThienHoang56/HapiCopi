@@ -294,6 +294,65 @@ namespace HapiCopi
             Print($"[TEST 5 RECOGNIZE] Ket qua nhan dien Ma tran 2x2: '{recMatrix}'");
             if (!recMatrix.Contains("\\begin{pmatrix}")) { Print("FAILED TEST 5 RECOGNIZE"); SaveTestReport("distill_test_report.txt", sb.ToString()); return 5; }
 
+            // TEST 5B: Test 3x3 Matrix with square brackets [ ]
+            var matrix3x3Strokes = new System.Collections.Generic.List<System.Collections.Generic.List<System.Drawing.PointF>>
+            {
+                // left tall bracket [ (h=140, w=20, top hook and bottom hook to right)
+                new() { new(25, 10), new(10, 10), new(10, 150), new(25, 150) },
+                // Row 1: "4", "5", "3"
+                new() { new(40, 20), new(35, 40), new(50, 40) }, // "4"
+                new() { new(45, 30), new(45, 55) },
+                new() { new(75, 20), new(65, 20), new(65, 35), new(75, 35), new(65, 55) }, // "5"
+                new() { new(95, 20), new(105, 20), new(100, 35), new(105, 55), new(95, 55) }, // "3"
+                // Row 2: "9", "2", "1"
+                new() { new(45, 75), new(35, 75), new(35, 90), new(45, 90), new(45, 110) }, // "9"
+                new() { new(65, 75), new(75, 75), new(65, 110), new(75, 110) }, // "2"
+                new() { new(100, 75), new(100, 110) }, // "1"
+                // Row 3: "1", "1", "7"
+                new() { new(40, 125), new(40, 145) }, // "1"
+                new() { new(70, 125), new(70, 145) }, // "1"
+                new() { new(95, 125), new(105, 125), new(98, 145) }, // "7"
+                // right tall bracket ] (h=140, w=20, top hook and bottom hook to left)
+                new() { new(120, 10), new(135, 10), new(135, 150), new(120, 150) }
+            };
+            string recMatrix3x3 = MathVisionService.RecognizeWithPersonalizedProfile(matrix3x3Strokes);
+            Print($"[TEST 5B RECOGNIZE] Ket qua nhan dien Ma tran 3x3: '{recMatrix3x3}'");
+            if (!recMatrix3x3.Contains("\\begin{bmatrix}") || !recMatrix3x3.Contains("&") || !recMatrix3x3.Contains("\\\\"))
+            {
+                Print("FAILED TEST 5B RECOGNIZE");
+                SaveTestReport("distill_test_report.txt", sb.ToString());
+                return 52;
+            }
+
+            // TEST 5C: Test System of Equations with curly brace {
+            var systemOfEqStrokes = new System.Collections.Generic.List<System.Collections.Generic.List<System.Drawing.PointF>>
+            {
+                // left tall curly brace { (top end at (20,10), cusp at (8,60), bottom end at (20,110))
+                new() { new(20, 10), new(15, 30), new(8, 60), new(15, 90), new(20, 110) },
+                // Row 1: "2x + y = 5"
+                new() { new(35, 25), new(45, 25), new(35, 45), new(45, 45) }, // 2
+                new() { new(52, 25), new(62, 45) }, new() { new(62, 25), new(52, 45) }, // x
+                new() { new(72, 35), new(82, 35) }, new() { new(77, 27), new(77, 43) }, // +
+                new() { new(92, 25), new(97, 35), new(102, 25), new(97, 45) }, // y
+                new() { new(112, 32), new(122, 32) }, new() { new(112, 38), new(122, 38) }, // =
+                new() { new(140, 25), new(132, 25), new(132, 35), new(140, 35), new(132, 45) }, // 5
+                // Row 2: "x - 3y = 2"
+                new() { new(35, 80), new(45, 100) }, new() { new(45, 80), new(35, 100) }, // x
+                new() { new(55, 90), new(65, 90) }, // -
+                new() { new(75, 80), new(85, 80), new(80, 90), new(85, 100), new(75, 100) }, // 3
+                new() { new(95, 80), new(100, 90), new(105, 80), new(100, 100) }, // y
+                new() { new(115, 87), new(125, 87) }, new() { new(115, 93), new(125, 93) }, // =
+                new() { new(135, 80), new(145, 80), new(135, 100), new(145, 100) } // 2
+            };
+            string recSystemOfEq = MathVisionService.RecognizeWithPersonalizedProfile(systemOfEqStrokes);
+            Print($"[TEST 5C RECOGNIZE] Ket qua nhan dien He phuong trinh: '{recSystemOfEq}'");
+            if (!recSystemOfEq.Contains("\\begin{cases}") || !recSystemOfEq.Contains("\\\\"))
+            {
+                Print("FAILED TEST 5C RECOGNIZE");
+                SaveTestReport("distill_test_report.txt", sb.ToString());
+                return 53;
+            }
+
             // TEST 6: Candidate ranking for single character and formula
             var (recWithCands, candsList) = MathVisionService.RecognizeWithPersonalizedProfileWithCandidates(testStrokes7);
             Print($"[TEST 6 CANDIDATES] Ket qua: '{recWithCands}', So goi y phu: {candsList.Count} [{string.Join(", ", candsList)}]");

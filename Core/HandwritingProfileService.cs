@@ -857,7 +857,13 @@ namespace HapiCopi
             lock (_lock)
             {
                 if (_prototypes.Count == 0)
+                {
+                    if (OnnxMathVisionEngine.IsModelLoaded)
+                    {
+                        return OnnxMathVisionEngine.Predict(strokes, topK);
+                    }
                     return new List<(string, float)>();
+                }
 
                 var scoredProtos = new List<(HandwritingPrototype proto, float weightedDist)>();
 

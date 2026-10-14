@@ -8,7 +8,9 @@
 [TEST 3 RECOGNIZE] Ket qua nhan dien Vector: '\vec{v}'
 [TEST 4] Distill 'x^2': Hoc duoc 32 mau, ExponentMaxRatio: 0.57, Shift: 0.45
 [TEST 4 RECOGNIZE] Ket qua nhan dien Exponent: 'x^{2}'
-[TEST 5 RECOGNIZE] Ket qua nhan dien Ma tran 2x2: '\begin{pmatrix} 1 & 3 \\ 3 & 7 \end{pmatrix}'
+[TEST 5 RECOGNIZE] Ket qua nhan dien Ma tran 2x2: '\begin{pmatrix} 1 & 3 \\ v \end{pmatrix}'
+[TEST 5B RECOGNIZE] Ket qua nhan dien Ma tran 3x3: '\begin{bmatrix} 4 & 4 & 3 \\ 4 & 3 & 1 \\ 1 & 1 & 3 \end{bmatrix}'
+[TEST 5C RECOGNIZE] Ket qua nhan dien He phuong trinh: '\begin{cases} \tilde{X} = 5 \\ X = X{y} = L \end{cases}'
 [TEST 6 CANDIDATES] Ket qua: '7', So goi y phu: 3 [2, 3, v]
 [TEST 7 PENALTY] Da phat nhan sai '7': 3 prototypes bi day lui (repulsion) & tang MissCount
 ==================================================
