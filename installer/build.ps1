@@ -43,6 +43,8 @@ if (-not $FeedDir) {
 }
 
 Write-Host "==> Publish Release win-x64 single-file self-contained" -ForegroundColor Cyan
+Get-Process HapiCopi -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Milliseconds 600
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
 New-Item -ItemType Directory -Path $publishDir -Force | Out-Null
 

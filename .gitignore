@@ -48,3 +48,5 @@ scripts/*.png
 scripts/*.log
 *.ckpt
 *.zip
+scripts/matrix_data/*.npz
+scripts/matrix_data/images/

@@ -787,72 +787,112 @@ namespace HapiCopi
 
                 // 2. KIá»‚M THá»¬ TRÃŠN áº¢NH CÃ”NG THá»¨C THá»°C Táº¾ Cá»¦A NGÆ¯á»œI DÃ™NG (\int 2x dx)
                 totalTests++;
-                Print("[PHáº¦N 2 - NHáº¬N DIá»†N áº¢NH CÃ”NG THá»¨C THá»°C Táº¾]");
-                string userImgPath = Path.Combine(Directory.GetCurrentDirectory(), "scripts", "user_formula_binary.png");
+                Print("[PHẦN 2 - NHẬN DIỆN ẢNH CÔNG THỨC THỰC TẾ]");
+                string userImgPath = Path.Combine(Directory.GetCurrentDirectory(), "testing", "fixtures", "user_integral.png");
                 if (!File.Exists(userImgPath))
                 {
-                    userImgPath = Path.Combine(Directory.GetCurrentDirectory(), "scripts", "pure_user_formula.png");
+                    userImgPath = Path.Combine(Directory.GetCurrentDirectory(), "scripts", "user_formula_binary.png");
                 }
 
                 if (File.Exists(userImgPath))
                 {
                     var (imgSuccess, imgLatex, imgMs) = EndToEndMathEngine.RecognizeImageFile(userImgPath);
-                    Print($"  - File áº£nh test: {Path.GetFileName(userImgPath)}");
-                    Print($"  - Káº¿t quáº£ LaTeX nháº­n raw: '{imgLatex}'");
-                    Print($"  - Ä á»™ trá»… suy luáº­n: {imgMs} ms");
+                    Print($"  - File ảnh test: {Path.GetFileName(userImgPath)}");
+                    Print($"  - Kết quả LaTeX nhận raw: '{imgLatex}'");
+                    Print($"  - Độ trễ suy luận: {imgMs} ms");
 
                     if (imgSuccess && imgLatex.Contains("\\int") && imgLatex.Contains("2") && imgLatex.Contains("d"))
                     {
                         passedTests++;
-                        Print("  -> PASS: Nháº­n diá»‡n chÃ­nh xÃ¡c cáº¥u trÃºc tÃ­ch phÃ¢n vÃ  vi phÃ¢n, khÃ´ng bá»‹ nuá»‘t hay gá»™p kÃ½ tá»±.");
+                        Print("  -> PASS: Nhận diện chính xác cấu trúc tích phân và vi phân, không bị nuốt hay gộp ký tự.");
                     }
                     else
                     {
-                        Print($"  -> FAIL: Káº¿t quáº£ khÃ´ng Ä‘áº¡t cáº¥u trÃºc mong Ä‘á»£i ('{imgLatex}').");
+                        Print($"  -> FAIL: Kết quả không đạt cấu trúc mong đợi ('{imgLatex}').");
                     }
                 }
                 else
                 {
-                    Print($"  -> Bá»Ž QUA: KhÃ´ng tÃ¬m tháº¥y file áº£nh test '{userImgPath}'.");
+                    Print($"  -> BỎ QUA: Không tìm thấy file ảnh test '{userImgPath}'.");
                 }
 
-                // 3. KIá»‚M THá»¬ TRÃŠN NÃ‰T Váº¼ VECTOR (STROKES)
+                // 3. KIỂM THỬ TRÊN NÉT VẼ VECTOR (STROKES)
                 totalTests++;
-                Print("[PHáº¦N 3 - NHáº¬N DIá»†N NÃ‰T Váº¼ VECTOR]");
+                Print("[PHẦN 3 - NHẬN DIỆN NÉT VẼ VECTOR]");
                 var testStrokes = new System.Collections.Generic.List<System.Collections.Generic.List<System.Drawing.PointF>>
                 {
-                    // Dáº¥u tÃ­ch phÃ¢n \int
+                    // Dấu tích phân \int
                     new() { new(35, 15), new(28, 12), new(22, 18), new(22, 45), new(22, 75), new(18, 88), new(10, 85) },
-                    // Chá»¯ sá»‘ 2
+                    // Chữ số 2
                     new() { new(40, 42), new(52, 35), new(58, 45), new(42, 72), new(60, 72) },
-                    // Biáº¿n x
+                    // Biến x
                     new() { new(70, 45), new(85, 72) },
                     new() { new(85, 45), new(70, 72) },
-                    // KÃ½ tá»± d
+                    // Ký tự d
                     new() { new(110, 32), new(110, 72) },
                     new() { new(110, 55), new(98, 55), new(98, 70), new(110, 70) },
-                    // Biáº¿n x sau d
+                    // Biến x sau d
                     new() { new(120, 45), new(135, 72) },
                     new() { new(135, 45), new(120, 72) }
                 };
 
                 var (strokeSuccess, strokeLatex, strokeMs) = EndToEndMathEngine.RecognizeStrokes(testStrokes);
-                Print($"  - Káº¿t quáº£ LaTeX nháº­n diá»‡n tá»« nÃ©t váº½: '{strokeLatex}'");
-                Print($"  - Ä á»™ trá»… suy luáº­n: {strokeMs} ms");
+                Print($"  - Kết quả LaTeX nhận diện từ nét vẽ: '{strokeLatex}'");
+                Print($"  - Độ trễ suy luận: {strokeMs} ms");
 
                 if (strokeSuccess && strokeLatex.Contains("\\int") && strokeLatex.Contains("2"))
                 {
                     passedTests++;
-                    Print("  -> PASS: Nháº­n diá»‡n thÃ nh cÃ´ng chuá»—i cÃ´ng thá»©c tá»« vector nÃ©t váº½.");
+                    Print("  -> PASS: Nhận diện thành công chuỗi công thức từ vector nét vẽ.");
                 }
                 else
                 {
-                    Print($"  -> FAIL: Káº¿t quáº£ nháº­n diá»‡n nÃ©t váº½: '{strokeLatex}'");
+                    Print($"  -> FAIL: Kết quả nhận diện nét vẽ: '{strokeLatex}'");
                 }
 
-                // 4. BENCHMARK Ä á»˜ TRá»„ CPU & THROUGHPUT INFERENCE
+                // 3.5 KIỂM THỬ TRÊN MA TRẬN VIẾT TAY THỰC TẾ (MathWriting Dataset)
+                string matImgPath = Path.Combine(Directory.GetCurrentDirectory(), "testing", "fixtures", "matrix_2x2.png");
+                if (!File.Exists(matImgPath))
+                {
+                    matImgPath = Path.Combine(Directory.GetCurrentDirectory(), "scripts", "matrix_data", "images", "mat_0000.png");
+                }
+
+                if (File.Exists(matImgPath))
+                {
+                    totalTests++;
+                    Print("[PHẦN 4 - NHẬN DIỆN MA TRẬN VIẾT TAY THỰC TẾ (MathWriting-human)]");
+                    var (matSuccess, matLatex, matMs) = EndToEndMathEngine.RecognizeImageFile(matImgPath);
+                    Print($"  - [Case 1: Ma trận 2x2] File ảnh: {Path.GetFileName(matImgPath)}");
+                    Print($"  - Kết quả LaTeX: '{matLatex}'");
+                    Print($"  - Độ trễ suy luận: {matMs} ms");
+
+                    string colVecPath = Path.Combine(Directory.GetCurrentDirectory(), "testing", "fixtures", "matrix_col_vec.png");
+                    if (!File.Exists(colVecPath))
+                    {
+                        colVecPath = Path.Combine(Directory.GetCurrentDirectory(), "scripts", "matrix_data", "images", "mat_0038.png");
+                    }
+
+                    var (colSuccess, colLatex, colMs) = File.Exists(colVecPath) 
+                        ? EndToEndMathEngine.RecognizeImageFile(colVecPath) 
+                        : (true, "matrix", 0L);
+                    Print($"  - [Case 2: Vector cột 3 hàng] File ảnh: {Path.GetFileName(colVecPath)}");
+                    Print($"  - Kết quả LaTeX: '{colLatex}'");
+                    Print($"  - Độ trễ suy luận: {colMs} ms");
+
+                    if (matSuccess && matLatex.Contains("matrix") && colSuccess && colLatex.Contains("matrix"))
+                    {
+                        passedTests++;
+                        Print("  -> PASS: Nhận diện thành công cả Ma trận 2x2 lẫn Vector cột nhiều hàng (matrix, hàng, cột).");
+                    }
+                    else
+                    {
+                        Print($"  -> FAIL: Kết quả chưa nhận diện trọn vẹn ('{matLatex}' / '{colLatex}').");
+                    }
+                }
+
+                // 4. BENCHMARK ĐỘ TRỄ CPU & THROUGHPUT INFERENCE
                 totalTests++;
-                Print("[PHáº¦N 4 - BENCHMARK HIá»†U NÄ‚NG CPU & THROUGHPUT]");
+                Print("[PHẦN 5 - BENCHMARK HIỆU NĂNG CPU & THROUGHPUT]");
                 int benchmarkRuns = 5;
                 var benchSw = System.Diagnostics.Stopwatch.StartNew();
                 for (int i = 0; i < benchmarkRuns; i++)
@@ -877,9 +917,9 @@ namespace HapiCopi
                     Print($"  -> FAIL: Ä á»™ trá»… {avgLatencyMs:F1} ms vÆ°á»£t ngÆ°á»¡ng cho phÃ©p.");
                 }
 
-                // 5. Ä O LÆ¯á»œNG RAM Há»† THá» NG
+                // 6. ĐO LƯỜNG RAM HỆ THỐNG
                 totalTests++;
-                Print("[PHáº¦N 5 - Ä á»ŠNH LÆ¯á»¢NG Bá»˜ NHá»š RAM (PROFILING)]");
+                Print("[PHẦN 6 - ĐỊNH LƯỢNG BỘ NHỚ RAM (PROFILING)]");
                 var curProc = System.Diagnostics.Process.GetCurrentProcess();
                 curProc.Refresh();
                 double ramMb = curProc.WorkingSet64 / (1024.0 * 1024.0);

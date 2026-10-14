@@ -5,31 +5,39 @@
 [PHáº¦N 1 - TÃ€I NGUYÃŠN & TRá»ŒNG Sá»  MÃ” HÃŒNH]
   - Khá»Ÿi táº¡o E2E Engine: THÃ€NH CÃ”NG
   - math_encoder.onnx : 12.09 MB
-  - math_decoder.onnx : 12.83 MB
-  - math_e2e_vocab.json: 1.32 KB
-  - Ráº NG BUá»˜C TÃ€I NGUYÃŠN: < 30 MB | THá»°C Táº¾: 24.92 MB
+  - math_decoder.onnx : 12.90 MB
+  - math_e2e_vocab.json: 1.84 KB
+  - Ráº NG BUá»˜C TÃ€I NGUYÃŠN: < 30 MB | THá»°C Táº¾: 25.00 MB
   -> PASS: Dung lÆ°á»£ng mÃ´ hÃ¬nh Ä‘Ã¡p á»©ng hoÃ n toÃ n rÃ ng buá»™c tÃ i nguyÃªn (< 30 MB).
-[PHáº¦N 2 - NHáº¬N DIá»†N áº¢NH CÃ”NG THá»¨C THá»°C Táº¾]
-  - File áº£nh test: user_formula_binary.png
-  - Káº¿t quáº£ LaTeX nháº­n raw: '\int 2 \times d x'
-  - Ä á»™ trá»… suy luáº­n: 118 ms
-  -> PASS: Nháº­n diá»‡n chÃ­nh xÃ¡c cáº¥u trÃºc tÃ­ch phÃ¢n vÃ  vi phÃ¢n, khÃ´ng bá»‹ nuá»‘t hay gá»™p kÃ½ tá»±.
-[PHáº¦N 3 - NHáº¬N DIá»†N NÃ‰T Váº¼ VECTOR]
-  - Káº¿t quáº£ LaTeX nháº­n diá»‡n tá»« nÃ©t váº½: '\int 2 X d X'
-  - Ä á»™ trá»… suy luáº­n: 19 ms
-  -> PASS: Nháº­n diá»‡n thÃ nh cÃ´ng chuá»—i cÃ´ng thá»©c tá»« vector nÃ©t váº½.
-[PHáº¦N 4 - BENCHMARK HIá»†U NÄ‚NG CPU & THROUGHPUT]
+[PHẦN 2 - NHẬN DIỆN ẢNH CÔNG THỨC THỰC TẾ]
+  - File ảnh test: user_integral.png
+  - Kết quả LaTeX nhận raw: '\int 2 x d x'
+  - Độ trễ suy luận: 82 ms
+  -> PASS: Nhận diện chính xác cấu trúc tích phân và vi phân, không bị nuốt hay gộp ký tự.
+[PHẦN 3 - NHẬN DIỆN NÉT VẼ VECTOR]
+  - Kết quả LaTeX nhận diện từ nét vẽ: '\int 2 X d X'
+  - Độ trễ suy luận: 91 ms
+  -> PASS: Nhận diện thành công chuỗi công thức từ vector nét vẽ.
+[PHẦN 4 - NHẬN DIỆN MA TRẬN VIẾT TAY THỰC TẾ (MathWriting-human)]
+  - [Case 1: Ma trận 2x2] File ảnh: matrix_2x2.png
+  - Kết quả LaTeX: '( \begin{matrix} - 1 & - 1 \\ 1 & 0 \end{matrix} )'
+  - Độ trễ suy luận: 135 ms
+  - [Case 2: Vector cột 3 hàng] File ảnh: matrix_col_vec.png
+  - Kết quả LaTeX: '[ \begin{matrix} 4 \\ 1 \\ 8 \end{matrix} ]'
+  - Độ trễ suy luận: 111 ms
+  -> PASS: Nhận diện thành công cả Ma trận 2x2 lẫn Vector cột nhiều hàng (matrix, hàng, cột).
+[PHẦN 5 - BENCHMARK HIỆU NĂNG CPU & THROUGHPUT]
   - Sá»‘ lÆ°á»£t Ä‘o (Runs): 5
-  - Ä á»™ trá»… trung bÃ¬nh: 29.8 ms / toÃ n bá»™ cÃ´ng thá»©c
-  - Tá»‘c Ä‘á»™ xá»­ lÃ½ (Throughput): 33.5 cÃ´ng thá»©c / giÃ¢y trÃªn CPU
+  - Ä á»™ trá»… trung bÃ¬nh: 73.9 ms / toÃ n bá»™ cÃ´ng thá»©c
+  - Tá»‘c Ä‘á»™ xá»­ lÃ½ (Throughput): 13.5 cÃ´ng thá»©c / giÃ¢y trÃªn CPU
   -> PASS: Ä á»™ trá»… Ä‘Ã¡p á»©ng thá» i gian thá»±c (< 300 ms/cÃ´ng thá»©c).
-[PHáº¦N 5 - Ä á»ŠNH LÆ¯á»¢NG Bá»˜ NHá»š RAM (PROFILING)]
-  - RAM tiÃªu thá»¥ thá»±c táº¿ (Working Set): 119.2 MB (NgÆ°á»¡ng an toÃ n: < 150 MB)
+[PHẦN 6 - ĐỊNH LƯỢNG BỘ NHỚ RAM (PROFILING)]
+  - RAM tiÃªu thá»¥ thá»±c táº¿ (Working Set): 121.8 MB (NgÆ°á»¡ng an toÃ n: < 150 MB)
   -> PASS: Bá»™ nhá»› RAM an toÃ n tuyá»‡t Ä‘á»‘i, khÃ´ng rÃ² rá»‰.
 ==========================================================
    KáºẾT QUẢ TỔNG THỂ BENCHMARK END-TO-END:
-   - VÆ°á»£t qua: 5 / 5 (100.0%)
-   - Ä á»™ trá»… CPU: 29.8 ms / cÃ´ng thá»©c
-   - Bá»™ nhá»› RAM: 119.2 MB
-   - Dung lÆ°á»£ng ONNX: 24.92 MB
+   - VÆ°á»£t qua: 6 / 6 (100.0%)
+   - Ä á»™ trá»… CPU: 73.9 ms / cÃ´ng thá»©c
+   - Bá»™ nhá»› RAM: 121.8 MB
+   - Dung lÆ°á»£ng ONNX: 25.00 MB
 ==========================================================

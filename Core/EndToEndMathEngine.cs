@@ -206,7 +206,7 @@ namespace HapiCopi
                 var generatedTokens = new List<long> { 1 }; // 1 = <sos>
                 var decodedLatexTokens = new List<string>();
 
-                int maxTokens = 60;
+                int maxTokens = 120;
                 for (int step = 0; step < maxTokens; step++)
                 {
                     var tgtTensor = new DenseTensor<long>(new[] { 1, generatedTokens.Count });
@@ -476,6 +476,14 @@ namespace HapiCopi
                  .Replace(" }", "}")
                  .Replace(" ^ ", "^")
                  .Replace(" _ ", "_");
+
+            // Format chuẩn cú pháp tên môi trường LaTeX: \begin{m a t r i x} -> \begin{matrix}, \end{m a t r i x} -> \end{matrix}
+            s = System.Text.RegularExpressions.Regex.Replace(s, @"\\(begin|end)\{([^}]+)\}", m =>
+            {
+                string envType = m.Groups[1].Value;
+                string envName = m.Groups[2].Value.Replace(" ", "");
+                return $"\\{envType}{{{envName}}}";
+            });
 
             // RÃºt gá»n khoáº£ng tráº¯ng thá»«a
             while (s.Contains("  "))
