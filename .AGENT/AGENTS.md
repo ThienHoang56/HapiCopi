@@ -80,4 +80,5 @@ Trước khi can thiệp bất kỳ mã nguồn nào, mọi Agent bắt buộc p
 * [`.agents/rules/ai_math_engine_rules.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/.agents/rules/ai_math_engine_rules.md): Quy chuẩn kỹ thuật AI Toán học.
 * [`.AGENT/architecture.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/.AGENT/architecture.md): Kiến trúc HapiCopi Desktop DLP.
 * [`document/KE_HOACH_PHAT_TRIEN_AI_TOAN_HOC_TOPO_NGU_PHAP.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/document/KE_HOACH_PHAT_TRIEN_AI_TOAN_HOC_TOPO_NGU_PHAP.md): Lộ trình chi tiết bộ máy nhận diện công thức toán.
+* [`document/KE_HOACH_MO_RONG_DATASET_MA_TRAN_VECTOR.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/document/KE_HOACH_MO_RONG_DATASET_MA_TRAN_VECTOR.md): Kế hoạch nghiên cứu mở rộng Dataset Ma trận & Vector (MathWriting & HME100K).
 * [`testing/README.md`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/testing/README.md): Hướng dẫn kiểm thử và báo cáo định lượng.
