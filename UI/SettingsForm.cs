@@ -20,6 +20,7 @@ namespace HapiCopi
         private readonly CheckBox _svgToPngCheck;
         private readonly CheckBox _svgTransparentCheck;
         private readonly TextBox _customKeywordsBox;
+        private readonly TextBox _geminiApiKeyBox;
         private readonly CheckBox _enableHistoryCheck;
         private readonly CheckBox _saveToDiskCheck;
         private readonly CheckBox _startWithWindowsCheck;
@@ -179,7 +180,47 @@ namespace HapiCopi
             AddControl(UiTheme.Separator(this), 10);
 
             // ============================
-            // 4. HỆ THỐNG & LỊCH SỬ
+            // 4. GOOGLE GEMINI API KEY (TÙY CHỌN)
+            // ============================
+            AddControl(UiTheme.SectionHeader("Google Gemini API Key (Tùy chọn)", UiTheme.Accent), 4);
+            AddControl(UiTheme.Hint("Dùng cho nhận diện công thức toán nâng cao bằng AI Đám mây:", UiTheme.TextMuted), 4);
+
+            var keyPanel = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            keyPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            keyPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+            _geminiApiKeyBox = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Font = UiTheme.Body,
+                UseSystemPasswordChar = true,
+                PlaceholderText = "Dán Gemini API Key (AIzaSy...) vào đây..."
+            };
+
+            var toggleKeyBtn = UiTheme.SecondaryButton("Hiện");
+            toggleKeyBtn.Margin = new Padding(LogicalToDeviceUnits(6), 0, 0, 0);
+            toggleKeyBtn.Click += (s, e) =>
+            {
+                _geminiApiKeyBox.UseSystemPasswordChar = !_geminiApiKeyBox.UseSystemPasswordChar;
+                toggleKeyBtn.Text = _geminiApiKeyBox.UseSystemPasswordChar ? "Hiện" : "Ẩn";
+            };
+
+            keyPanel.Controls.Add(_geminiApiKeyBox, 0, 0);
+            keyPanel.Controls.Add(toggleKeyBtn, 1, 0);
+            AddControl(keyPanel, 10);
+
+            AddControl(UiTheme.Separator(this), 10);
+
+            // ============================
+            // 5. HỆ THỐNG & LỊCH SỬ
             // ============================
             AddControl(UiTheme.SectionHeader("Hệ thống & Lịch sử", UiTheme.Accent), 6);
             _startWithWindowsCheck = UiTheme.Option("Khởi động cùng Windows (chạy ngầm dưới khay hệ thống)");
@@ -283,6 +324,7 @@ namespace HapiCopi
             _checkEmailBox.Enabled = piiEnabled;
 
             _customKeywordsBox.Text = (AppConfig.Get("PII_CUSTOM_KEYWORDS") ?? "").Replace("|", "\r\n");
+            _geminiApiKeyBox.Text = AppConfig.Get("GEMINI_API_KEY") ?? "";
 
             _svgToPngCheck.Checked = SvgPasteService.IsEnabled;
             _svgTransparentCheck.Checked = (AppConfig.Get("SVG_PNG_BACKGROUND") ?? "transparent").ToLower() != "white";
@@ -327,6 +369,9 @@ namespace HapiCopi
                 while (keywords.Contains("||")) keywords = keywords.Replace("||", "|");
                 keywords = keywords.Trim('|');
                 AppConfig.Set("PII_CUSTOM_KEYWORDS", keywords);
+
+                string geminiKey = _geminiApiKeyBox.Text.Trim();
+                AppConfig.Set("GEMINI_API_KEY", string.IsNullOrEmpty(geminiKey) ? null : geminiKey);
 
                 if (_startWithWindowsCheck.Checked != StartupManager.IsEnabled &&
                     !StartupManager.TrySet(_startWithWindowsCheck.Checked, out string startupError))
