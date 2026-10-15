@@ -1455,7 +1455,7 @@
         function handleFormulaInsert(snip) {
             if (!snip) return;
             var now = Date.now();
-            if (now - lastInsertTime < 60) return;
+            if (now - lastInsertTime < 250) return;
             lastInsertTime = now;
 
             if (activeMode === 'wysiwyg' && mathField) {
@@ -1483,9 +1483,6 @@
                 e.preventDefault();
                 handleFormulaInsert(btn.getAttribute('data-latex'));
             });
-            btn.addEventListener('click', function(e) {
-                handleFormulaInsert(btn.getAttribute('data-latex'));
-            });
         });
 
         // --- SIDEBAR TEMPLATE GALLERY & PROPERTIES (FULLSCREEN) ---
@@ -1496,10 +1493,6 @@
                 card.addEventListener('mousedown', function(e) {
                     if (e.target.closest('.template-card-del-btn')) return;
                     e.preventDefault();
-                    handleFormulaInsert(card.getAttribute('data-latex'));
-                });
-                card.addEventListener('click', function(e) {
-                    if (e.target.closest('.template-card-del-btn')) return;
                     handleFormulaInsert(card.getAttribute('data-latex'));
                 });
             });
@@ -1599,7 +1592,8 @@
                         btn.style.whiteSpace = 'nowrap';
                         btn.textContent = t.name;
                         btn.title = t.name + ' (' + t.latex + ')';
-                        btn.addEventListener('click', function() {
+                        btn.addEventListener('mousedown', function(e) {
+                            e.preventDefault();
                             handleFormulaInsert(t.latex);
                         });
                         quickContainer.appendChild(btn);

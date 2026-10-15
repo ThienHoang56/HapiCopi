@@ -8,16 +8,28 @@ using System.Windows.Forms;
 namespace HapiCopi
 {
     /// <summary>
-    /// Một mục trong lịch sử clipboard.
+    /// Một mục trong lịch sử clipboard (có cache preview siêu tốc, tránh xử lý chuỗi lớn khi lăn chuột).
     /// </summary>
     public class ClipboardHistoryItem
     {
+        private string? _cachedPreview;
+        private string _originalText = "";
+        private string _processedText = "";
+
         public string Id { get; set; } = Guid.NewGuid().ToString("N").Substring(0, 8);
         public DateTime Timestamp { get; set; } = DateTime.Now;
         public string AppName { get; set; } = "Unknown";
-        public string OriginalText { get; set; } = "";
+        public string OriginalText
+        {
+            get => _originalText;
+            set { _originalText = value; _cachedPreview = null; }
+        }
         public string OriginalHtml { get; set; } = "";
-        public string ProcessedText { get; set; } = "";
+        public string ProcessedText
+        {
+            get => _processedText;
+            set { _processedText = value; _cachedPreview = null; }
+        }
         public string ProcessedHtml { get; set; } = "";
         public string Status { get; set; } = "Bỏ qua";
         public PiiScanResult? PiiResult { get; set; }
@@ -27,22 +39,79 @@ namespace HapiCopi
         {
             get
             {
-                string src = !string.IsNullOrEmpty(ProcessedText) ? ProcessedText : OriginalText;
-                if (string.IsNullOrEmpty(src)) src = "(Không có nội dung văn bản)";
-                src = src.Replace("\r", "").Replace("\n", " ").Trim();
-                return src.Length > 65 ? src.Substring(0, 65) + "…" : src;
+                if (_cachedPreview != null) return _cachedPreview;
+                string src = !string.IsNullOrEmpty(_processedText) ? _processedText : _originalText;
+                if (string.IsNullOrWhiteSpace(src)) return _cachedPreview = "(Không có nội dung văn bản)";
+                // Tối ưu hóa tuyệt đối: Chỉ lấy 120 ký tự đầu tiên để format, tránh xử lý chuỗi 100KB gây lag khi lăn chuột
+                if (src.Length > 120) src = src.Substring(0, 120);
+                src = src.Replace("\r", " ").Replace("\n", " ").Trim();
+                _cachedPreview = src.Length > 65 ? src.Substring(0, 65) + "…" : src;
+                return _cachedPreview;
             }
         }
     }
 
     /// <summary>
-    /// Cửa sổ lịch sử clipboard dạng Mini Popup tinh gọn, responsive, tự giải thích.
+    /// ListBox có hỗ trợ Double-Buffering phần cứng qua WS_EX_COMPOSITED, loại bỏ hoàn toàn hiện tượng giật/lag khi lăn chuột.
+    /// </summary>
+    internal sealed class SmoothListBox : ListBox
+    {
+        public SmoothListBox()
+        {
+            SetStyle(
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.ResizeRedraw,
+                true);
+            DoubleBuffered = true;
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                var cp = base.CreateParams;
+                cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED: Bật offscreen buffer mượt mà
+                return cp;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Cửa sổ lịch sử clipboard dạng Mini Popup tinh gọn, responsive, mượt mà 60 FPS.
     /// </summary>
     public class ClipboardHistoryForm : Form
     {
+        // Cache tĩnh các tài nguyên GDI để không tạo rác/GC khi lăn chuột liên tục
+        private static readonly SolidBrush _surfaceBrush = new(UiTheme.Surface);
+        private static readonly SolidBrush _selectedBgBrush = new(UiTheme.AccentLight);
+        private static readonly SolidBrush _selectedBarBrush = new(UiTheme.Accent);
+        private static readonly SolidBrush _metaBrush = new(UiTheme.TextMuted);
+        private static readonly SolidBrush _textPrimaryBrush = new(UiTheme.TextPrimary);
+        private static readonly SolidBrush _accentHoverBrush = new(UiTheme.AccentHover);
+        private static readonly SolidBrush _piiBgBrush = new(Color.FromArgb(220, 252, 231));
+        private static readonly SolidBrush _piiTextBrush = new(Color.FromArgb(22, 101, 52));
+        private static readonly Pen _borderPen = new(UiTheme.Border, 1);
+        private static readonly Font _badgeFont = new("Segoe UI", 7.5f, FontStyle.Bold);
+        private static readonly StringFormat _previewFormat = new()
+        {
+            Trimming = StringTrimming.EllipsisWord,
+            FormatFlags = StringFormatFlags.NoWrap
+        };
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                var cp = base.CreateParams;
+                cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED: Loại bỏ hoàn toàn giật/chớp tắt toàn form
+                return cp;
+            }
+        }
+
         private readonly List<ClipboardHistoryItem> _historySource;
         private readonly List<ClipboardHistoryItem> _filteredList = new();
-        private readonly ListBox _historyList;
+        private readonly SmoothListBox _historyList;
         private readonly TextBox _searchBox;
         private readonly Label _countLabel;
         private readonly Panel _emptyPanel;
@@ -62,8 +131,8 @@ namespace HapiCopi
             StartPosition = FormStartPosition.CenterScreen;
 
             // Kích thước chuẩn Mini Popup gọn gàng, tương đồng với Math Editor thu nhỏ
-            MinimumSize = new Size(LogicalToDeviceUnits(420), LogicalToDeviceUnits(360));
-            Size = new Size(LogicalToDeviceUnits(480), LogicalToDeviceUnits(460));
+            MinimumSize = new Size(LogicalToDeviceUnits(440), LogicalToDeviceUnits(380));
+            ClientSize = new Size(LogicalToDeviceUnits(480), LogicalToDeviceUnits(480));
             KeyPreview = true;
             FormClosed += (s, e) => MemoryOptimizer.OptimizeMemory();
 
@@ -154,7 +223,7 @@ namespace HapiCopi
                 Padding = new Padding(LogicalToDeviceUnits(6), LogicalToDeviceUnits(4), LogicalToDeviceUnits(6), 0)
             };
 
-            _historyList = new ListBox
+            _historyList = new SmoothListBox
             {
                 Dock = DockStyle.Fill,
                 BackColor = UiTheme.Surface,
@@ -200,10 +269,10 @@ namespace HapiCopi
             var footer = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = LogicalToDeviceUnits(48),
+                Height = LogicalToDeviceUnits(58),
                 BackColor = UiTheme.Surface,
-                Padding = new Padding(LogicalToDeviceUnits(14), LogicalToDeviceUnits(8),
-                                      LogicalToDeviceUnits(14), LogicalToDeviceUnits(8))
+                Padding = new Padding(LogicalToDeviceUnits(16), LogicalToDeviceUnits(12),
+                                      LogicalToDeviceUnits(16), LogicalToDeviceUnits(12))
             };
 
             var footerLayout = new TableLayoutPanel
@@ -223,9 +292,9 @@ namespace HapiCopi
                 BackColor = Color.Transparent,
                 FlatStyle = FlatStyle.Flat,
                 AutoSize = true,
-                Height = LogicalToDeviceUnits(28),
                 Cursor = Cursors.Hand,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                Margin = new Padding(0, LogicalToDeviceUnits(4), 0, 0)
             };
             _deleteButton.FlatAppearance.BorderSize = 0;
             _deleteButton.Click += (s, e) => DeleteSelectedItem();
@@ -240,11 +309,9 @@ namespace HapiCopi
             };
 
             _copyButton = UiTheme.PrimaryButton("Sao chép (Enter)");
-            _copyButton.Height = LogicalToDeviceUnits(28);
             _copyButton.Click += (s, e) => CopySelectedItem();
 
             _closeButton = UiTheme.SecondaryButton("Đóng (Esc)");
-            _closeButton.Height = LogicalToDeviceUnits(28);
             _closeButton.Click += (s, e) => Close();
             _closeButton.Margin = new Padding(0, 0, LogicalToDeviceUnits(8), 0);
 
@@ -262,6 +329,7 @@ namespace HapiCopi
             Controls.Add(header);
             Controls.Add(footerBorder);
             Controls.Add(footer);
+            listHost.BringToFront();
 
             KeyDown += ClipboardHistoryForm_KeyDown;
             RefreshHistoryList();
@@ -383,19 +451,14 @@ namespace HapiCopi
 
             bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
             Graphics g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.SmoothingMode = SmoothingMode.None; // Tối ưu vẽ hình học siêu tốc 60 FPS
 
             // Nền thẻ
-            Color bgColor = isSelected ? UiTheme.AccentLight : UiTheme.Surface;
-            using (var bgBrush = new SolidBrush(bgColor))
-            {
-                g.FillRectangle(bgBrush, e.Bounds);
-            }
+            g.FillRectangle(isSelected ? _selectedBgBrush : _surfaceBrush, e.Bounds);
 
             if (isSelected)
             {
-                using var barBrush = new SolidBrush(UiTheme.Accent);
-                g.FillRectangle(barBrush, e.Bounds.Left, e.Bounds.Top, LogicalToDeviceUnits(3), e.Bounds.Height);
+                g.FillRectangle(_selectedBarBrush, e.Bounds.Left, e.Bounds.Top, LogicalToDeviceUnits(3), e.Bounds.Height);
             }
 
             int left = e.Bounds.Left + LogicalToDeviceUnits(10);
@@ -405,47 +468,28 @@ namespace HapiCopi
             // Dòng 1: AppName + Timestamp + PII Badge
             string timeStr = item.Timestamp.ToString("HH:mm:ss");
             string metaText = $"{item.AppName}  ·  {timeStr}";
-            using (var metaFont = UiTheme.Small)
-            using (var metaBrush = new SolidBrush(UiTheme.TextMuted))
-            {
-                g.DrawString(metaText, metaFont, metaBrush, left, top);
-            }
+            g.DrawString(metaText, UiTheme.Small, _metaBrush, left, top);
 
             if (item.PiiResult?.HasPii == true)
             {
-                string badge = "Đã che PII";
-                using var badgeFont = new Font(Font.FontFamily, 7.5f, FontStyle.Bold);
-                SizeF bSize = g.MeasureString(badge, badgeFont);
-                int bLeft = right - (int)bSize.Width - LogicalToDeviceUnits(8);
-                int bTop = top - LogicalToDeviceUnits(1);
-                var bRect = new Rectangle(bLeft, bTop, (int)bSize.Width + LogicalToDeviceUnits(8), (int)bSize.Height + LogicalToDeviceUnits(2));
+                int bWidth = LogicalToDeviceUnits(62);
+                int bHeight = LogicalToDeviceUnits(16);
+                int bLeft = right - bWidth;
+                int bTop = top;
+                var bRect = new Rectangle(bLeft, bTop, bWidth, bHeight);
 
-                using var bBg = new SolidBrush(Color.FromArgb(220, 252, 231));
-                using var bText = new SolidBrush(Color.FromArgb(22, 101, 52));
-                g.FillRectangle(bBg, bRect);
-                g.DrawString(badge, badgeFont, bText, bLeft + LogicalToDeviceUnits(4), bTop + LogicalToDeviceUnits(1));
+                g.FillRectangle(_piiBgBrush, bRect);
+                g.DrawString("Đã che PII", _badgeFont, _piiTextBrush, bLeft + LogicalToDeviceUnits(4), bTop + LogicalToDeviceUnits(1));
             }
 
             // Dòng 2: Nội dung trích đoạn (PreviewText)
             top += LogicalToDeviceUnits(18);
             string preview = item.PreviewText;
-            using (var textFont = UiTheme.Body)
-            using (var textBrush = new SolidBrush(isSelected ? UiTheme.AccentHover : UiTheme.TextPrimary))
-            {
-                var textRect = new RectangleF(left, top, right - left, e.Bounds.Bottom - top - LogicalToDeviceUnits(4));
-                var sf = new StringFormat
-                {
-                    Trimming = StringTrimming.EllipsisWord,
-                    FormatFlags = StringFormatFlags.NoWrap
-                };
-                g.DrawString(preview, textFont, textBrush, textRect, sf);
-            }
+            var textRect = new RectangleF(left, top, right - left, e.Bounds.Bottom - top - LogicalToDeviceUnits(4));
+            g.DrawString(preview, UiTheme.Body, isSelected ? _accentHoverBrush : _textPrimaryBrush, textRect, _previewFormat);
 
             // Đường viền ngăn cách
-            using (var linePen = new Pen(UiTheme.Border, 1))
-            {
-                g.DrawLine(linePen, e.Bounds.Left + LogicalToDeviceUnits(6), e.Bounds.Bottom - 1, e.Bounds.Right - LogicalToDeviceUnits(6), e.Bounds.Bottom - 1);
-            }
+            g.DrawLine(_borderPen, e.Bounds.Left + LogicalToDeviceUnits(6), e.Bounds.Bottom - 1, e.Bounds.Right - LogicalToDeviceUnits(6), e.Bounds.Bottom - 1);
         }
     }
 }
