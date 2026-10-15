@@ -1227,35 +1227,15 @@
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                     </div>
                 </div>
-                <p id="quotaModalDesc" style="font-size: 12.5px; line-height: 1.5; color: var(--color-text-primary); text-align: center; margin: 0 0 16px 0;">
-                    Bản Miễn phí hỗ trợ nhận diện offline mỗi ngày (tự động hồi phục sau 00:00).
+                <p id="quotaModalDesc" style="font-size: 13px; line-height: 1.5; color: var(--color-text-primary); text-align: center; margin: 0 0 14px 0;">
+                    HapiCopi đang trong giai đoạn trải nghiệm thử nghiệm (Beta).
                 </p>
-                <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <div>
-                            <div style="font-weight: 700; color: var(--color-text-primary); font-size: 13px;">HapiCopi Pro (Trọn đời)</div>
-                            <div style="font-size: 11px; color: var(--color-text-muted);">Không giới hạn lượt Cục bộ, Chỉnh sửa trực tiếp trong Word</div>
-                        </div>
-                        <div style="font-weight: 700; color: var(--color-primary); font-size: 14px;">19.000đ</div>
-                    </div>
-                    <div style="border-top: 1px dashed var(--color-border); padding-top: 8px; display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <div style="font-weight: 700; color: var(--color-text-primary); font-size: 13px;">Gói Cloud AI (1 tháng)</div>
-                            <div style="font-size: 11px; color: var(--color-text-muted);">1.000 lượt nhận diện đám mây siêu tốc</div>
-                        </div>
-                        <div style="font-weight: 700; color: #8b5cf6; font-size: 14px;">9.000đ</div>
-                    </div>
-                </div>
-                <div style="font-size: 11.5px; color: #0d9488; background: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 6px; padding: 7px 10px; text-align: center; margin-bottom: 8px;">
-                    💡 <b>Nhận thêm lượt miễn phí:</b> Viết 1 ký tự và bấm nút <b>"Lưu mẫu nét"</b> để đóng góp dữ liệu và nhận ngay <b>+5 lượt AI</b>!
-                </div>
-                <div style="font-size: 11px; color: var(--color-text-muted); text-align: center;">
-                    Quét mã QR thanh toán chuyển khoản tự động trong 30 giây.
+                <div style="font-size: 12px; color: #0d9488; background: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 8px; padding: 10px 12px; text-align: center; line-height: 1.5;">
+                    💡 <b>Mẹo nhận thêm lượt:</b> Viết 1 ký tự và bấm <b>"Lưu mẫu nét"</b> để vừa dạy máy nét riêng của bạn, vừa nhận ngay <b>+5 lượt AI</b>!
                 </div>
             </div>
-            <div class="modal-footer" style="justify-content: flex-end; gap: 8px;">
-                <button type="button" class="btn-icon" id="quotaModalLaterBtn" style="padding: 4px 14px;">Để sau</button>
-                <button type="button" class="btn-primary" id="quotaModalUpgradeBtn" style="padding: 4px 16px;">Nâng cấp ngay</button>
+            <div class="modal-footer" style="justify-content: flex-end;">
+                <button type="button" class="btn-primary" id="quotaModalLaterBtn" style="padding: 5px 18px;">Đã hiểu</button>
             </div>
         </div>
     </div>
@@ -2459,8 +2439,8 @@
                 planBadge.title = 'Bản Pro Trọn Đời — Đã kích hoạt trên máy này';
             } else {
                 planBadge.className = 'plan-badge free';
-                planBadge.textContent = 'Free';
-                planBadge.title = 'Bản Miễn phí (Còn ' + currentLicenseInfo.remainingFree + ' lượt hôm nay) — Bấm để nâng cấp';
+                planBadge.textContent = 'Beta';
+                planBadge.title = 'HapiCopi đang trong giai đoạn trải nghiệm thử nghiệm (Beta)';
             }
         }
 
@@ -2471,9 +2451,7 @@
                     showToast('Bạn đang sở hữu Bản quyền HapiCopi Pro vĩnh viễn trên thiết bị này.', 'info');
                     return;
                 }
-                if (window.chrome && window.chrome.webview) {
-                    window.chrome.webview.postMessage(JSON.stringify({ type: 'openUpgrade' }));
-                }
+                showToast('HapiCopi đang trong giai đoạn trải nghiệm Beta miễn phí.', 'info');
             });
         }
 

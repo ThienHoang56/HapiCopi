@@ -232,18 +232,7 @@ namespace HapiCopi
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft
             };
-            var buyBtn = UiTheme.SecondaryButton("Nâng cấp ngay");
-            buyBtn.Margin = new Padding(LogicalToDeviceUnits(6), 0, 0, 0);
-            buyBtn.Click += (s, e) =>
-            {
-                using var up = new UpgradeForm();
-                if (up.ShowDialog(this) == DialogResult.OK)
-                {
-                    UpdateLicenseStatusUI();
-                }
-            };
             upgradeRow.Controls.Add(machineHint, 0, 0);
-            upgradeRow.Controls.Add(buyBtn, 1, 0);
             AddControl(upgradeRow, 6);
 
             var licensePanel = new TableLayoutPanel

@@ -436,20 +436,7 @@ namespace HapiCopi
 
                 if (type == "openUpgrade")
                 {
-                    BeginInvoke(new Action(() =>
-                    {
-                        try
-                        {
-                            using var upgrade = new UpgradeForm();
-                            upgrade.TopMost = true;
-                            upgrade.ShowDialog(this);
-                            PushLicenseAndSponsorStatus();
-                        }
-                        catch (Exception ex)
-                        {
-                            Program.Log($"[MathEditor] Lỗi mở Nâng cấp: {ex.Message}");
-                        }
-                    }));
+                    // Tạm ẩn tính năng mua Pro trong giai đoạn thử nghiệm Beta
                     return;
                 }
 
@@ -683,42 +670,18 @@ namespace HapiCopi
 
                     if (isWordUpdate && !string.IsNullOrEmpty(png))
                     {
-                        if (!LicenseService.IsPro)
+                        bool success = WordInterop.ReplaceSelectedFormulaInWord(png, source, wPt, hPt, vPt);
+                        if (success)
                         {
-                            BeginInvoke(new Action(() =>
-                            {
-                                var ask = MessageBox.Show(
-                                    "Tính năng Cập nhật trực tiếp đè vào Microsoft Word là đặc quyền của Bản Pro Trọn Đời (19.000 VNĐ).\n\n" +
-                                    "Bản Miễn phí đã tự động chép công thức vào Clipboard để bạn dán (Ctrl+V) vào tài liệu.\n\n" +
-                                    "Bạn có muốn nâng cấp Bản Pro để kích hoạt chỉnh sửa trực tiếp 1-chạm không?",
-                                    "HapiCopi Pro",
-                                    MessageBoxButtons.YesNo,
-                                    MessageBoxIcon.Information);
-
-                                if (ask == DialogResult.Yes)
-                                {
-                                    using var upgrade = new UpgradeForm();
-                                    upgrade.TopMost = true;
-                                    upgrade.ShowDialog(this);
-                                    PushLicenseAndSponsorStatus();
-                                }
-                            }));
+                            Program.Log($"[MathEditor] Đã cập nhật công thức trực tiếp trong Word: {source}");
+                            FormulaTracker.Register(png, source, widthPt: wPt, heightPt: hPt);
+                            Hide();
+                            WordInterop.ActivateWordWindow();
+                            return;
                         }
                         else
                         {
-                            bool success = WordInterop.ReplaceSelectedFormulaInWord(png, source, wPt, hPt, vPt);
-                            if (success)
-                            {
-                                Program.Log($"[MathEditor] Đã cập nhật công thức trực tiếp trong Word: {source}");
-                                FormulaTracker.Register(png, source, widthPt: wPt, heightPt: hPt);
-                                Hide();
-                                WordInterop.ActivateWordWindow();
-                                return;
-                            }
-                            else
-                            {
-                                Program.Log("[MathEditor] Cập nhật trực tiếp vào Word thất bại, chuyển sang fallback copy Clipboard.");
-                            }
+                            Program.Log("[MathEditor] Cập nhật trực tiếp vào Word thất bại, chuyển sang fallback copy Clipboard.");
                         }
                     }
 
