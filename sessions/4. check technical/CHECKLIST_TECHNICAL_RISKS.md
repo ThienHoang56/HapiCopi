@@ -174,3 +174,25 @@
   - [x] Thiết lập Timer nhịp tim `_hookHeartbeatTimer` (chu kỳ 30 giây) trong `HapiCopiApplicationContext.cs` tự động phát hiện và cắm lại Hook nếu bị Windows âm thầm tháo gỡ.
 - [x] **13.3. Xử lý xung đột với các ứng dụng chiếm phím tắt khác**
   - [x] Cung cấp nhiều cách kích hoạt: Phím tắt `Ctrl+Alt+M`, nhấp đúp vào công thức, hoặc mở từ Menu chuột phải ở khay hệ thống.
+
+---
+
+## 14. Phím tắt Toàn cục, Ứng dụng Khay Hệ thống & Tùy biến Dữ liệu Bảo mật (DLP)
+
+- [x] **14.1. Hệ thống Phím tắt Toàn cục Độc lập & Không Xung đột**
+  - [x] `Ctrl + Alt + P` (hoặc `Ctrl + Pause`): Tạm dừng / Tiếp tục ứng dụng (chuyển chế độ nhanh như Unikey).
+  - [x] `Ctrl + Alt + Q`: Thoát hoàn toàn ứng dụng (ẩn ngay tray icon, giải phóng toàn bộ Hook, WebView2, tiến trình ngầm).
+  - [x] `Ctrl + Alt + M` (hoặc nhả `Ctrl + Alt`): Mở bảng Soạn thảo công thức Toán học.
+  - [x] Cơ chế chống rung phím (Debounce): 400ms cho Pause/Resume, 1000ms cho Exit để tránh tình trạng autorepeat của Windows làm nhảy trạng thái liên tục khi người dùng giữ phím.
+- [x] **14.2. Chuẩn hóa Ứng dụng Chạy ngầm Khay Hệ thống (System Tray Only)**
+  - [x] Thiết lập `ShowInTaskbar = false` trên toàn bộ các Form và Dialog (`UiTheme.ApplyDialog`, `MathEditorForm`, `EditorWindow`, `AbcEditorForm`).
+  - [x] Ứng dụng chỉ xuất hiện trong Khay hệ thống (System Tray), hoàn toàn không chiếm chỗ hay hiển thị biểu tượng trên thanh Taskbar danh sách ứng dụng.
+- [x] **14.3. Minh bạch Hóa Danh mục Dữ liệu Nhạy cảm (DLP Protection Checklist)**
+  - [x] Bổ sung checklist chi tiết trong Cài đặt với ngôn ngữ dễ hiểu, make sense:
+    - Mật khẩu, Khóa bí mật & API Key (OpenAI, Google, AWS, GitHub, Token...)
+    - Số thẻ ngân hàng & Thẻ tín dụng (Visa, MasterCard, 16 số)
+    - Căn cước công dân (CCCD 12 số) & CMND (9 số)
+    - Số điện thoại di động cá nhân (Việt Nam)
+    - Địa chỉ Email cá nhân / công việc
+  - [x] Người dùng hoàn toàn có thể tự do bật/tắt từng loại dữ liệu theo nhu cầu sử dụng riêng, cấu hình lưu trữ an toàn trong `AppConfig` và được `PiiScanner.Scan()` áp dụng thời gian thực.
+
