@@ -33,14 +33,14 @@
   * Kết nối tài khoản ngân hàng cá nhân với SePay.
   * Lấy URL tạo mã VietQR động chuẩn Napas.
 * [ ] **2.2. Xây dựng Form Thanh toán trong HapiCopi (`UpgradeForm.cs`):**
-  * Hiển thị mã VietQR động chứa sẵn số tiền (49.000đ) và mã đơn hàng (ví dụ: `HAPI8821`).
+  * Hiển thị mã VietQR động chứa sẵn số tiền (19.000đ) và mã đơn hàng (ví dụ: `HAPI8821`).
   * Cơ chế Long-polling / Webhook check: Tự động kiểm tra trạng thái đơn hàng mỗi 2 giây.
   * Khi phát hiện tài khoản đã nhận tiền: Tự động điền key và nâng cấp Pro ngay lập tức.
 
 ---
 
 ## 3. Giai đoạn 3: Hệ thống Cloud AI Subscription (Shared Key Pool)
-*Mục tiêu: Bán gói AI Cloud 19.000đ/tháng dùng chung API Key an toàn mà không lộ key.*
+*Mục tiêu: Bán gói AI Cloud 9.000đ/tháng (1.000 lượt) dùng chung API Key an toàn mà không lộ key.*
 
 * [ ] **3.1. Dựng Cloudflare Worker Proxy (Miễn phí 100k req/ngày):**
   * Cấu hình secret `GEMINI_API_KEY` trong Cloudflare Environment.
