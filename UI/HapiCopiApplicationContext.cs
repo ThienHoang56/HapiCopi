@@ -322,7 +322,7 @@ namespace HapiCopi
                 MinimizeBox = false,
                 StartPosition = FormStartPosition.CenterScreen,
                 ClientSize = new Size(380, 160),
-                ShowInTaskbar = true,
+                ShowInTaskbar = false,
                 BackColor = Color.FromArgb(248, 250, 252)
             };
 
@@ -655,7 +655,7 @@ namespace HapiCopi
         {
             _isPaused = !_isPaused;
             _pauseMenuItem.Checked = _isPaused;
-            _pauseMenuItem.Text = _isPaused ? "Tiếp tục bảo vệ (Ctrl+Alt+P)" : "Tạm dừng (Ctrl+Alt+P)";
+            _pauseMenuItem.Text = _isPaused ? "Tiếp tục (Ctrl+Alt+P)" : "Tạm dừng (Ctrl+Alt+P)";
 
             if (_isPaused)
             {
@@ -664,15 +664,15 @@ namespace HapiCopi
                     try { _currentToast.Close(); } catch { }
                 }
                 _notifyIcon.Text = "HapiCopi (Đang tạm dừng)";
-                _notifyIcon.ShowBalloonTip(1500, "HapiCopi — Đang tạm dừng",
-                    "Đã tạm dừng bảo vệ & định dạng clipboard.\nNhấn Ctrl+Alt+P để kích hoạt lại.",
+                _notifyIcon.ShowBalloonTip(1500, "HapiCopi — Tạm dừng",
+                    "Đã tạm dừng ứng dụng.\nNhấn Ctrl+Alt+P để tiếp tục.",
                     ToolTipIcon.Warning);
             }
             else
             {
                 _notifyIcon.Text = "HapiCopi - Clipboard DLP & Auto-Format";
-                _notifyIcon.ShowBalloonTip(1500, "HapiCopi — Hoạt động trở lại",
-                    "Đã tiếp tục bảo vệ & tự động định dạng clipboard.",
+                _notifyIcon.ShowBalloonTip(1500, "HapiCopi — Tiếp tục",
+                    "Đã tiếp tục hoạt động.",
                     ToolTipIcon.Info);
             }
         }

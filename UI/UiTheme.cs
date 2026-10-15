@@ -90,7 +90,7 @@ namespace HapiCopi
             form.BackColor = Background;
             form.ForeColor = TextPrimary;
             form.StartPosition = FormStartPosition.CenterScreen;
-            form.ShowInTaskbar = true;
+            form.ShowInTaskbar = false; // Luôn ẩn khỏi Taskbar, ứng dụng chỉ xuất hiện trong Khay hệ thống (System Tray)
 
             try
             {

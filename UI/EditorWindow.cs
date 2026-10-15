@@ -12,6 +12,7 @@ namespace HapiCopi
         public static void PrepareOffscreen(Form form)
         {
             IntPtr prev = ActiveWindowHelper.GetForegroundWindow();
+            form.ShowInTaskbar = false;
             form.Opacity = 0;
             form.StartPosition = FormStartPosition.Manual;
             form.Location = new Point(-20000, -20000);
@@ -24,6 +25,7 @@ namespace HapiCopi
 
         public static void Present(Form form)
         {
+            form.ShowInTaskbar = false;
             form.Opacity = 1;
             form.WindowState = FormWindowState.Normal;
             form.StartPosition = FormStartPosition.Manual;

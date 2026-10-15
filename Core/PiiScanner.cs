@@ -75,6 +75,13 @@ namespace HapiCopi
     /// </summary>
     public static class PiiScanner
     {
+        // Cấu hình từng loại thông tin nhạy cảm được bảo vệ (người dùng bật/tắt trong Cài đặt)
+        public static bool CheckKeysEnabled => (AppConfig.Get("PII_CHECK_KEYS") ?? "true").ToLower() != "false";
+        public static bool CheckCardsEnabled => (AppConfig.Get("PII_CHECK_CARDS") ?? "true").ToLower() != "false";
+        public static bool CheckCccdEnabled => (AppConfig.Get("PII_CHECK_CCCD") ?? "true").ToLower() != "false";
+        public static bool CheckPhoneEnabled => (AppConfig.Get("PII_CHECK_PHONE") ?? "true").ToLower() != "false";
+        public static bool CheckEmailEnabled => (AppConfig.Get("PII_CHECK_EMAIL") ?? "true").ToLower() != "false";
+
         // Các ký tự đặc trưng của code được bỏ qua không quét Entropy, tải động từ AppConfig
         private static readonly char[] CodeBypassChars = 
             (AppConfig.Get("PII_BYPASS_CHARS") ?? "()[]{}=,;<>/\\+-*&|^%!~\"'").ToCharArray();
@@ -241,50 +248,64 @@ namespace HapiCopi
             var result = new PiiScanResult();
             if (string.IsNullOrWhiteSpace(text)) return result;
 
-            // --- Engine 1: Regex ---
+            // --- Engine 1 & 2: Regex & Entropy theo danh mục người dùng cấu hình ---
 
-            // API Keys (specific patterns)
-            ScanWithRegex(result, text, GeminiKeyRegex, "API Key (Gemini)", MaskApiKey);
-            ScanWithRegex(result, text, OpenAiKeyRegex, "API Key (OpenAI)", MaskApiKey);
-            ScanWithRegex(result, text, GitHubTokenRegex, "API Key (GitHub)", MaskApiKey);
-            ScanWithRegex(result, text, AwsKeyRegex, "API Key (AWS)", MaskApiKey);
-            ScanWithRegex(result, text, GenericBearerTokenRegex, "Bearer Token", MaskApiKey);
-
-            // API Keys (generic prefix-based)
-            ScanWithRegex(result, text, GenericSecretPrefixRegex, "API Key / Secret", MaskApiKey);
-            ScanWithRegex(result, text, CloudTokenRegex, "Cloud Token", MaskApiKey);
-            ScanWithRegex(result, text, PrivateKeyBlockRegex, "Private Key", _ => "-----BEGIN PRIVATE KEY-----[MASKED]");
-
-            // Connection Strings
-            ScanWithRegex(result, text, ConnectionStringRegex, "Connection String", MaskConnectionString);
-
-            // SĐT Việt Nam
-            ScanWithRegex(result, text, PhoneVnRegex, "Số điện thoại", MaskPhone);
-
-            // Email
-            ScanWithRegex(result, text, EmailRegex, "Email", MaskEmail);
-
-            // Thẻ tín dụng (kiểm tra Luhn)
-            foreach (Match match in CreditCardRegex.Matches(text))
+            // 1. Mật khẩu, API Keys & Tokens
+            if (CheckKeysEnabled)
             {
-                if (PassesLuhnCheck(match.Value))
+                ScanWithRegex(result, text, GeminiKeyRegex, "API Key (Gemini)", MaskApiKey);
+                ScanWithRegex(result, text, OpenAiKeyRegex, "API Key (OpenAI)", MaskApiKey);
+                ScanWithRegex(result, text, GitHubTokenRegex, "API Key (GitHub)", MaskApiKey);
+                ScanWithRegex(result, text, AwsKeyRegex, "API Key (AWS)", MaskApiKey);
+                ScanWithRegex(result, text, GenericBearerTokenRegex, "Bearer Token", MaskApiKey);
+
+                ScanWithRegex(result, text, GenericSecretPrefixRegex, "API Key / Secret", MaskApiKey);
+                ScanWithRegex(result, text, CloudTokenRegex, "Cloud Token", MaskApiKey);
+                ScanWithRegex(result, text, PrivateKeyBlockRegex, "Private Key", _ => "-----BEGIN PRIVATE KEY-----[MASKED]");
+
+                ScanWithRegex(result, text, ConnectionStringRegex, "Connection String", MaskConnectionString);
+
+                // Quét Shannon Entropy cho mật khẩu / token ngẫu nhiên
+                ScanHighEntropyTokens(result, text);
+            }
+
+            // 2. Số điện thoại cá nhân (Việt Nam)
+            if (CheckPhoneEnabled)
+            {
+                ScanWithRegex(result, text, PhoneVnRegex, "Số điện thoại", MaskPhone);
+            }
+
+            // 3. Địa chỉ Email
+            if (CheckEmailEnabled)
+            {
+                ScanWithRegex(result, text, EmailRegex, "Email", MaskEmail);
+            }
+
+            // 4. Thẻ ngân hàng & Thẻ tín dụng (16 số, kiểm tra thuật toán Luhn)
+            if (CheckCardsEnabled)
+            {
+                foreach (Match match in CreditCardRegex.Matches(text))
                 {
-                    result.Matches.Add(new PiiMatch
+                    if (PassesLuhnCheck(match.Value))
                     {
-                        Type = "Credit Card",
-                        Value = match.Value,
-                        MaskedValue = MaskCreditCard(match.Value),
-                        StartIndex = match.Index,
-                        Length = match.Length
-                    });
+                        result.Matches.Add(new PiiMatch
+                        {
+                            Type = "Credit Card",
+                            Value = match.Value,
+                            MaskedValue = MaskCreditCard(match.Value),
+                            StartIndex = match.Index,
+                            Length = match.Length
+                        });
+                    }
                 }
             }
 
-            // CCCD (12 chữ số, bắt đầu bằng 0XX + chữ số giới tính)
-            ScanWithRegex(result, text, CccdRegex, "CCCD", MaskCccd);
-
-            // --- Engine 2: Entropy (bắt các token lạ không match regex nào) ---
-            ScanHighEntropyTokens(result, text);
+            // 5. Căn cước công dân (12 số) & CMND (9 số)
+            if (CheckCccdEnabled)
+            {
+                ScanWithRegex(result, text, CccdRegex, "CCCD", MaskCccd);
+                ScanWithRegex(result, text, CmndRegex, "CMND", MaskCccd);
+            }
 
             // --- Custom Keywords từ Settings ---
             ScanCustomKeywords(result, text);

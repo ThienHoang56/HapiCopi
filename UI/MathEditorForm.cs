@@ -32,6 +32,7 @@ namespace HapiCopi
             ClientSize = new Size(760, 480);
             MinimumSize = new Size(580, 380);
             StartPosition = FormStartPosition.CenterScreen;
+            ShowInTaskbar = false;
 
             try { Icon = UiTheme.AppIcon; } catch { }
 
