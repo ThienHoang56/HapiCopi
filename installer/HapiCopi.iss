@@ -52,7 +52,8 @@ Name: "autostart"; Description: "Start HapiCopi with Windows"; GroupDescription:
 
 [Files]
 ; Toàn bộ output publish (single-file exe + WebViewResources + DLL phụ nếu có)
-Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Tuyệt đối loại trừ file .env chứa API Key bí mật và file debug .pdb
+Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.env,*.pdb"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

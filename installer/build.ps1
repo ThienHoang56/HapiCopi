@@ -71,7 +71,7 @@ if (-not (Test-Path (Join-Path $md "math_rec.onnx")) -and (Test-Path (Join-Path 
     New-Item -ItemType Directory -Path $md -Force | Out-Null
     Copy-Item (Join-Path $root "models\*") $md -Recurse -Force
 }
-if (Test-Path (Join-Path $root ".env")) { Copy-Item (Join-Path $root ".env") (Join-Path $publishDir ".env") -Force }
+# if (Test-Path (Join-Path $root ".env")) { Copy-Item (Join-Path $root ".env") (Join-Path $publishDir ".env") -Force }
 
 Write-Host "Publish OK: $publishDir" -ForegroundColor Green
 Get-ChildItem $publishDir -File | Select-Object Name, @{N='MB';E={[math]::Round($_.Length/1MB,1)}} | Format-Table -AutoSize
