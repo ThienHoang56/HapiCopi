@@ -390,6 +390,44 @@
         }
         .profile-pill-sm:hover { background: #b8ebef; border-color: var(--color-primary); }
 
+        .quota-badge-btn {
+            padding: 2.5px 8px; border: 1px solid var(--color-border); border-radius: 5px;
+            background: var(--color-surface); font-size: 11px; font-weight: 600; color: var(--color-text-primary);
+            cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.12s;
+        }
+        .quota-badge-btn:hover {
+            background: var(--color-primary-light); border-color: var(--color-primary); color: var(--color-primary);
+        }
+        .quota-badge-dot {
+            width: 6.5px; height: 6.5px; border-radius: 50%; background: #10b981; flex-shrink: 0;
+        }
+        .quota-badge-dot.warning { background: #f59e0b; }
+        .quota-badge-dot.exhausted { background: #ef4444; }
+        .quota-badge-dot.pro { background: #8b5cf6; }
+
+        .sponsor-bar {
+            display: none; align-items: center; justify-content: space-between;
+            height: 24px; padding: 0 10px; background: #F8FAFC; border-top: 1px solid #E2E8F0;
+            font-size: 11px; color: var(--color-text-muted); flex-shrink: 0;
+        }
+        .sponsor-tag {
+            font-size: 8.5px; font-weight: 700; color: #64748B; background: #E2E8F0;
+            padding: 1px 4px; border-radius: 3px; letter-spacing: 0.04em; margin-right: 6px;
+        }
+        .sponsor-text {
+            flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--color-text-primary);
+        }
+        .sponsor-link {
+            color: var(--color-primary); font-weight: 600; text-decoration: none; margin-left: 8px; font-size: 11px; cursor: pointer;
+        }
+        .sponsor-link:hover { text-decoration: underline; }
+
+        .ink-canvas-watermark {
+            position: absolute; bottom: 8px; right: 12px; pointer-events: none;
+            font-size: 11px; color: #94A3B8; opacity: 0.55; font-weight: 500;
+            user-select: none; z-index: 2;
+        }
+
         .ink-canvas-body {
             flex: 1; min-height: 0; position: relative; width: 100%;
             background: var(--color-surface); background-image: radial-gradient(var(--color-border) 1.2px, transparent 1.2px);
@@ -818,6 +856,13 @@
                                 Công thức nhận diện sẽ hiển thị ở đây theo thời gian thực (chuẩn MathType)...
                             </div>
                         </div>
+                        <div id="sponsorBar" class="sponsor-bar">
+                            <div style="display: flex; align-items: center; overflow: hidden; flex: 1;">
+                                <span class="sponsor-tag">TÀI TRỢ</span>
+                                <span id="sponsorText" class="sponsor-text"></span>
+                            </div>
+                            <a id="sponsorLink" class="sponsor-link" href="#" target="_blank">Xem ngay →</a>
+                        </div>
                     </div>
 
                     <!-- Bottom Handwriting Canvas Card -->
@@ -852,6 +897,10 @@
                                 </label>
                                 <button type="button" class="btn-sm-primary" id="inkRecognizeBtn">Nhận diện</button>
                                 <div class="header-divider" style="height: 14px; margin: 0 1px;"></div>
+                                <button type="button" class="quota-badge-btn" id="quotaBadgeBtn" title="Hạn mức nhận diện hôm nay (Bấm để xem chi tiết hoặc nâng cấp)">
+                                    <span id="quotaBadgeDot" class="quota-badge-dot"></span>
+                                    <span id="quotaBadgeText">50/50</span>
+                                </button>
                                 <button type="button" class="profile-pill-sm" id="profileBadgeBtn" title="Xem & quản lý hồ sơ nét viết tay cá nhân">
                                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                                     <span id="profileBadgeText">Hồ sơ: 127 mẫu</span>
@@ -864,6 +913,9 @@
                             <div id="inkPlaceholder" class="ink-placeholder">
                                 <svg style="width: 26px; height: 26px; stroke: var(--color-border); fill: none; margin: 0 auto 4px auto; display: block;" viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
                                 Cầm chuột hoặc bút cảm ứng vẽ phương trình vào đây...
+                            </div>
+                            <div id="inkCanvasWatermark" class="ink-canvas-watermark" style="display: none;">
+                                HapiCopi Free — hapicopi.com
                             </div>
                         </div>
                     </div>
@@ -1148,6 +1200,51 @@
                     </button>
                 </div>
                 <button type="button" class="btn-primary" id="profileModalDoneBtn" style="padding: 4px 14px;">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quota & Upgrade Modal -->
+    <div id="quotaModal" class="modal-overlay">
+        <div class="modal-backdrop" id="quotaModalBackdrop"></div>
+        <div class="modal-dialog" style="max-width: 440px;">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title" id="quotaModalTitle">Hạn mức nhận diện hôm nay</h3>
+                    <p style="margin: 2px 0 0 0; font-size: 11.5px; color: var(--color-text-muted);" id="quotaModalSubtitle">Thông tin gói & bản quyền</p>
+                </div>
+                <button type="button" class="modal-close" id="quotaModalCloseBtn">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 16px 20px;">
+                <div style="text-align: center; margin-bottom: 12px;">
+                    <span id="quotaModalIcon" style="font-size: 32px; display: inline-block;">⚡</span>
+                </div>
+                <p id="quotaModalDesc" style="font-size: 12.5px; line-height: 1.5; color: var(--color-text-primary); text-align: center; margin: 0 0 16px 0;">
+                    Bản Miễn phí hỗ trợ 50 lượt nhận diện offline mỗi ngày (tự động hồi phục sau 00:00).
+                </p>
+                <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px; margin-bottom: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div>
+                            <div style="font-weight: 700; color: var(--color-text-primary); font-size: 13px;">HapiCopi Pro (Trọn đời)</div>
+                            <div style="font-size: 11px; color: var(--color-text-muted);">Không giới hạn lượt Cục bộ, xóa Watermark</div>
+                        </div>
+                        <div style="font-weight: 700; color: var(--color-primary); font-size: 14px;">19.000đ</div>
+                    </div>
+                    <div style="border-top: 1px dashed var(--color-border); padding-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-weight: 700; color: var(--color-text-primary); font-size: 13px;">Gói Cloud AI (1 tháng)</div>
+                            <div style="font-size: 11px; color: var(--color-text-muted);">1.000 lượt nhận diện đám mây siêu tốc</div>
+                        </div>
+                        <div style="font-weight: 700; color: #8b5cf6; font-size: 14px;">9.000đ</div>
+                    </div>
+                </div>
+                <div style="font-size: 11px; color: var(--color-text-muted); text-align: center;">
+                    Quét mã QR thanh toán tự động trong 30 giây, kích hoạt ngay lập tức.
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content: flex-end; gap: 8px;">
+                <button type="button" class="btn-icon" id="quotaModalLaterBtn" style="padding: 4px 14px;">Để sau</button>
+                <button type="button" class="btn-primary" id="quotaModalUpgradeBtn" style="padding: 4px 16px;">Nâng cấp ngay</button>
             </div>
         </div>
     </div>
@@ -2154,9 +2251,23 @@
         }
 
         // KHI AI TRẢ VỀ KẾT QUẢ DỰ ĐOÁN
-        window.onInkRecognized = function(success, latex, candidates, errorMsg, elapsedMs) {
+        window.onInkRecognized = function(success, latex, candidates, errorMsg, elapsedMs, newRemaining, isPro, isCloud) {
             isInkRecognizing = false;
             if (inkLatencyBadge) inkLatencyBadge.textContent = (elapsedMs || 0) + 'ms';
+
+            if (typeof newRemaining === 'number') {
+                if (isCloud) currentLicenseInfo.remainingCloud = newRemaining;
+                else currentLicenseInfo.remainingFree = newRemaining;
+
+                if (!currentLicenseInfo.isProLifetime) {
+                    if (quotaBadgeText) {
+                        quotaBadgeText.textContent = isCloud ? ('Cloud: ' + newRemaining) : (newRemaining + '/50');
+                    }
+                    if (quotaBadgeDot) {
+                        quotaBadgeDot.className = newRemaining <= 0 ? 'quota-badge-dot exhausted' : (newRemaining <= 10 ? 'quota-badge-dot warning' : 'quota-badge-dot');
+                    }
+                }
+            }
 
             var candsBar = document.getElementById('inkCandidatesBar');
             var candsList = document.getElementById('inkCandPillsList');
@@ -2199,6 +2310,135 @@
                 if (inkStatusText) inkStatusText.textContent = 'Lỗi: ' + (errorMsg || 'Không nhận diện được');
                 if (candsBar) candsBar.style.display = 'none';
             }
+        };
+
+        var currentLicenseInfo = {
+            isPro: false,
+            isProLifetime: false,
+            hasCloud: false,
+            remainingFree: 50,
+            remainingCloud: 0
+        };
+
+        var quotaModal = document.getElementById('quotaModal');
+        var quotaModalBackdrop = document.getElementById('quotaModalBackdrop');
+        var quotaModalCloseBtn = document.getElementById('quotaModalCloseBtn');
+        var quotaModalLaterBtn = document.getElementById('quotaModalLaterBtn');
+        var quotaModalUpgradeBtn = document.getElementById('quotaModalUpgradeBtn');
+        var quotaBadgeBtn = document.getElementById('quotaBadgeBtn');
+        var quotaBadgeText = document.getElementById('quotaBadgeText');
+        var quotaBadgeDot = document.getElementById('quotaBadgeDot');
+        var inkCanvasWatermark = document.getElementById('inkCanvasWatermark');
+        var sponsorBar = document.getElementById('sponsorBar');
+        var sponsorText = document.getElementById('sponsorText');
+        var sponsorLink = document.getElementById('sponsorLink');
+
+        function openQuotaModal(title, desc, icon) {
+            if (!quotaModal) return;
+            if (title) document.getElementById('quotaModalTitle').textContent = title;
+            if (desc) document.getElementById('quotaModalDesc').textContent = desc;
+            if (icon) document.getElementById('quotaModalIcon').textContent = icon;
+            quotaModal.classList.add('show');
+        }
+
+        function closeQuotaModal() {
+            if (quotaModal) quotaModal.classList.remove('show');
+        }
+
+        if (quotaModalCloseBtn) quotaModalCloseBtn.addEventListener('click', closeQuotaModal);
+        if (quotaModalBackdrop) quotaModalBackdrop.addEventListener('click', closeQuotaModal);
+        if (quotaModalLaterBtn) quotaModalLaterBtn.addEventListener('click', closeQuotaModal);
+
+        if (quotaModalUpgradeBtn) {
+            quotaModalUpgradeBtn.addEventListener('click', function() {
+                closeQuotaModal();
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({ type: 'openUpgrade' }));
+                }
+            });
+        }
+
+        if (quotaBadgeBtn) {
+            quotaBadgeBtn.addEventListener('click', function() {
+                if (currentLicenseInfo.isProLifetime) {
+                    openQuotaModal(
+                        'HapiCopi Pro (Trọn đời)',
+                        'Bạn đang sở hữu bản quyền HapiCopi Pro vĩnh viễn! Không giới hạn lượt nhận diện Cục bộ và không có watermark.',
+                        '⭐'
+                    );
+                } else if (currentLicenseInfo.hasCloud) {
+                    openQuotaModal(
+                        'Gói Cloud AI',
+                        'Bạn còn ' + currentLicenseInfo.remainingCloud + ' / 1.000 lượt nhận diện đám mây siêu tốc trong tháng này.',
+                        '☁️'
+                    );
+                } else {
+                    openQuotaModal(
+                        'Hạn mức nhận diện hôm nay',
+                        'Bạn còn ' + currentLicenseInfo.remainingFree + ' / 50 lượt nhận diện Cục bộ hôm nay. Hồi phục 50 lượt vào 00:00.',
+                        '⚡'
+                    );
+                }
+            });
+        }
+
+        window.onLicenseStatusUpdate = function(isPro, isProLifetime, hasCloud, remainingFree, remainingCloud, sponsor) {
+            currentLicenseInfo.isPro = !!isPro;
+            currentLicenseInfo.isProLifetime = !!isProLifetime;
+            currentLicenseInfo.hasCloud = !!hasCloud;
+            currentLicenseInfo.remainingFree = (typeof remainingFree === 'number') ? remainingFree : 50;
+            currentLicenseInfo.remainingCloud = (typeof remainingCloud === 'number') ? remainingCloud : 0;
+
+            if (quotaBadgeText && quotaBadgeDot) {
+                if (currentLicenseInfo.isProLifetime) {
+                    quotaBadgeText.textContent = '✦ Pro';
+                    quotaBadgeDot.className = 'quota-badge-dot pro';
+                    if (quotaBadgeBtn) quotaBadgeBtn.title = 'HapiCopi Pro: Không giới hạn nhận diện Cục bộ trọn đời';
+                } else if (currentLicenseInfo.hasCloud) {
+                    quotaBadgeText.textContent = 'Cloud: ' + currentLicenseInfo.remainingCloud;
+                    quotaBadgeDot.className = currentLicenseInfo.remainingCloud <= 50 ? 'quota-badge-dot warning' : 'quota-badge-dot';
+                    if (quotaBadgeBtn) quotaBadgeBtn.title = 'Gói Cloud: Còn ' + currentLicenseInfo.remainingCloud + '/1000 lượt tháng này';
+                } else {
+                    quotaBadgeText.textContent = currentLicenseInfo.remainingFree + '/50';
+                    quotaBadgeDot.className = currentLicenseInfo.remainingFree <= 0 ? 'quota-badge-dot exhausted' : (currentLicenseInfo.remainingFree <= 10 ? 'quota-badge-dot warning' : 'quota-badge-dot');
+                    if (quotaBadgeBtn) quotaBadgeBtn.title = 'Bản Free: Còn ' + currentLicenseInfo.remainingFree + '/50 lượt hôm nay (Hồi phục lúc 00:00)';
+                }
+            }
+
+            if (inkCanvasWatermark) {
+                inkCanvasWatermark.style.display = isPro ? 'none' : 'block';
+            }
+
+            if (sponsorBar) {
+                if (isPro || !sponsor) {
+                    sponsorBar.style.display = 'none';
+                } else {
+                    sponsorBar.style.display = 'flex';
+                    if (sponsorText) sponsorText.textContent = sponsor.text || '';
+                    if (sponsorLink) {
+                        sponsorLink.textContent = (sponsor.callToAction || 'Xem ngay') + ' →';
+                        sponsorLink.onclick = function(e) {
+                            e.preventDefault();
+                            if (window.chrome && window.chrome.webview) {
+                                window.chrome.webview.postMessage(JSON.stringify({ type: 'openUrl', url: sponsor.url }));
+                            }
+                        };
+                    }
+                }
+            }
+        };
+
+        window.onInkLimitReached = function(isCloud, reason, remaining, maxQuota) {
+            isInkRecognizing = false;
+            if (inkDotStatus) inkDotStatus.className = 'dot-indicator error';
+            if (inkStatusText) inkStatusText.textContent = 'Đã đạt giới hạn';
+            openQuotaModal(
+                isCloud ? 'Hết hạn mức Cloud AI' : 'Hết 50 lượt nhận diện hôm nay',
+                reason || (isCloud 
+                    ? 'Bạn đã dùng hết hạn mức 1.000 lượt Cloud trong tháng này. Hãy gia hạn gói Cloud hoặc chuyển sang nhận diện Cục bộ (Offline).'
+                    : 'Bạn đã sử dụng hết 50 lượt nhận diện miễn phí hôm nay. Hạn mức sẽ tự động hồi phục 50 lượt mới vào 00:00 đêm nay.'),
+                '⏳'
+            );
         };
 
         function selectCandidate(cand) {
@@ -2519,6 +2759,7 @@
                 e.preventDefault();
                 copyImage();
             } else if (e.key === 'Escape') {
+                if (quotaModal && quotaModal.classList.contains('show')) { closeQuotaModal(); return; }
                 if (helpModal && helpModal.style.display === 'flex') { closeHelp(); return; }
                 if (profileModal && profileModal.style.display === 'flex') { closeProfile(); return; }
                 if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage(JSON.stringify({ type: 'close' }));

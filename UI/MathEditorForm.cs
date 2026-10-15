@@ -81,6 +81,7 @@ namespace HapiCopi
                     }
                     RequestReady();
                     SyncWordFontSize();
+                    PushLicenseAndSponsorStatus();
                     BeginInvoke(new Action(() =>
                     {
                         _web.Focus();
@@ -428,6 +429,43 @@ namespace HapiCopi
                 if (type == "ready")
                 {
                     HideLoadingScreen();
+                    PushLicenseAndSponsorStatus();
+                    return;
+                }
+
+                if (type == "openUpgrade")
+                {
+                    BeginInvoke(new Action(() =>
+                    {
+                        try
+                        {
+                            using var settings = new SettingsForm();
+                            settings.ShowDialog(this);
+                            PushLicenseAndSponsorStatus();
+                        }
+                        catch (Exception ex)
+                        {
+                            Program.Log($"[MathEditor] Lỗi mở Cài đặt: {ex.Message}");
+                        }
+                    }));
+                    return;
+                }
+
+                if (type == "openUrl")
+                {
+                    string url = root.TryGetProperty("url", out var u) ? (u.GetString() ?? "") : "";
+                    if (!string.IsNullOrEmpty(url) && (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        try
+                        {
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                            {
+                                FileName = url,
+                                UseShellExecute = true
+                            });
+                        }
+                        catch { }
+                    }
                     return;
                 }
 
@@ -447,6 +485,16 @@ namespace HapiCopi
                 {
                     string img = root.TryGetProperty("image", out var im) ? (im.GetString() ?? "") : "";
                     string engine = root.TryGetProperty("engine", out var eng) ? (eng.GetString() ?? "ai") : "ai";
+                    bool isCloud = engine.Equals("ai", StringComparison.OrdinalIgnoreCase);
+
+                    // Kiểm tra hạn mức sử dụng (50 lượt offline / ngày hoặc gói Cloud)
+                    if (!LicenseService.CanRecognize(isCloud, out string limitReason, out int currentRemaining, out int currentMax))
+                    {
+                        string safeReason = System.Text.Json.JsonSerializer.Serialize(limitReason);
+                        string limitScript = $"if (typeof onInkLimitReached === 'function') onInkLimitReached({(isCloud ? "true" : "false")}, {safeReason}, {currentRemaining}, {currentMax});";
+                        BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(limitScript)));
+                        return;
+                    }
 
                     List<List<PointF>>? strokeList = null;
                     if (root.TryGetProperty("strokes", out var strokesElem) && strokesElem.ValueKind == System.Text.Json.JsonValueKind.Array)
@@ -468,10 +516,18 @@ namespace HapiCopi
                     _ = Task.Run(async () =>
                     {
                         var result = await MathVisionService.RecognizeHandwrittenMathAsync(img, engine, strokeList);
+                        if (result.success)
+                        {
+                            LicenseService.ConsumeRecognition(isCloud);
+                        }
+
+                        bool isPro = LicenseService.IsPro;
+                        int newRemaining = isCloud ? LicenseService.CloudQuotaRemaining : LicenseService.RemainingDailyFreeQuota;
+
                         string safeLatex = System.Text.Json.JsonSerializer.Serialize(result.latex);
                         string safeCandidates = System.Text.Json.JsonSerializer.Serialize(result.candidates ?? new List<string>());
                         string safeError = System.Text.Json.JsonSerializer.Serialize(result.error);
-                        string script = $"if (typeof onInkRecognized === 'function') onInkRecognized({(result.success ? "true" : "false")}, {safeLatex}, {safeCandidates}, {safeError}, {result.elapsedMs});";
+                        string script = $"if (typeof onInkRecognized === 'function') onInkRecognized({(result.success ? "true" : "false")}, {safeLatex}, {safeCandidates}, {safeError}, {result.elapsedMs}, {newRemaining}, {(isPro ? "true" : "false")}, {(isCloud ? "true" : "false")});";
                         try
                         {
                             BeginInvoke(new Action(() =>
@@ -641,7 +697,17 @@ namespace HapiCopi
                         string safeSource = System.Net.WebUtility.HtmlEncode(source);
                         string fragment = $"<img src=\"{png}\" alt=\"[HapiCopi:Math] {safeSource}\" title=\"[HapiCopi:Math] {safeSource}\" style=\"{style.Trim()}\" />";
                         string cfHtml = MarkdownToWordConverter.PackageAsClipboardHtml(fragment);
-                        _setClipboard(source, cfHtml);
+
+                        string clipboardText = source;
+                        if (!LicenseService.IsPro && !string.IsNullOrWhiteSpace(source))
+                        {
+                            if (!source.StartsWith("% Tạo bởi HapiCopi", StringComparison.OrdinalIgnoreCase))
+                            {
+                                clipboardText = "% Tạo bởi HapiCopi (hapicopi.com)\r\n" + source;
+                            }
+                        }
+
+                        _setClipboard(clipboardText, cfHtml);
                         FormulaTracker.Register(png, source, widthPt: wPt, heightPt: hPt);
                         Program.Log($"[MathEditor] Đã copy ảnh công thức vào clipboard (Size={heightPt}pt, Display={isDisplay}).");
 
@@ -676,6 +742,24 @@ namespace HapiCopi
             {
                 Program.Log($"[MathEditor LỖI] Xử lý message thất bại: {ex.Message}");
             }
+        }
+
+        private void PushLicenseAndSponsorStatus()
+        {
+            try
+            {
+                bool isPro = LicenseService.IsPro;
+                bool isProLifetime = LicenseService.IsProLifetime;
+                bool hasCloud = LicenseService.HasActiveCloud;
+                int remainingFree = LicenseService.RemainingDailyFreeQuota;
+                int remainingCloud = LicenseService.CloudQuotaRemaining;
+                var sponsor = SponsorService.GetActiveSponsor();
+
+                string sponsorJson = System.Text.Json.JsonSerializer.Serialize(sponsor);
+                string script = $"if (typeof onLicenseStatusUpdate === 'function') onLicenseStatusUpdate({(isPro ? "true" : "false")}, {(isProLifetime ? "true" : "false")}, {(hasCloud ? "true" : "false")}, {remainingFree}, {remainingCloud}, {sponsorJson});";
+                BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(script)));
+            }
+            catch { }
         }
     }
 }

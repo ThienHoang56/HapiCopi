@@ -90,7 +90,7 @@ namespace HapiCopi
             if (string.IsNullOrWhiteSpace(apiKey))
             {
                 sw.Stop();
-                return (false, "", new List<string>(), "Chưa cấu hình GEMINI_API_KEY trong file .env hoặc Cài đặt.", sw.ElapsedMilliseconds);
+                return (false, "", new List<string>(), "Chưa kích hoạt gói Cloud AI. Vui lòng kích hoạt gói Cloud trong Cài đặt hoặc dùng chế độ Cục bộ (Offline) miễn phí.", sw.ElapsedMilliseconds);
             }
 
             // Danh sách model ưu tiên

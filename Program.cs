@@ -35,6 +35,11 @@ namespace HapiCopi
                 return RunEndToEndMathBenchmark();
             }
 
+            if (args.Any(a => a.Equals("--test-license", StringComparison.OrdinalIgnoreCase)))
+            {
+                return RunLicenseSelfTest();
+            }
+
             if (args.Any(a => a.Equals("--selfcheck-pdf", StringComparison.OrdinalIgnoreCase)))
             {
                 string result = PdfHeuristicCleaner.SelfCheck();
@@ -204,6 +209,66 @@ namespace HapiCopi
             catch
             {
                 File.WriteAllText(filename, content);
+            }
+        }
+
+        private static int RunLicenseSelfTest()
+        {
+            var sb = new System.Text.StringBuilder();
+            void Print(string s) { Console.WriteLine(s); sb.AppendLine(s); }
+
+            Print("==================================================");
+            Print("   HAPICOPI LICENSE & MONETIZATION SELF-TEST     ");
+            Print("==================================================");
+
+            try
+            {
+                // Test 1: Daily free quota countdown
+                bool canRec = LicenseService.CanRecognize(false, out string reason, out int remaining, out int maxQ);
+                Print($"[TEST 1] CanRecognize Offline: {canRec}, Remaining: {remaining}/{maxQ}");
+                if (!canRec || remaining <= 0) { Print("FAILED TEST 1"); return 1; }
+
+                LicenseService.ConsumeRecognition(false);
+                int afterConsume = LicenseService.RemainingDailyFreeQuota;
+                Print($"[TEST 2] Consume 1 recognition: {remaining} -> {afterConsume}");
+                if (afterConsume != remaining - 1 && !LicenseService.IsProLifetime) { Print("FAILED TEST 2"); return 1; }
+
+                // Test 3: Generate and Validate PRO key
+                string proKey = LicenseService.GenerateKey("PRO");
+                Print($"[TEST 3] Sinh key Pro: {proKey}");
+                var actRes = LicenseService.ActivateLicenseKey(proKey);
+                Print($"[TEST 3 KÍCH HOẠT] Kết quả: {actRes.success} - {actRes.message}");
+                if (!actRes.success || !LicenseService.IsPro) { Print("FAILED TEST 3"); return 1; }
+
+                // Test 4: CanRecognize when Pro Lifetime
+                bool canRecPro = LicenseService.CanRecognize(false, out _, out int remPro, out _);
+                Print($"[TEST 4] CanRecognize sau khi lên Pro: {canRecPro}, Remaining: {remPro}");
+                if (!canRecPro || remPro != 999999) { Print("FAILED TEST 4"); return 1; }
+
+                // Test 5: Generate and Validate CLD key
+                string cldKey = LicenseService.GenerateKey("CLD");
+                Print($"[TEST 5] Sinh key Cloud: {cldKey}");
+                var actCldRes = LicenseService.ActivateLicenseKey(cldKey);
+                Print($"[TEST 5 KÍCH HOẠT] Kết quả: {actCldRes.success} - {actCldRes.message}");
+                if (!actCldRes.success || !LicenseService.HasActiveCloud) { Print("FAILED TEST 5"); return 1; }
+                Print($"[TEST 5 HẠN MỨC] Cloud Remaining: {LicenseService.CloudQuotaRemaining}/1000");
+
+                // Test 6: Sponsor Service
+                var sponsor = SponsorService.GetActiveSponsor();
+                Print($"[TEST 6] Sponsor khi là Pro (phải bằng null): {(sponsor == null ? "NULL (PASS)" : "NOT NULL (FAIL)")}");
+                if (sponsor != null) { Print("FAILED TEST 6"); return 1; }
+
+                Print("==================================================");
+                Print("   ALL 6 LICENSE & SPONSOR TESTS PASSED! (100%)   ");
+                Print("==================================================");
+                SaveTestReport("license_test_report.txt", sb.ToString());
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Print($"[ERROR] {ex.Message}");
+                SaveTestReport("license_test_report.txt", sb.ToString());
+                return 1;
             }
         }
 
