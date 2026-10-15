@@ -86,8 +86,24 @@ Nếu không có kiến trúc phòng vệ nghiêm ngặt, ứng dụng sẽ rấ
 
 ---
 
-## III. NGUYÊN TẮC VÀNG TRONG VẬN HÀNH ỨNG DỤNG (GOLDEN RULES)
+## III. 6 NGUY CƠ MÔI TRƯỜNG THỰC CHIẾN HỆ ĐIỀU HÀNH WINDOWS (OS ECOSYSTEM PITFALLS)
 
-1. **Nguyên tắc "Fail-Safe Clipboard":** Clipboard là của người dùng. Nếu bất kỳ thao tác định dạng nào của HapiCopi bị lỗi hoặc timeout (> 200ms), phải giữ nguyên vẹn dữ liệu gốc của người dùng. Tuyệt đối không bao giờ làm rỗng clipboard (Clear clipboard) khi gặp exception.
+Ngoài các nguy cơ nội tại bên trong code, trong môi trường triển khai thực tế trên máy người dùng, ứng dụng bắt buộc phải phòng thủ trước 6 "cạm bẫy môi trường":
+
+| Nguy cơ (Risk) | Cơ chế phát sinh | Hậu quả nếu không chặn | Giải pháp phòng vệ chuẩn mực |
+|---|---|---|---|
+| **1. Bị Antivirus / SmartScreen chặn nhầm (False Positive)** | App không có chứng chỉ số EV ($400/năm), lại dùng Hook phím tắt và đọc `WM_CLIPBOARDUPDATE` liên tục | Windows SmartScreen hiện cảnh báo xanh "Unknown Publisher", một số AV (Bkav, Avast) chặn app chạy | Điền đầy đủ metadata file `.exe` (Company, Product, Version, Icon, Description). Chuẩn hóa manifest UAC (`asInvoker`). Viết tài liệu hướng dẫn người dùng bấm *"More info → Run anyway"*. |
+| **2. Xung đột gõ tiếng Việt Unikey / EVKey** | Unikey/EVKey ở một số ứng dụng dùng cơ chế copy ký tự có dấu vào clipboard rồi paste ra màn hình | Hàng loạt ký tự rác 1 ký tự (`a`, `ê`, `o`) tràn vào Lịch sử Clipboard, gây trễ nhịp gõ phím | Bỏ qua mọi chuỗi clipboard siêu ngắn ($< 2$ ký tự) hoặc phát sinh quá nhanh ($< 15\text{ ms}$) từ các tiến trình bộ gõ. |
+| **3. Tên tài khoản Windows có dấu tiếng Việt / khoảng trắng** | Người dùng đặt tên máy dạng `C:\Users\Nguyễn Văn A\...` | Các hàm C++ của ONNX Runtime hoặc thư mục WebView2 nếu xử lý đường dẫn ANSI sẽ báo `File Not Found` (thành `Nguy?n Van A`) | Toàn bộ đường dẫn nạp model và profile bắt buộc chuẩn hóa Unicode UTF-16 qua .NET `Path.Combine()`, tuyệt đối không dùng ép kiểu byte/ANSI. |
+| **4. Máy tính thiếu WebView2 Runtime** | Windows 10 đời cũ (trước 2021) hoặc máy công ty dùng Windows 10 Enterprise/LTSC bị tắt cập nhật Edge | Khi mở Math Editor, app bị crash do `DllNotFoundException` | Bộ cài Inno Setup (`HapiCopi.iss`) kiểm tra khóa Registry của WebView2. Nếu thiếu $\rightarrow$ Tự động tải hoặc hướng dẫn tải Evergreen Bootstrapper. |
+| **5. Rào cản quyền hạn Windows (UIPI Isolation)** | Người dùng copy dữ liệu từ cửa sổ chạy quyền Admin (CMD Admin, Task Manager, Visual Studio Admin) | HapiCopi (chạy quyền Standard) bị Windows chặn thông điệp, không nhận được clipboard | Bẫy ngoại lệ phân quyền êm ái, ghi log cảnh báo, không làm gián đoạn luồng chính của app. |
+| **6. Xung đột Phím tắt Toàn cục (Global Hotkey Conflict)** | Phím tắt của HapiCopi (`Ctrl+Alt+M`, `Ctrl+Shift+V`) đã bị Discord, OBS, Photoshop, Zalo chiếm trước | Hàm Win32 `RegisterHotKey` trả về `false`, bấm phím tắt không phản hồi | Khi đăng ký phím tắt thất bại, phát Toast nhắc nhở nhẹ và cho phép người dùng mở bằng chuột từ System Tray hoặc đổi phím tắt. |
+
+---
+
+## IV. NGUYÊN TẮC VÀNG TRONG VẬN HÀNH ỨNG DỤNG (GOLDEN RULES)
+
+1. **Nguyên tắc "Fail-Safe Clipboard":** Clipboard là tài sản của người dùng. Nếu bất kỳ thao tác định dạng nào của HapiCopi bị lỗi hoặc timeout (> 200ms), phải giữ nguyên vẹn dữ liệu gốc của người dùng. Tuyệt đối không bao giờ làm rỗng clipboard (Clear clipboard) khi gặp exception.
 2. **Nguyên tắc "Zero Ghost Process":** Bấm nút Thoát (Exit) ở khay hệ thống là toàn bộ tiến trình C# và tiến trình con WebView2 phải tắt sạch trong vòng $500\text{ ms}$, không để lại bất kỳ tiến trình chạy ngầm nào.
 3. **Nguyên tắc "No Unhandled Crashes":** Đăng ký đầy đủ `Application.ThreadException` và `AppDomain.CurrentDomain.UnhandledException`. Ghi nhật ký lỗi vào file log offline, không được để app văng hộp thoại crash của Windows.
+
