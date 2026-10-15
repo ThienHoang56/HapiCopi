@@ -42,6 +42,8 @@ namespace HapiCopi
         private long _currentClipboardSeq = 0; // Mã tuần tự clipboard cho AI ngầm bất đồng bộ
         private readonly HashSet<string> _svgJobsInFlight = new HashSet<string>();
         private bool _hasCleanedUp = false;
+        private DateTime _lastClipboardEventTime = DateTime.MinValue;
+        private System.Windows.Forms.Timer? _hookHeartbeatTimer;
 
         public HapiCopiApplicationContext() : this(AppInstanceChannel.CommandShow)
         {
@@ -112,6 +114,18 @@ namespace HapiCopi
             {
                 Program.Log($"[MouseHook LỖI] {ex.Message}");
             }
+
+            // 4c. Thiết lập Timer nhịp tim (Heartbeat) kiểm tra sức khỏe của Hook hệ thống định kỳ (30 giây)
+            _hookHeartbeatTimer = new System.Windows.Forms.Timer { Interval = 30000 };
+            _hookHeartbeatTimer.Tick += (s, e) =>
+            {
+                try
+                {
+                    _keyboardHook?.EnsureHookActive();
+                }
+                catch { }
+            };
+            _hookHeartbeatTimer.Start();
 
             _notifyIcon.BalloonTipClicked += OnBalloonTipClicked;
 
@@ -568,9 +582,39 @@ namespace HapiCopi
             bool historyEnabled = (AppConfig.Get("HISTORY_ENABLED") ?? "true").ToLower() != "false";
             if (!historyEnabled)
             {
-                _clipboardHistory.Clear();
+                lock (_clipboardHistory)
+                {
+                    _clipboardHistory.Clear();
+                }
                 HistoryManager.DeletePhysicalFiles();
                 return;
+            }
+
+            // Bỏ qua nếu mục lịch sử hoàn toàn rỗng và không có định dạng ảnh
+            if (string.IsNullOrWhiteSpace(item.OriginalText) && 
+                string.IsNullOrWhiteSpace(item.OriginalHtml) && 
+                string.IsNullOrWhiteSpace(item.ProcessedText) && 
+                item.ClipboardFormats.Count == 0)
+            {
+                return;
+            }
+
+            // Bỏ qua ký tự vụn đơn lẻ của bộ gõ tiếng Việt nếu phát sinh dồn dập
+            if (!string.IsNullOrEmpty(item.OriginalText) && item.OriginalText.Trim().Length <= 1 && item.ClipboardFormats.Count <= 2)
+            {
+                lock (_clipboardHistory)
+                {
+                    if (_clipboardHistory.Count > 0)
+                    {
+                        var lastItem = _clipboardHistory[_clipboardHistory.Count - 1];
+                        if ((DateTime.Now - lastItem.Timestamp).TotalMilliseconds < 80.0 &&
+                            !string.IsNullOrEmpty(lastItem.OriginalText) && lastItem.OriginalText.Trim().Length <= 2)
+                        {
+                            Program.Log($"[IME Filter] Bỏ qua ký tự rác từ bộ gõ trong AddToHistory: '{item.OriginalText}'");
+                            return;
+                        }
+                    }
+                }
             }
 
             // Bảo vệ bộ nhớ: Rút gọn dữ liệu lớn trước khi lưu vào danh sách lịch sử RAM
@@ -579,10 +623,13 @@ namespace HapiCopi
             item.ProcessedText = SanitizeTextForHistory(item.ProcessedText);
             item.ProcessedHtml = SanitizeHtmlForHistory(item.ProcessedHtml);
 
-            _clipboardHistory.Add(item);
-            while (_clipboardHistory.Count > MaxHistoryItems)
+            lock (_clipboardHistory)
             {
-                _clipboardHistory.RemoveAt(0);
+                _clipboardHistory.Add(item);
+                while (_clipboardHistory.Count > MaxHistoryItems)
+                {
+                    _clipboardHistory.RemoveAt(0);
+                }
             }
 
             // Lưu lịch sử xuống đĩa thích ứng theo cấu hình
@@ -972,6 +1019,17 @@ namespace HapiCopi
                 {
                     originalHtml = Clipboard.GetText(TextDataFormat.Html);
                     hasHtml = !string.IsNullOrEmpty(originalHtml);
+                }
+
+                // Lọc ký tự rác gõ dấu tiếng Việt (Unikey/EVKey clipboard macro burst)
+                DateTime nowUtc = DateTime.UtcNow;
+                double elapsedSinceLastChange = (nowUtc - _lastClipboardEventTime).TotalMilliseconds;
+                _lastClipboardEventTime = nowUtc;
+
+                if (!isStartup && !hasHtml && !string.IsNullOrEmpty(originalText) && originalText.Length <= 2 && elapsedSinceLastChange < 45.0)
+                {
+                    Program.Log($"[IME Filter] Bỏ qua ký tự vụn từ bộ gõ tiếng Việt: '{originalText}' (sau {elapsedSinceLastChange:F0}ms)");
+                    return;
                 }
 
                 ActiveAppInfo sourceApp = ActiveWindowHelper.GetActiveAppInfo();
@@ -1939,6 +1997,7 @@ namespace HapiCopi
 
             try { AppInstanceChannel.StopServer(); } catch { }
             try { _notifyIcon.Visible = false; _notifyIcon.Dispose(); } catch { }
+            try { _hookHeartbeatTimer?.Stop(); _hookHeartbeatTimer?.Dispose(); } catch { }
             try { _listener.Dispose(); } catch { }
             try { _keyboardHook.Dispose(); } catch { }
             try { _mouseHook?.Dispose(); } catch { }

@@ -17,6 +17,7 @@ namespace HapiCopi
 
         private static string DatPath => Path.Combine(ConfigDirectory, "history.dat");
         private static string JsonPath => Path.Combine(ConfigDirectory, "history.json");
+        private static readonly object _fileLock = new object();
 
         // Muối bảo mật (entropy) để tăng cường bảo vệ DPAPI
         private static byte[] GetOptionalEntropy()
@@ -38,45 +39,48 @@ namespace HapiCopi
                 return list;
             }
 
-            try
+            lock (_fileLock)
             {
-                Directory.CreateDirectory(ConfigDirectory);
+                try
+                {
+                    Directory.CreateDirectory(ConfigDirectory);
 
-                // Trường hợp 1: Có file mã hóa .dat, tiến hành giải mã
-                if (File.Exists(DatPath))
-                {
-                    Program.Log("[HistoryManager] Tìm thấy file lịch sử mã hóa history.dat. Đang giải mã DPAPI...");
-                    byte[] encryptedBytes = File.ReadAllBytes(DatPath);
-                    byte[] entropy = GetOptionalEntropy();
-                    byte[] plaintextBytes = ProtectedData.Unprotect(encryptedBytes, entropy, DataProtectionScope.CurrentUser);
-                    
-                    string json = Encoding.UTF8.GetString(plaintextBytes);
-                    list = JsonSerializer.Deserialize<List<ClipboardHistoryItem>>(json) ?? new List<ClipboardHistoryItem>();
-                    Program.Log($"[HistoryManager] Đã nạp thành công {list.Count} mục lịch sử đã mã hóa.");
-                }
-                // Trường hợp 2: Có file plaintext .json, nạp văn bản rõ
-                else if (File.Exists(JsonPath))
-                {
-                    Program.Log("[HistoryManager] Tìm thấy file lịch sử văn bản rõ history.json. Đang nạp...");
-                    string json = File.ReadAllText(JsonPath, Encoding.UTF8);
-                    list = JsonSerializer.Deserialize<List<ClipboardHistoryItem>>(json) ?? new List<ClipboardHistoryItem>();
-                    Program.Log($"[HistoryManager] Đã nạp thành công {list.Count} mục lịch sử từ file văn bản rõ.");
-                }
+                    // Trường hợp 1: Có file mã hóa .dat, tiến hành giải mã
+                    if (File.Exists(DatPath))
+                    {
+                        Program.Log("[HistoryManager] Tìm thấy file lịch sử mã hóa history.dat. Đang giải mã DPAPI...");
+                        byte[] encryptedBytes = File.ReadAllBytes(DatPath);
+                        byte[] entropy = GetOptionalEntropy();
+                        byte[] plaintextBytes = ProtectedData.Unprotect(encryptedBytes, entropy, DataProtectionScope.CurrentUser);
+                        
+                        string json = Encoding.UTF8.GetString(plaintextBytes);
+                        list = JsonSerializer.Deserialize<List<ClipboardHistoryItem>>(json) ?? new List<ClipboardHistoryItem>();
+                        Program.Log($"[HistoryManager] Đã nạp thành công {list.Count} mục lịch sử đã mã hóa.");
+                    }
+                    // Trường hợp 2: Có file plaintext .json, nạp văn bản rõ
+                    else if (File.Exists(JsonPath))
+                    {
+                        Program.Log("[HistoryManager] Tìm thấy file lịch sử văn bản rõ history.json. Đang nạp...");
+                        string json = File.ReadAllText(JsonPath, Encoding.UTF8);
+                        list = JsonSerializer.Deserialize<List<ClipboardHistoryItem>>(json) ?? new List<ClipboardHistoryItem>();
+                        Program.Log($"[HistoryManager] Đã nạp thành công {list.Count} mục lịch sử từ file văn bản rõ.");
+                    }
 
-                // Làm sạch và thu gọn các chuỗi Base64 cũ còn sót lại trong lịch sử để tiết kiệm RAM
-                foreach (var item in list)
-                {
-                    item.OriginalText = HapiCopiApplicationContext.SanitizeTextForHistory(item.OriginalText);
-                    item.OriginalHtml = HapiCopiApplicationContext.SanitizeHtmlForHistory(item.OriginalHtml);
-                    item.ProcessedText = HapiCopiApplicationContext.SanitizeTextForHistory(item.ProcessedText);
-                    item.ProcessedHtml = HapiCopiApplicationContext.SanitizeHtmlForHistory(item.ProcessedHtml);
+                    // Làm sạch và thu gọn các chuỗi Base64 cũ còn sót lại trong lịch sử để tiết kiệm RAM
+                    foreach (var item in list)
+                    {
+                        item.OriginalText = HapiCopiApplicationContext.SanitizeTextForHistory(item.OriginalText);
+                        item.OriginalHtml = HapiCopiApplicationContext.SanitizeHtmlForHistory(item.OriginalHtml);
+                        item.ProcessedText = HapiCopiApplicationContext.SanitizeTextForHistory(item.ProcessedText);
+                        item.ProcessedHtml = HapiCopiApplicationContext.SanitizeHtmlForHistory(item.ProcessedHtml);
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                Program.Log($"[HistoryManager LỖI] Lỗi nạp và giải mã lịch sử clipboard: {ex.Message}");
-                // Trong trường hợp giải mã thất bại (do đổi tài khoản Windows hoặc file lỗi),
-                // trả về danh sách rỗng để tránh làm sập ứng dụng.
+                catch (Exception ex)
+                {
+                    Program.Log($"[HistoryManager LỖI] Lỗi nạp và giải mã lịch sử clipboard: {ex.Message}");
+                    // Trong trường hợp giải mã thất bại (do đổi tài khoản Windows hoặc file lỗi),
+                    // trả về danh sách rỗng để tránh làm sập ứng dụng.
+                }
             }
 
             return list;
@@ -84,6 +88,7 @@ namespace HapiCopi
 
         /// <summary>
         /// Lưu trữ lịch sử clipboard thích ứng theo cấu hình hiện hành.
+        /// Sử dụng cơ chế ghi nguyên tử (Atomic Write qua file .tmp) và khóa luồng.
         /// </summary>
         public static void SaveHistory(List<ClipboardHistoryItem> history)
         {
@@ -94,74 +99,86 @@ namespace HapiCopi
                 return;
             }
 
-            try
+            lock (_fileLock)
             {
-                Directory.CreateDirectory(ConfigDirectory);
-
-                // Bảo vệ nhạy cảm trước khi ghi đĩa (PII Protection)
-                bool maskHistory = (AppConfig.Get("PII_MASK_HISTORY") ?? "true").ToLower() != "false";
-                var historyToSave = new List<ClipboardHistoryItem>();
-
-                foreach (var item in history)
+                try
                 {
-                    var clone = new ClipboardHistoryItem
-                    {
-                        Timestamp = item.Timestamp,
-                        AppName = item.AppName,
-                        OriginalText = item.OriginalText,
-                        OriginalHtml = item.OriginalHtml,
-                        ProcessedText = item.ProcessedText,
-                        ProcessedHtml = item.ProcessedHtml,
-                        Status = item.Status,
-                        PiiResult = item.PiiResult
-                    };
-                    
-                    // Copy ID của item để giữ nguyên định danh
-                    clone.Id = item.Id;
+                    Directory.CreateDirectory(ConfigDirectory);
 
-                    foreach (var kv in item.ClipboardFormats)
+                    // Bảo vệ nhạy cảm trước khi ghi đĩa (PII Protection)
+                    bool maskHistory = (AppConfig.Get("PII_MASK_HISTORY") ?? "true").ToLower() != "false";
+                    var historyToSave = new List<ClipboardHistoryItem>();
+
+                    // Tạo bản sao an toàn để tránh xung đột luồng khi duyệt danh sách
+                    lock (history)
                     {
-                        clone.ClipboardFormats[kv.Key] = kv.Value;
+                        foreach (var item in history)
+                        {
+                            var clone = new ClipboardHistoryItem
+                            {
+                                Timestamp = item.Timestamp,
+                                AppName = item.AppName,
+                                OriginalText = item.OriginalText,
+                                OriginalHtml = item.OriginalHtml,
+                                ProcessedText = item.ProcessedText,
+                                ProcessedHtml = item.ProcessedHtml,
+                                Status = item.Status,
+                                PiiResult = item.PiiResult
+                            };
+                            
+                            // Copy ID của item để giữ nguyên định danh
+                            clone.Id = item.Id;
+
+                            foreach (var kv in item.ClipboardFormats)
+                            {
+                                clone.ClipboardFormats[kv.Key] = kv.Value;
+                            }
+
+                            // Nếu bật che lịch sử và mục lịch sử chứa PII nhạy cảm
+                            if (maskHistory && item.PiiResult != null && item.PiiResult.HasPii)
+                            {
+                                // Xóa vĩnh viễn dữ liệu gốc nhạy cảm, chỉ lưu trữ bản đã được che sạch
+                                clone.OriginalText = item.ProcessedText;
+                                clone.OriginalHtml = "";
+                            }
+
+                            historyToSave.Add(clone);
+                        }
                     }
 
-                    // Nếu bật che lịch sử và mục lịch sử chứa PII nhạy cảm
-                    if (maskHistory && item.PiiResult != null && item.PiiResult.HasPii)
+                    string json = JsonSerializer.Serialize(historyToSave);
+
+                    // Kiểm tra cấu hình mã hóa bảo mật
+                    if ((AppConfig.Get("ENCRYPT_HISTORY_DATA") ?? "true").ToLower() != "false")
                     {
-                        // Xóa vĩnh viễn dữ liệu gốc nhạy cảm, chỉ lưu trữ bản đã được che sạch
-                        clone.OriginalText = item.ProcessedText;
-                        clone.OriginalHtml = "";
+                        // Chế độ mã hóa: Sử dụng DPAPI bảo vệ
+                        byte[] plaintextBytes = Encoding.UTF8.GetBytes(json);
+                        byte[] entropy = GetOptionalEntropy();
+                        byte[] encryptedBytes = ProtectedData.Protect(plaintextBytes, entropy, DataProtectionScope.CurrentUser);
+                        
+                        // Ghi nguyên tử: Ghi ra file .tmp rồi đổi tên đè lên file chính
+                        string tmpDatPath = DatPath + ".tmp";
+                        File.WriteAllBytes(tmpDatPath, encryptedBytes);
+                        File.Move(tmpDatPath, DatPath, overwrite: true);
+                        
+                        // Xóa file JSON rõ cũ nếu có để tránh rò rỉ
+                        if (File.Exists(JsonPath)) File.Delete(JsonPath);
                     }
-
-                    historyToSave.Add(clone);
+                    else
+                    {
+                        // Chế độ văn bản rõ: Lưu trực tiếp nguyên tử
+                        string tmpJsonPath = JsonPath + ".tmp";
+                        File.WriteAllText(tmpJsonPath, json, Encoding.UTF8);
+                        File.Move(tmpJsonPath, JsonPath, overwrite: true);
+                        
+                        // Xóa file mã hóa cũ nếu có
+                        if (File.Exists(DatPath)) File.Delete(DatPath);
+                    }
                 }
-
-                string json = JsonSerializer.Serialize(historyToSave);
-
-                // Kiểm tra cấu hình mã hóa bảo mật
-                if ((AppConfig.Get("ENCRYPT_HISTORY_DATA") ?? "true").ToLower() != "false")
+                catch (Exception ex)
                 {
-                    // Chế độ mã hóa: Sử dụng DPAPI bảo vệ
-                    byte[] plaintextBytes = Encoding.UTF8.GetBytes(json);
-                    byte[] entropy = GetOptionalEntropy();
-                    byte[] encryptedBytes = ProtectedData.Protect(plaintextBytes, entropy, DataProtectionScope.CurrentUser);
-                    
-                    File.WriteAllBytes(DatPath, encryptedBytes);
-                    
-                    // Xóa file JSON rõ cũ nếu có để tránh rò rỉ
-                    if (File.Exists(JsonPath)) File.Delete(JsonPath);
+                    Program.Log($"[HistoryManager LỖI] Lỗi khi lưu trữ lịch sử clipboard xuống đĩa: {ex.Message}");
                 }
-                else
-                {
-                    // Chế độ văn bản rõ: Lưu trực tiếp
-                    File.WriteAllText(JsonPath, json, Encoding.UTF8);
-                    
-                    // Xóa file mã hóa cũ nếu có
-                    if (File.Exists(DatPath)) File.Delete(DatPath);
-                }
-            }
-            catch (Exception ex)
-            {
-                Program.Log($"[HistoryManager LỖI] Lỗi khi lưu trữ lịch sử clipboard xuống đĩa: {ex.Message}");
             }
         }
 
@@ -175,27 +192,31 @@ namespace HapiCopi
         }
 
         /// <summary>
-        /// Xóa bỏ vật lý các file lịch sử lưu trên đĩa.
+        /// Xóa bỏ vật lý các file lịch sử lưu trên đĩa (an toàn luồng).
         /// </summary>
         public static void DeletePhysicalFiles()
         {
-            try
+            lock (_fileLock)
             {
-                if (File.Exists(DatPath))
+                try
                 {
-                    File.Delete(DatPath);
-                    Program.Log("[HistoryManager] Đã xóa file mã hóa history.dat trên đĩa.");
+                    if (File.Exists(DatPath))
+                    {
+                        File.Delete(DatPath);
+                        Program.Log("[HistoryManager] Đã xóa file mã hóa history.dat trên đĩa.");
+                    }
+                    if (File.Exists(JsonPath))
+                    {
+                        File.Delete(JsonPath);
+                        Program.Log("[HistoryManager] Đã xóa file văn bản rõ history.json trên đĩa.");
+                    }
                 }
-                if (File.Exists(JsonPath))
+                catch (Exception ex)
                 {
-                    File.Delete(JsonPath);
-                    Program.Log("[HistoryManager] Đã xóa file văn bản rõ history.json trên đĩa.");
+                    Program.Log($"[HistoryManager LỖI] Lỗi xóa file lịch sử vật lý: {ex.Message}");
                 }
-            }
-            catch (Exception ex)
-            {
-                Program.Log($"[HistoryManager LỖI] Lỗi xóa file lịch sử vật lý: {ex.Message}");
             }
         }
     }
 }
+

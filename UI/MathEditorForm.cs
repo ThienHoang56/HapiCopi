@@ -125,8 +125,37 @@ namespace HapiCopi
                 Program.Log($"[MathEditor LỖI] Khởi tạo WebView2 thất bại: {ex.Message}");
                 if (Visible && Opacity > 0)
                 {
-                    MessageBox.Show("Không mở được soạn công thức:\n" + ex.Message, "HapiCopi",
-                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    bool isRuntimeMissing = ex is Microsoft.Web.WebView2.Core.WebView2RuntimeNotFoundException ||
+                                           ex.Message.IndexOf("WebView2", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                           ex is System.IO.FileNotFoundException;
+
+                    if (isRuntimeMissing)
+                    {
+                        var dlgResult = MessageBox.Show(
+                            "Máy tính của bạn chưa có Microsoft Edge WebView2 Runtime (thành phần hiển thị bảng vẽ công thức toán).\n\n" +
+                            "Bạn có muốn mở trang tải bộ cài tự động từ Microsoft ngay bây giờ không?",
+                            "HapiCopi — Cần WebView2 Runtime",
+                            MessageBoxButtons.YesNo,
+                            MessageBoxIcon.Information);
+
+                        if (dlgResult == DialogResult.Yes)
+                        {
+                            try
+                            {
+                                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                                {
+                                    FileName = "https://go.microsoft.com/fwlink/p/?LinkId=2124703",
+                                    UseShellExecute = true
+                                });
+                            }
+                            catch { }
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show("Không mở được soạn công thức:\n" + ex.Message, "HapiCopi",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
                 }
             }
         }

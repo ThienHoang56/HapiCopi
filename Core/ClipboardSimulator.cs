@@ -66,10 +66,20 @@ namespace HapiCopi
                         System.Threading.Thread.Sleep(50);
                         retries--;
                     }
+
+                    // Nếu không copy được văn bản mới, lập tức khôi phục lại clipboard cũ của người dùng
+                    if (string.IsNullOrEmpty(selectedText) && (_hasOriginalText || _hasOriginalHtml))
+                    {
+                        RestoreClipboardInternal();
+                    }
                 }
                 catch (Exception ex)
                 {
                     Program.Log($"Lỗi trong GetSelectedTextViaClipboard: {ex.Message}");
+                    if (_hasOriginalText || _hasOriginalHtml)
+                    {
+                        RestoreClipboardInternal();
+                    }
                 }
             });
             thread.SetApartmentState(System.Threading.ApartmentState.STA);
@@ -221,16 +231,17 @@ namespace HapiCopi
         {
             try
             {
-                Clipboard.Clear();
                 if (_hasOriginalText && _hasOriginalHtml)
                 {
                     ClipboardHelper.SetOfficeClipboard(_originalText, _originalHtml);
+                    Program.Log("Đã khôi phục thành công clipboard gốc (Text + HTML) của người dùng.");
                 }
                 else if (_hasOriginalText)
                 {
                     Clipboard.SetText(_originalText);
+                    Program.Log("Đã khôi phục thành công clipboard gốc (Text) của người dùng.");
                 }
-                Program.Log("Đã khôi phục thành công clipboard gốc của người dùng.");
+                // Tuyệt đối không gọi Clipboard.Clear() nếu không có bản sao lưu trước đó
             }
             catch (Exception ex)
             {

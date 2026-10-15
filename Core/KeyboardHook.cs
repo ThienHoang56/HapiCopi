@@ -158,6 +158,31 @@ namespace HapiCopi
             return CallNextHookEx(_hookId, nCode, wParam, lParam);
         }
 
+        public bool IsHookActive => _hookId != IntPtr.Zero;
+
+        public void EnsureHookActive()
+        {
+            if (_hookId == IntPtr.Zero)
+            {
+                Program.Log("[KeyboardHook] Hook chưa kích hoạt hoặc bị Windows ngắt, đang thiết lập lại...");
+                InstallHook();
+            }
+        }
+
+        public void ReinstallHook()
+        {
+            try
+            {
+                if (_hookId != IntPtr.Zero)
+                {
+                    UnhookWindowsHookEx(_hookId);
+                    _hookId = IntPtr.Zero;
+                }
+            }
+            catch { }
+            InstallHook();
+        }
+
         public void Dispose()
         {
             if (_hookId != IntPtr.Zero)
@@ -169,3 +194,4 @@ namespace HapiCopi
         }
     }
 }
+

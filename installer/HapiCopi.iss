@@ -124,6 +124,36 @@ begin
   Result := not AppIsRunning();
 end;
 
+function IsWebView2Installed(): Boolean;
+var
+  Version: String;
+begin
+  Result := RegQueryStringValue(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-9E47-BBBE-9E3E-7E48F834E014}', 'pv', Version) or
+            RegQueryStringValue(HKCU, 'Software\Microsoft\EdgeUpdate\Clients\{F3017226-9E47-BBBE-9E3E-7E48F834E014}', 'pv', Version) or
+            RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-9E47-BBBE-9E3E-7E48F834E014}', 'pv', Version);
+  if Result and (Version <> '') and (Version <> '0.0.0.0') then
+    Result := True
+  else
+    Result := False;
+end;
+
+function InitializeSetup(): Boolean;
+var
+  ErrorCode: Integer;
+begin
+  Result := True;
+  if not IsWebView2Installed() then
+  begin
+    if MsgBox('HapiCopi cần Microsoft Edge WebView2 Runtime để chạy tính năng Soạn công thức Toán.' + #13#10#13#10 +
+              'Hệ thống phát hiện máy bạn chưa có WebView2 Runtime. Bạn có muốn mở trang tải tự động từ Microsoft trước khi cài không?' + #13#10#13#10 +
+              '(Chọn Yes để mở trang tải, hoặc No để tiếp tục cài đặt HapiCopi).',
+              mbInformation, MB_YESNO) = IDYES then
+    begin
+      ShellExec('open', 'https://go.microsoft.com/fwlink/p/?LinkId=2124703', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+    end;
+  end;
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   NeedsRestart := False;
