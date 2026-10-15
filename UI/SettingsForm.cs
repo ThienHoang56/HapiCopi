@@ -25,10 +25,18 @@ namespace HapiCopi
         private readonly CheckBox _saveToDiskCheck;
         private readonly CheckBox _startWithWindowsCheck;
         private readonly System.Collections.Generic.List<ClipboardHistoryItem> _historyList;
+        private readonly ToolTip _toolTip;
 
         public SettingsForm(System.Collections.Generic.List<ClipboardHistoryItem> history)
         {
             _historyList = history;
+            _toolTip = new ToolTip
+            {
+                InitialDelay = 200,
+                ReshowDelay = 100,
+                AutoPopDelay = 6000,
+                ShowAlways = true
+            };
 
             UiTheme.ApplyDialog(this, "HapiCopi — Cài đặt");
             ShowInTaskbar = false;
@@ -93,41 +101,48 @@ namespace HapiCopi
             // 1. BẢO MẬT DỮ LIỆU (DLP)
             // ============================
             AddControl(UiTheme.SectionHeader("Bảo mật dữ liệu (DLP)", UiTheme.Accent), 6);
-            _piiScanCheck = UiTheme.Option("Quét tự động thông tin nhạy cảm");
+            _piiScanCheck = UiTheme.Option("Quét dữ liệu nhạy cảm");
+            _toolTip.SetToolTip(_piiScanCheck, "Tự động phát hiện thông tin nhạy cảm khi sao chép");
             AddControl(_piiScanCheck, 4);
 
-            _piiToastCheck = UiTheme.Option("Cảnh báo Toast khi phát hiện thông tin nhạy cảm");
+            _piiToastCheck = UiTheme.Option("Hiện thông báo cảnh báo");
             _piiToastCheck.Margin = new Padding(LogicalToDeviceUnits(16), 0, 0, LogicalToDeviceUnits(4));
+            _toolTip.SetToolTip(_piiToastCheck, "Hiển thị thông báo góc màn hình khi phát hiện dữ liệu nhạy cảm");
             AddControl(_piiToastCheck, 4);
 
-            _piiMaskHistoryCheck = UiTheme.Option("Tự động che dữ liệu nhạy cảm trong lịch sử clipboard");
+            _piiMaskHistoryCheck = UiTheme.Option("Ẩn dữ liệu nhạy cảm trong lịch sử");
             _piiMaskHistoryCheck.Margin = new Padding(LogicalToDeviceUnits(16), 0, 0, LogicalToDeviceUnits(8));
+            _toolTip.SetToolTip(_piiMaskHistoryCheck, "Tự động làm mờ các thông tin nhạy cảm lưu trong lịch sử clipboard");
             AddControl(_piiMaskHistoryCheck, 8);
 
-            // Checklist các loại thông tin được bảo vệ (make sense, dễ hiểu, người dùng chỉnh được)
-            var piiTypesHeader = UiTheme.Hint("Các loại thông tin được bảo vệ (tùy chọn bật/tắt):", UiTheme.Accent);
+            var piiTypesHeader = UiTheme.Hint("Loại dữ liệu bảo vệ:", UiTheme.Accent);
             piiTypesHeader.Font = UiTheme.BodyStrong;
             piiTypesHeader.Margin = new Padding(LogicalToDeviceUnits(16), 0, 0, LogicalToDeviceUnits(4));
             AddControl(piiTypesHeader, 4);
 
-            _checkKeysBox = UiTheme.Option("Mật khẩu, Khóa bí mật & API Key (OpenAI, Google, AWS, Token...)");
+            _checkKeysBox = UiTheme.Option("API Key, Token & Mật khẩu");
             _checkKeysBox.Margin = new Padding(LogicalToDeviceUnits(24), 0, 0, LogicalToDeviceUnits(3));
+            _toolTip.SetToolTip(_checkKeysBox, "Phát hiện OpenAI, Google, AWS, GitHub key, Token và mật khẩu");
             AddControl(_checkKeysBox, 3);
 
-            _checkCardsBox = UiTheme.Option("Số thẻ ngân hàng & Thẻ tín dụng (Visa, MasterCard, 16 số)");
+            _checkCardsBox = UiTheme.Option("Thẻ ngân hàng & Thẻ tín dụng");
             _checkCardsBox.Margin = new Padding(LogicalToDeviceUnits(24), 0, 0, LogicalToDeviceUnits(3));
+            _toolTip.SetToolTip(_checkCardsBox, "Phát hiện số thẻ Visa, MasterCard và thẻ ATM ngân hàng");
             AddControl(_checkCardsBox, 3);
 
-            _checkCccdBox = UiTheme.Option("Căn cước công dân (CCCD 12 số) & CMND (9 số)");
+            _checkCccdBox = UiTheme.Option("Căn cước công dân & CMND");
             _checkCccdBox.Margin = new Padding(LogicalToDeviceUnits(24), 0, 0, LogicalToDeviceUnits(3));
+            _toolTip.SetToolTip(_checkCccdBox, "Phát hiện CCCD 12 số và CMND 9 số");
             AddControl(_checkCccdBox, 3);
 
-            _checkPhoneBox = UiTheme.Option("Số điện thoại di động cá nhân (Việt Nam)");
+            _checkPhoneBox = UiTheme.Option("Số điện thoại di động");
             _checkPhoneBox.Margin = new Padding(LogicalToDeviceUnits(24), 0, 0, LogicalToDeviceUnits(3));
+            _toolTip.SetToolTip(_checkPhoneBox, "Phát hiện số điện thoại di động Việt Nam");
             AddControl(_checkPhoneBox, 3);
 
-            _checkEmailBox = UiTheme.Option("Địa chỉ Email cá nhân / công việc");
+            _checkEmailBox = UiTheme.Option("Địa chỉ Email");
             _checkEmailBox.Margin = new Padding(LogicalToDeviceUnits(24), 0, 0, LogicalToDeviceUnits(10));
+            _toolTip.SetToolTip(_checkEmailBox, "Phát hiện địa chỉ email cá nhân và công việc");
             AddControl(_checkEmailBox, 10);
 
             _piiScanCheck.CheckedChanged += (s, e) =>
@@ -148,11 +163,13 @@ namespace HapiCopi
             // 2. CHUYỂN SVG SANG PNG
             // ============================
             AddControl(UiTheme.SectionHeader("Chuyển đổi hình ảnh", UiTheme.Accent), 6);
-            _svgToPngCheck = UiTheme.Option("Tự động chuyển SVG sang ảnh PNG khi copy");
+            _svgToPngCheck = UiTheme.Option("Tự động chuyển SVG sang PNG");
+            _toolTip.SetToolTip(_svgToPngCheck, "Tự động chuyển vector SVG sang ảnh PNG khi copy để dán vào Word/PowerPoint");
             AddControl(_svgToPngCheck, 4);
 
-            _svgTransparentCheck = UiTheme.Option("Giữ nền trong suốt cho ảnh PNG");
+            _svgTransparentCheck = UiTheme.Option("Giữ nền trong suốt cho PNG");
             _svgTransparentCheck.Margin = new Padding(LogicalToDeviceUnits(16), 0, 0, LogicalToDeviceUnits(10));
+            _toolTip.SetToolTip(_svgTransparentCheck, "Giữ nền PNG trong suốt thay vì chèn nền màu trắng");
             AddControl(_svgTransparentCheck, 10);
 
             _svgToPngCheck.CheckedChanged += (s, e) =>
@@ -173,8 +190,9 @@ namespace HapiCopi
                 Dock = DockStyle.Fill,
                 Font = UiTheme.Small,
                 Height = LogicalToDeviceUnits(44),
-                PlaceholderText = "Ví dụ: Tên dự án bí mật, mã nội bộ, mật khẩu wifi (mỗi từ một dòng)..."
+                PlaceholderText = "Tên dự án nội bộ, mã bí mật... (mỗi từ một dòng)"
             };
+            _toolTip.SetToolTip(_customKeywordsBox, "Thêm các từ khóa riêng cần cảnh báo khi sao chép");
             AddControl(_customKeywordsBox, 10);
 
             AddControl(UiTheme.Separator(this), 10);
@@ -183,7 +201,6 @@ namespace HapiCopi
             // 4. GOOGLE GEMINI API KEY (TÙY CHỌN)
             // ============================
             AddControl(UiTheme.SectionHeader("Google Gemini API Key (Tùy chọn)", UiTheme.Accent), 4);
-            AddControl(UiTheme.Hint("Dùng cho nhận diện công thức toán nâng cao bằng AI Đám mây:", UiTheme.TextMuted), 4);
 
             var keyPanel = new TableLayoutPanel
             {
@@ -202,11 +219,13 @@ namespace HapiCopi
                 Dock = DockStyle.Fill,
                 Font = UiTheme.Body,
                 UseSystemPasswordChar = true,
-                PlaceholderText = "Dán Gemini API Key (AIzaSy...) vào đây..."
+                PlaceholderText = "AIzaSy... (Để trống nếu chỉ dùng Offline)"
             };
+            _toolTip.SetToolTip(_geminiApiKeyBox, "API Key Google Gemini để nhận diện công thức toán bằng AI Đám mây");
 
             var toggleKeyBtn = UiTheme.SecondaryButton("Hiện");
             toggleKeyBtn.Margin = new Padding(LogicalToDeviceUnits(6), 0, 0, 0);
+            _toolTip.SetToolTip(toggleKeyBtn, "Hiện hoặc ẩn API Key");
             toggleKeyBtn.Click += (s, e) =>
             {
                 _geminiApiKeyBox.UseSystemPasswordChar = !_geminiApiKeyBox.UseSystemPasswordChar;
@@ -223,14 +242,17 @@ namespace HapiCopi
             // 5. HỆ THỐNG & LỊCH SỬ
             // ============================
             AddControl(UiTheme.SectionHeader("Hệ thống & Lịch sử", UiTheme.Accent), 6);
-            _startWithWindowsCheck = UiTheme.Option("Khởi động cùng Windows (chạy ngầm dưới khay hệ thống)");
+            _startWithWindowsCheck = UiTheme.Option("Khởi động cùng Windows");
+            _toolTip.SetToolTip(_startWithWindowsCheck, "Tự động chạy ngầm dưới khay hệ thống khi bật máy");
             AddControl(_startWithWindowsCheck, 4);
 
-            _enableHistoryCheck = UiTheme.Option("Ghi nhớ lịch sử clipboard (lưu mã hóa bảo vệ qua DPAPI)");
+            _enableHistoryCheck = UiTheme.Option("Lưu lịch sử clipboard");
+            _toolTip.SetToolTip(_enableHistoryCheck, "Lưu lại nội dung sao chép, mã hóa an toàn qua Windows DPAPI");
             AddControl(_enableHistoryCheck, 4);
 
-            _saveToDiskCheck = UiTheme.Option("Lưu lại lịch sử khi khởi động lại máy");
+            _saveToDiskCheck = UiTheme.Option("Giữ lịch sử sau khi khởi động lại");
             _saveToDiskCheck.Margin = new Padding(LogicalToDeviceUnits(16), 0, 0, LogicalToDeviceUnits(8));
+            _toolTip.SetToolTip(_saveToDiskCheck, "Lưu lịch sử vào ổ đĩa thay vì chỉ giữ tạm trong RAM");
             AddControl(_saveToDiskCheck, 8);
 
             _enableHistoryCheck.CheckedChanged += (s, e) =>
@@ -241,25 +263,24 @@ namespace HapiCopi
             AddControl(UiTheme.Separator(this), 10);
 
             // ============================
-            // 5. PHÍM TẮT HỆ THỐNG
+            // 6. PHÍM TẮT HỆ THỐNG
             // ============================
             AddControl(UiTheme.SectionHeader("Phím tắt hệ thống", UiTheme.Accent), 6);
-            AddControl(UiTheme.Hint("Các tổ hợp phím tắt toàn cục để điều khiển ứng dụng nhanh từ mọi nơi:", UiTheme.TextMuted), 6);
 
             AddControl(CreateHotkeyCard(
-                "Tạm dừng / Tiếp tục (như Unikey)",
-                "Tạm ngừng quét bảo mật và tự động định dạng clipboard",
-                "Ctrl + Alt + P"), 6);
+                "Tạm dừng / Tiếp tục",
+                "Tạm ngừng hoặc tiếp tục quét bảo mật clipboard",
+                "Ctrl + Alt + P"), 4);
 
             AddControl(CreateHotkeyCard(
-                "Thoát hoàn toàn ứng dụng",
-                "Đóng sạch toàn bộ tiến trình ngầm, không để lại icon rác",
-                "Ctrl + Alt + Q"), 6);
+                "Thoát ứng dụng",
+                "Đóng sạch hoàn toàn ứng dụng và giải phóng bộ nhớ",
+                "Ctrl + Alt + Q"), 4);
 
             AddControl(CreateHotkeyCard(
-                "Soạn công thức Toán học",
-                "Mở bảng vẽ nét thời gian thực và nhận diện AI",
-                "Ctrl + Alt + M"), 8);
+                "Soạn công thức Toán",
+                "Mở bảng vẽ công thức toán và nhận diện LaTeX",
+                "Ctrl + Alt + M"), 6);
 
             content.Controls.Add(col);
 
@@ -402,38 +423,21 @@ namespace HapiCopi
                 AutoSize = true,
                 ColumnCount = 2,
                 BackColor = Color.FromArgb(241, 245, 249),
-                Padding = new Padding(LogicalToDeviceUnits(10), LogicalToDeviceUnits(8), LogicalToDeviceUnits(10), LogicalToDeviceUnits(8)),
-                Margin = new Padding(0, 0, 0, LogicalToDeviceUnits(6))
+                Padding = new Padding(LogicalToDeviceUnits(12), LogicalToDeviceUnits(6), LogicalToDeviceUnits(12), LogicalToDeviceUnits(6)),
+                Margin = new Padding(0, 0, 0, LogicalToDeviceUnits(4))
             };
             card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             card.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-
-            var textPanel = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                FlowDirection = FlowDirection.TopDown,
-                AutoSize = true,
-                WrapContents = false,
-                BackColor = Color.Transparent,
-                Margin = Padding.Empty
-            };
 
             var titleLabel = new Label
             {
                 Text = title,
                 Font = UiTheme.BodyStrong,
                 ForeColor = UiTheme.TextPrimary,
-                AutoSize = true
+                AutoSize = true,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft
             };
-            var descLabel = new Label
-            {
-                Text = description,
-                Font = UiTheme.Small,
-                ForeColor = UiTheme.TextMuted,
-                AutoSize = true
-            };
-            textPanel.Controls.Add(titleLabel);
-            textPanel.Controls.Add(descLabel);
 
             var badge = new Label
             {
@@ -444,12 +448,16 @@ namespace HapiCopi
                 BorderStyle = BorderStyle.FixedSingle,
                 AutoSize = true,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Padding = new Padding(LogicalToDeviceUnits(8), LogicalToDeviceUnits(4), LogicalToDeviceUnits(8), LogicalToDeviceUnits(4)),
-                Margin = new Padding(LogicalToDeviceUnits(8), LogicalToDeviceUnits(2), 0, 0)
+                Padding = new Padding(LogicalToDeviceUnits(8), LogicalToDeviceUnits(3), LogicalToDeviceUnits(8), LogicalToDeviceUnits(3)),
+                Margin = new Padding(LogicalToDeviceUnits(8), 0, 0, 0)
             };
 
-            card.Controls.Add(textPanel, 0, 0);
+            card.Controls.Add(titleLabel, 0, 0);
             card.Controls.Add(badge, 1, 0);
+
+            _toolTip.SetToolTip(card, description);
+            _toolTip.SetToolTip(titleLabel, description);
+            _toolTip.SetToolTip(badge, description);
 
             return card;
         }
