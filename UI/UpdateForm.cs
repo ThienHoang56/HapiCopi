@@ -37,8 +37,8 @@ namespace HapiCopi
             StartPosition = FormStartPosition.CenterScreen;
 
             // Kích thước chuẩn Mini Popup gọn nhẹ, tinh tế
-            MinimumSize = new Size(LogicalToDeviceUnits(420), LogicalToDeviceUnits(340));
-            Size = new Size(LogicalToDeviceUnits(460), LogicalToDeviceUnits(380));
+            MinimumSize = new Size(LogicalToDeviceUnits(440), LogicalToDeviceUnits(360));
+            ClientSize = new Size(LogicalToDeviceUnits(480), LogicalToDeviceUnits(390));
             KeyPreview = true;
             FormClosed += (s, e) => MemoryOptimizer.OptimizeMemory();
 
@@ -190,10 +190,10 @@ namespace HapiCopi
             var footer = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = LogicalToDeviceUnits(46),
+                Height = LogicalToDeviceUnits(58),
                 BackColor = UiTheme.Surface,
-                Padding = new Padding(LogicalToDeviceUnits(16), LogicalToDeviceUnits(8),
-                                      LogicalToDeviceUnits(16), LogicalToDeviceUnits(8))
+                Padding = new Padding(LogicalToDeviceUnits(16), LogicalToDeviceUnits(12),
+                                      LogicalToDeviceUnits(16), LogicalToDeviceUnits(12))
             };
 
             var footerLayout = new TableLayoutPanel
@@ -213,9 +213,9 @@ namespace HapiCopi
                 BackColor = Color.Transparent,
                 FlatStyle = FlatStyle.Flat,
                 AutoSize = true,
-                Height = LogicalToDeviceUnits(28),
                 Cursor = Cursors.Hand,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                Margin = new Padding(0, LogicalToDeviceUnits(4), 0, 0)
             };
             _fileUpdateButton.FlatAppearance.BorderSize = 0;
             _fileUpdateButton.Click += OnFileUpdateClicked;
@@ -230,11 +230,9 @@ namespace HapiCopi
             };
 
             _actionButton = UiTheme.PrimaryButton("Kiểm tra lại");
-            _actionButton.Height = LogicalToDeviceUnits(28);
             _actionButton.Click += OnActionClicked;
 
             _closeButton = UiTheme.SecondaryButton("Đóng");
-            _closeButton.Height = LogicalToDeviceUnits(28);
             _closeButton.Click += (s, e) => Close();
             _closeButton.Margin = new Padding(0, 0, LogicalToDeviceUnits(8), 0);
 
@@ -250,6 +248,7 @@ namespace HapiCopi
             Controls.Add(header);
             Controls.Add(footerBorder);
             Controls.Add(footer);
+            body.BringToFront();
 
             CancelButton = _closeButton;
             KeyDown += (s, e) => { if (e.KeyCode == Keys.Escape) Close(); };
@@ -410,7 +409,7 @@ namespace HapiCopi
                 MaximizeBox = false,
                 MinimizeBox = false,
                 StartPosition = FormStartPosition.CenterParent,
-                ClientSize = new Size(LogicalToDeviceUnits(420), LogicalToDeviceUnits(140)),
+                ClientSize = new Size(LogicalToDeviceUnits(440), LogicalToDeviceUnits(160)),
                 BackColor = UiTheme.Surface
             };
 
@@ -435,8 +434,8 @@ namespace HapiCopi
             var btnPanel = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = LogicalToDeviceUnits(40),
-                Padding = new Padding(LogicalToDeviceUnits(14), LogicalToDeviceUnits(6), LogicalToDeviceUnits(14), LogicalToDeviceUnits(6))
+                Height = LogicalToDeviceUnits(54),
+                Padding = new Padding(LogicalToDeviceUnits(14), LogicalToDeviceUnits(10), LogicalToDeviceUnits(14), LogicalToDeviceUnits(10))
             };
 
             var btnOk = UiTheme.PrimaryButton("Lưu");

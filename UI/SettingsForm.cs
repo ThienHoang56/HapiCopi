@@ -31,8 +31,8 @@ namespace HapiCopi
             StartPosition = FormStartPosition.CenterScreen;
 
             // Kích thước chuẩn Mini Popup vừa vặn, không bị to bự chảng
-            MinimumSize = new Size(LogicalToDeviceUnits(440), LogicalToDeviceUnits(420));
-            Size = new Size(LogicalToDeviceUnits(480), LogicalToDeviceUnits(480));
+            MinimumSize = new Size(LogicalToDeviceUnits(460), LogicalToDeviceUnits(500));
+            ClientSize = new Size(LogicalToDeviceUnits(480), LogicalToDeviceUnits(540));
             KeyPreview = true;
             FormClosed += (s, e) => MemoryOptimizer.OptimizeMemory();
 
@@ -165,20 +165,18 @@ namespace HapiCopi
             // FOOTER BAR
             // ============================
             Button saveButton = UiTheme.PrimaryButton("Lưu cấu hình");
-            saveButton.Height = LogicalToDeviceUnits(28);
             saveButton.Click += OnSaveClicked;
 
             Button closeButton = UiTheme.SecondaryButton("Đóng");
-            closeButton.Height = LogicalToDeviceUnits(28);
             closeButton.Click += (s, e) => Close();
 
             var footer = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = LogicalToDeviceUnits(44),
+                Height = LogicalToDeviceUnits(58),
                 BackColor = UiTheme.Surface,
-                Padding = new Padding(LogicalToDeviceUnits(16), LogicalToDeviceUnits(8),
-                                      LogicalToDeviceUnits(16), LogicalToDeviceUnits(8))
+                Padding = new Padding(LogicalToDeviceUnits(16), LogicalToDeviceUnits(12),
+                                      LogicalToDeviceUnits(16), LogicalToDeviceUnits(12))
             };
             footer.Controls.Add(UiTheme.ButtonRow(closeButton, saveButton));
 
@@ -194,6 +192,7 @@ namespace HapiCopi
             Controls.Add(header);
             Controls.Add(footerBorder);
             Controls.Add(footer);
+            content.BringToFront();
 
             AcceptButton = saveButton;
             CancelButton = closeButton;
