@@ -21,6 +21,7 @@ namespace HapiCopi
         public const string CommandMath = "math";
         public const string CommandAbc = "abc";
         public const string CommandQuit = "quit";
+        public const string CommandPause = "pause";
         public const string CommandPing = "ping";
 
         public const string MutexName = @"Global\HapiCopi_SingleInstance_Mutex_9912";

@@ -62,13 +62,13 @@ namespace HapiCopi
             var titleItem = new ToolStripMenuItem($"HapiCopi v{UpdateManager.CurrentVersionText}") { Enabled = false };
             titleItem.Font = new Font(titleItem.Font, FontStyle.Bold);
 
-            _pauseMenuItem = new ToolStripMenuItem("Tạm dừng", null, OnPauseClicked);
+            _pauseMenuItem = new ToolStripMenuItem("Tạm dừng (Ctrl+Alt+P)", null, OnPauseClicked);
             var historyMenuItem = new ToolStripMenuItem("Lịch sử Clipboard...", null, OnHistoryClicked);
-            var mathEditorMenuItem = new ToolStripMenuItem("Soạn công thức toán (Ctrl+Alt)...", null, OnMathEditorClicked);
+            var mathEditorMenuItem = new ToolStripMenuItem("Soạn công thức toán (Ctrl+Alt+M)...", null, OnMathEditorClicked);
             var abcEditorMenuItem = new ToolStripMenuItem("🔒 Soạn nhạc (Chưa hoàn thiện)...", null, OnAbcEditorClicked);
             var settingsMenuItem = new ToolStripMenuItem("Cài đặt...", null, OnSettingsClicked);
             _updateMenuItem = new ToolStripMenuItem("Phiên bản & Cập nhật...", null, OnUpdateClicked);
-            var exitMenuItem = new ToolStripMenuItem("Thoát", null, OnExitClicked);
+            var exitMenuItem = new ToolStripMenuItem("Thoát (Ctrl+Alt+Q)", null, OnExitClicked);
 
             contextMenu.Items.Add(titleItem);
             contextMenu.Items.Add(new ToolStripSeparator());
@@ -102,6 +102,8 @@ namespace HapiCopi
             _keyboardHook = new KeyboardHook();
             _keyboardHook.PastePressed += OnPastePressed;
             _keyboardHook.MathHotkeyPressed += () => _syncContext.Post(_ => OnMathEditorClicked(this, EventArgs.Empty), null);
+            _keyboardHook.PauseTogglePressed += () => _syncContext.Post(_ => OnPauseClicked(this, EventArgs.Empty), null);
+            _keyboardHook.ExitAppPressed += () => _syncContext.Post(_ => OnExitClicked(this, EventArgs.Empty), null);
 
             // 4b. Đăng ký Hook chuột phát hiện click sửa công thức trực tiếp
             try
@@ -653,16 +655,25 @@ namespace HapiCopi
         {
             _isPaused = !_isPaused;
             _pauseMenuItem.Checked = _isPaused;
+            _pauseMenuItem.Text = _isPaused ? "Tiếp tục bảo vệ (Ctrl+Alt+P)" : "Tạm dừng (Ctrl+Alt+P)";
 
             if (_isPaused)
             {
+                if (_currentToast != null && !_currentToast.IsDisposed)
+                {
+                    try { _currentToast.Close(); } catch { }
+                }
                 _notifyIcon.Text = "HapiCopi (Đang tạm dừng)";
-                _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Đã tạm dừng bảo vệ clipboard.", ToolTipIcon.Warning);
+                _notifyIcon.ShowBalloonTip(1500, "HapiCopi — Đang tạm dừng",
+                    "Đã tạm dừng bảo vệ & định dạng clipboard.\nNhấn Ctrl+Alt+P để kích hoạt lại.",
+                    ToolTipIcon.Warning);
             }
             else
             {
                 _notifyIcon.Text = "HapiCopi - Clipboard DLP & Auto-Format";
-                _notifyIcon.ShowBalloonTip(1500, "HapiCopi", "Đã hoạt động trở lại.", ToolTipIcon.Info);
+                _notifyIcon.ShowBalloonTip(1500, "HapiCopi — Hoạt động trở lại",
+                    "Đã tiếp tục bảo vệ & tự động định dạng clipboard.",
+                    ToolTipIcon.Info);
             }
         }
 
@@ -1937,6 +1948,7 @@ namespace HapiCopi
 
         private void OnExitClicked(object? sender, EventArgs e)
         {
+            try { _notifyIcon.Visible = false; } catch { }
             Application.Exit();
         }
 
@@ -1971,6 +1983,10 @@ namespace HapiCopi
                     _syncContext.Post(_ => OnAbcEditorClicked(this, EventArgs.Empty), null);
                     return true;
 
+                case AppInstanceChannel.CommandPause:
+                    _syncContext.Post(_ => OnPauseClicked(this, EventArgs.Empty), null);
+                    return true;
+
                 case AppInstanceChannel.CommandQuit:
                     _syncContext.Post(_ => Application.Exit(), null);
                     return true;
@@ -2001,6 +2017,9 @@ namespace HapiCopi
             try { _listener.Dispose(); } catch { }
             try { _keyboardHook.Dispose(); } catch { }
             try { _mouseHook?.Dispose(); } catch { }
+            try { if (_mathEditorForm != null && !_mathEditorForm.IsDisposed) { _mathEditorForm.Dispose(); } } catch { }
+            try { if (_updateForm != null && !_updateForm.IsDisposed) { _updateForm.Dispose(); } } catch { }
+            try { if (_currentToast != null && !_currentToast.IsDisposed) { _currentToast.Dispose(); } } catch { }
             try { WebViewManager.Shutdown(); } catch { }
 
             Program.Log("[Shutdown] Đã thoát sạch.");

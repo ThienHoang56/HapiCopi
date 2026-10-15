@@ -100,6 +100,7 @@ namespace HapiCopi
                 a.Equals("/" + name, StringComparison.OrdinalIgnoreCase));
 
             if (Has("quit") || Has("exit")) return AppInstanceChannel.CommandQuit;
+            if (Has("pause")) return AppInstanceChannel.CommandPause;
             if (Has("update")) return AppInstanceChannel.CommandUpdate;
             if (Has("settings")) return AppInstanceChannel.CommandSettings;
             if (Has("math")) return AppInstanceChannel.CommandMath;

@@ -31,8 +31,8 @@ namespace HapiCopi
             StartPosition = FormStartPosition.CenterScreen;
 
             // Kích thước chuẩn Mini Popup vừa vặn, không bị to bự chảng
-            MinimumSize = new Size(LogicalToDeviceUnits(460), LogicalToDeviceUnits(500));
-            ClientSize = new Size(LogicalToDeviceUnits(480), LogicalToDeviceUnits(540));
+            MinimumSize = new Size(LogicalToDeviceUnits(460), LogicalToDeviceUnits(540));
+            ClientSize = new Size(LogicalToDeviceUnits(480), LogicalToDeviceUnits(620));
             KeyPreview = true;
             FormClosed += (s, e) => MemoryOptimizer.OptimizeMemory();
 
@@ -159,6 +159,29 @@ namespace HapiCopi
                 _saveToDiskCheck.Enabled = _enableHistoryCheck.Checked;
             };
 
+            AddControl(UiTheme.Separator(this), 10);
+
+            // ============================
+            // 5. PHÍM TẮT HỆ THỐNG
+            // ============================
+            AddControl(UiTheme.SectionHeader("Phím tắt hệ thống", UiTheme.Accent), 6);
+            AddControl(UiTheme.Hint("Các tổ hợp phím tắt toàn cục để điều khiển ứng dụng nhanh từ mọi nơi:", UiTheme.TextMuted), 6);
+
+            AddControl(CreateHotkeyCard(
+                "Tạm dừng / Tiếp tục (như Unikey)",
+                "Tạm ngừng quét bảo mật và tự động định dạng clipboard",
+                "Ctrl + Alt + P"), 6);
+
+            AddControl(CreateHotkeyCard(
+                "Thoát hoàn toàn ứng dụng",
+                "Đóng sạch toàn bộ tiến trình ngầm, không để lại icon rác",
+                "Ctrl + Alt + Q"), 6);
+
+            AddControl(CreateHotkeyCard(
+                "Soạn công thức Toán học",
+                "Mở bảng vẽ nét thời gian thực và nhận diện AI",
+                "Ctrl + Alt + M"), 8);
+
             content.Controls.Add(col);
 
             // ============================
@@ -267,6 +290,66 @@ namespace HapiCopi
                 MessageBox.Show($"Không thể lưu cấu hình: {ex.Message}", "Lỗi",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private Control CreateHotkeyCard(string title, string description, string badgeText)
+        {
+            var card = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 2,
+                BackColor = Color.FromArgb(241, 245, 249),
+                Padding = new Padding(LogicalToDeviceUnits(10), LogicalToDeviceUnits(8), LogicalToDeviceUnits(10), LogicalToDeviceUnits(8)),
+                Margin = new Padding(0, 0, 0, LogicalToDeviceUnits(6))
+            };
+            card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            card.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+            var textPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                AutoSize = true,
+                WrapContents = false,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty
+            };
+
+            var titleLabel = new Label
+            {
+                Text = title,
+                Font = UiTheme.BodyStrong,
+                ForeColor = UiTheme.TextPrimary,
+                AutoSize = true
+            };
+            var descLabel = new Label
+            {
+                Text = description,
+                Font = UiTheme.Small,
+                ForeColor = UiTheme.TextMuted,
+                AutoSize = true
+            };
+            textPanel.Controls.Add(titleLabel);
+            textPanel.Controls.Add(descLabel);
+
+            var badge = new Label
+            {
+                Text = badgeText,
+                Font = UiTheme.BodyStrong,
+                ForeColor = UiTheme.Accent,
+                BackColor = UiTheme.AccentLight,
+                BorderStyle = BorderStyle.FixedSingle,
+                AutoSize = true,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Padding = new Padding(LogicalToDeviceUnits(8), LogicalToDeviceUnits(4), LogicalToDeviceUnits(8), LogicalToDeviceUnits(4)),
+                Margin = new Padding(LogicalToDeviceUnits(8), LogicalToDeviceUnits(2), 0, 0)
+            };
+
+            card.Controls.Add(textPanel, 0, 0);
+            card.Controls.Add(badge, 1, 0);
+
+            return card;
         }
     }
 }

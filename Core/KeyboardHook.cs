@@ -22,6 +22,9 @@ namespace HapiCopi
         private const int VK_V = 0x56;
         private const int VK_INSERT = 0x2D;
         private const int VK_M = 0x4D; // Giữ tương thích Ctrl+Alt+M
+        private const int VK_P = 0x50; // Phím P (Tạm dừng / Bật lại như Unikey)
+        private const int VK_Q = 0x51; // Phím Q (Thoát hoàn toàn app)
+        private const int VK_PAUSE = 0x13; // Phím Pause/Break
 
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
@@ -48,8 +51,14 @@ namespace HapiCopi
         private bool _ctrlAltComboPending = false;
         private bool _ctrlAltThirdKeyPressed = false;
 
+        // Chống lặp phím tự động (typematic autorepeat debounce)
+        private DateTime _lastPauseToggleTime = DateTime.MinValue;
+        private DateTime _lastExitPressTime = DateTime.MinValue;
+
         public event Action? PastePressed;
         public event Action? MathHotkeyPressed;
+        public event Action? PauseTogglePressed;
+        public event Action? ExitAppPressed;
 
         public KeyboardHook()
         {
@@ -132,6 +141,26 @@ namespace HapiCopi
                         else if (vkCode == VK_M && ctrlDown && altDown)
                         {
                             System.Threading.Tasks.Task.Run(() => MathHotkeyPressed?.Invoke());
+                        }
+                        // 4. Phím tắt Tạm dừng / Tiếp tục: Ctrl + Alt + P (hoặc Ctrl + Pause)
+                        else if ((vkCode == VK_P && ctrlDown && altDown) || (vkCode == VK_PAUSE && ctrlDown))
+                        {
+                            var now = DateTime.UtcNow;
+                            if ((now - _lastPauseToggleTime).TotalMilliseconds > 400)
+                            {
+                                _lastPauseToggleTime = now;
+                                System.Threading.Tasks.Task.Run(() => PauseTogglePressed?.Invoke());
+                            }
+                        }
+                        // 5. Phím tắt Thoát app hoàn toàn: Ctrl + Alt + Q
+                        else if (vkCode == VK_Q && ctrlDown && altDown)
+                        {
+                            var now = DateTime.UtcNow;
+                            if ((now - _lastExitPressTime).TotalMilliseconds > 1000)
+                            {
+                                _lastExitPressTime = now;
+                                System.Threading.Tasks.Task.Run(() => ExitAppPressed?.Invoke());
+                            }
                         }
                     }
                 }
