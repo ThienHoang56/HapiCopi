@@ -1,15 +1,17 @@
 ==================================================
    HAPICOPI LICENSE & MONETIZATION SELF-TEST     
 ==================================================
-[TEST 1] CanRecognize Offline: True, Remaining: 50/50
+[TEST 1] CanRecognize Offline Free: True, Remaining: 50/50
 [TEST 2] Consume 1 recognition: 50 -> 49
-[TEST 3] Sinh key Pro: HAPI-PRO-286DF44F-39CC43C3
-[TEST 3 KÍCH HOẠT] Kết quả: True - Chúc mừng! Đã kích hoạt thành công Bản Pro Trọn Đời (Vô hạn lượt Offline & Tắt quảng cáo).
+[TEST 3] Mã máy hiện tại (MachineId): E777F732
+[TEST 3a] Kích hoạt key máy khác (FFFFFFFF): success=False (Kỳ vọng: False)
+[TEST 3b] Sinh key Pro đúng máy: HAPI-PRO-E777F732-2B85F6C8
+[TEST 3b KÍCH HOẠT] Kết quả: True - Chúc mừng! Đã kích hoạt thành công Bản Pro Trọn Đời (Vô hạn lượt Offline & Tắt quảng cáo).
 [TEST 4] CanRecognize sau khi lên Pro: True, Remaining: 999999
-[TEST 5] Sinh key Cloud: HAPI-CLD-9116547B-AEA8149F
+[TEST 5] Sinh key Cloud: HAPI-CLD-E777F732-80A684E4
 [TEST 5 KÍCH HOẠT] Kết quả: True - Chúc mừng! Đã kích hoạt thành công Gói Cloud AI: 1.000 lượt nhận diện siêu tốc trong 30 ngày.
 [TEST 5 HẠN MỨC] Cloud Remaining: 1000/1000
 [TEST 6] Sponsor khi là Pro (phải bằng null): NULL (PASS)
 ==================================================
-   ALL 6 LICENSE & SPONSOR TESTS PASSED! (100%)   
+   ALL 6 ISOLATED LICENSE TESTS PASSED! (100%)    
 ==================================================

@@ -1,0 +1,13 @@
+{
+  "App": "HapiCopi",
+  "Releases": [
+    {
+      "Version": "1.3.0",
+      "Released": "2026-10-15",
+      "Notes": "AI Toán học offline, thu thập dữ liệu chữ viết tay phục vụ đào tạo và mở khóa Pro vĩnh viễn.",
+      "File": "https://github.com/ThienHoang56/HapiCopi/releases/download/v1.3.0/HapiCopi-Setup-1.3.0.exe",
+      "Size": 99204712,
+      "Sha256": "49153DC2CAE5DBD0E921A5D7CBFDF67C225BAF2A46F145200A0C11CDF07D3249"
+    }
+  ]
+}

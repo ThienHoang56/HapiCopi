@@ -21,6 +21,7 @@ namespace HapiCopi
         private (string formula, string mode, float fontSize, bool isWord, bool isDocs)? _pendingFormula;
         private Panel? _loadingPanel;
         private bool _isMiniMode = false;
+        private bool _isCurrentInkSessionConsumed = false;
 
         public MathEditorForm(Action<string, string> setClipboard)
         {
@@ -439,15 +440,22 @@ namespace HapiCopi
                     {
                         try
                         {
-                            using var settings = new SettingsForm();
-                            settings.ShowDialog(this);
+                            using var upgrade = new UpgradeForm();
+                            upgrade.TopMost = true;
+                            upgrade.ShowDialog(this);
                             PushLicenseAndSponsorStatus();
                         }
                         catch (Exception ex)
                         {
-                            Program.Log($"[MathEditor] Lỗi mở Cài đặt: {ex.Message}");
+                            Program.Log($"[MathEditor] Lỗi mở Nâng cấp: {ex.Message}");
                         }
                     }));
+                    return;
+                }
+
+                if (type == "clearInkSession")
+                {
+                    _isCurrentInkSessionConsumed = false;
                     return;
                 }
 
@@ -516,9 +524,10 @@ namespace HapiCopi
                     _ = Task.Run(async () =>
                     {
                         var result = await MathVisionService.RecognizeHandwrittenMathAsync(img, engine, strokeList);
-                        if (result.success)
+                        if (result.success && !_isCurrentInkSessionConsumed)
                         {
                             LicenseService.ConsumeRecognition(isCloud);
+                            _isCurrentInkSessionConsumed = true;
                         }
 
                         bool isPro = LicenseService.IsPro;
@@ -574,7 +583,20 @@ namespace HapiCopi
                         bool learned = HandwritingProfileService.LearnSample(label, strokeList);
                         int count = HandwritingProfileService.GetSampleCount();
                         int labelCount = HandwritingProfileService.GetSampleCountForLabel(label);
-                        string script = $"if (typeof onInkLearned === 'function') onInkLearned({(learned ? "true" : "false")}, {count}, {System.Text.Json.JsonSerializer.Serialize(label)}, {labelCount});";
+
+                        // Đóng góp nét chữ: Thưởng ngay +5 lượt nhận diện AI cho bản Free và đẩy vào hàng đợi gom mẫu
+                        if (learned)
+                        {
+                            if (!LicenseService.IsPro)
+                            {
+                                LicenseService.AddFreeBonusQuota(5);
+                            }
+                            TelemetryService.EnqueueSample(label, wrongLabel, strokeList);
+                        }
+
+                        int currentRem = LicenseService.RemainingDailyFreeQuota;
+                        int currentMax = LicenseService.EffectiveDailyFreeQuota;
+                        string script = $"if (typeof onInkLearned === 'function') onInkLearned({(learned ? "true" : "false")}, {count}, {System.Text.Json.JsonSerializer.Serialize(label)}, {labelCount}, {currentRem}, {currentMax});";
                         BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(script)));
                     }
                     return;
@@ -661,18 +683,42 @@ namespace HapiCopi
 
                     if (isWordUpdate && !string.IsNullOrEmpty(png))
                     {
-                        bool success = WordInterop.ReplaceSelectedFormulaInWord(png, source, wPt, hPt, vPt);
-                        if (success)
+                        if (!LicenseService.IsPro)
                         {
-                            Program.Log($"[MathEditor] Đã cập nhật công thức trực tiếp trong Word: {source}");
-                            FormulaTracker.Register(png, source, widthPt: wPt, heightPt: hPt);
-                            Hide();
-                            WordInterop.ActivateWordWindow();
-                            return;
+                            BeginInvoke(new Action(() =>
+                            {
+                                var ask = MessageBox.Show(
+                                    "Tính năng Cập nhật trực tiếp đè vào Microsoft Word là đặc quyền của Bản Pro Trọn Đời (19.000 VNĐ).\n\n" +
+                                    "Bản Miễn phí đã tự động chép công thức vào Clipboard để bạn dán (Ctrl+V) vào tài liệu.\n\n" +
+                                    "Bạn có muốn nâng cấp Bản Pro để kích hoạt chỉnh sửa trực tiếp 1-chạm không?",
+                                    "HapiCopi Pro",
+                                    MessageBoxButtons.YesNo,
+                                    MessageBoxIcon.Information);
+
+                                if (ask == DialogResult.Yes)
+                                {
+                                    using var upgrade = new UpgradeForm();
+                                    upgrade.TopMost = true;
+                                    upgrade.ShowDialog(this);
+                                    PushLicenseAndSponsorStatus();
+                                }
+                            }));
                         }
                         else
                         {
-                            Program.Log("[MathEditor] Cập nhật trực tiếp vào Word thất bại, chuyển sang fallback copy Clipboard.");
+                            bool success = WordInterop.ReplaceSelectedFormulaInWord(png, source, wPt, hPt, vPt);
+                            if (success)
+                            {
+                                Program.Log($"[MathEditor] Đã cập nhật công thức trực tiếp trong Word: {source}");
+                                FormulaTracker.Register(png, source, widthPt: wPt, heightPt: hPt);
+                                Hide();
+                                WordInterop.ActivateWordWindow();
+                                return;
+                            }
+                            else
+                            {
+                                Program.Log("[MathEditor] Cập nhật trực tiếp vào Word thất bại, chuyển sang fallback copy Clipboard.");
+                            }
                         }
                     }
 
@@ -698,17 +744,10 @@ namespace HapiCopi
                         string fragment = $"<img src=\"{png}\" alt=\"[HapiCopi:Math] {safeSource}\" title=\"[HapiCopi:Math] {safeSource}\" style=\"{style.Trim()}\" />";
                         string cfHtml = MarkdownToWordConverter.PackageAsClipboardHtml(fragment);
 
-                        string clipboardText = source;
-                        if (!LicenseService.IsPro && !string.IsNullOrWhiteSpace(source))
-                        {
-                            if (!source.StartsWith("% Tạo bởi HapiCopi", StringComparison.OrdinalIgnoreCase))
-                            {
-                                clipboardText = "% Tạo bởi HapiCopi (hapicopi.com)\r\n" + source;
-                            }
-                        }
-
+                        string clipboardText = source; // Không chèn comment watermark gây phiền hà người dùng
                         _setClipboard(clipboardText, cfHtml);
                         FormulaTracker.Register(png, source, widthPt: wPt, heightPt: hPt);
+                        _isCurrentInkSessionConsumed = false; // Reset session sau khi hoàn thành chèn công thức
                         Program.Log($"[MathEditor] Đã copy ảnh công thức vào clipboard (Size={heightPt}pt, Display={isDisplay}).");
 
                         if ((_isDocsMode || isDocsUpdate) && _docsSourceWindow != IntPtr.Zero)

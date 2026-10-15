@@ -46,33 +46,30 @@ Xây dựng một hệ thống nhận diện **Neuro-Symbolic** lai ghép:
 
 ---
 
-### PHASE 1: BẢN CHẤT TOPO & BẤT BIẾN HÌNH THÁI HỌC (TOPOLOGICAL INVARIANTS)
+### PHASE 1: TRÍCH XUẤT ĐẶC TRƯNG HÌNH HỌC & THẨM ĐỊNH CHỐNG ĐẦU ĐỘC (LLM-AS-A-JUDGE)
+
+> [!IMPORTANT]
+> **BÀI HỌC VỀ RULE-BASE HÌNH THÁI HỌC CỨNG NHẮC (DEPRECATED):**  
+> Việc dùng các luật cứng (`L = 2 bắt buộc là số 8`, `L = 1 bắt buộc là số 0, 6, 9`) là **ngây thơ (naive)** và rất nguy hiểm:
+> 1. **Gạt bỏ nét thật:** Người dùng viết nhanh thì số `0` hoặc `8` thường bị hở đuôi 2-3 pixel $\rightarrow$ Rule-base đếm ra 0 vòng và loại bỏ nhầm mẫu nét tự nhiên.
+> 2. **Đầu độc dữ liệu (Data Poisoning):** Người dùng có thể vẽ vòng tròn nhưng gõ nhãn là số `1` hoặc vẽ bậy. Rule-base không có nhận thức thị giác ngữ nghĩa toàn cục nên không thể phát hiện.
+> 
+> **CHIẾN LƯỢC MỚI (MAKE SENSE & ĐỊNH LƯỢNG):**  
+> - **Client (Local):** Chỉ trích xuất vector đặc trưng hình học thuần túy (Polyline Resampling + Chamfer distance) phục vụ so khớp mềm, không dùng rule-base gạt bỏ nét.
+> - **Server / Pipeline Thẩm định:** Sử dụng **Google Gemini Flash (LLM-as-a-Judge)** duyệt theo batch (`scripts/validate_crowd_data.py`).
+> - **Chi phí cực thấp:** Gom 20 mẫu nét thành 1 ảnh, chi phí thẩm định chưa tới **0.83 VNĐ / mẫu**, trích trực tiếp từ tiền lãi bản quyền Pro để tạo ra tập **Gold Dataset** sạch 100%, loại bỏ triệt để troll và spam.
 
 #### 1. Các thành phần kỹ thuật cốt lõi
-1. **Euler Characteristic & Loop Detection (Thuật toán đếm vòng kín):**
-   * Sử dụng thuật toán dò chu trình khép kín trên chuỗi điểm của nét vẽ (Polygon self-intersection & winding number):
-     * **2 Vòng kín ($L = 2$):** Bắt buộc là số `8` hoặc ký hiệu vô cực `\infty` (nằm ngang) hoặc chữ `B`.
-     * **1 Vòng kín ($L = 1$):** Các số `{0, 6, 9}`, các chữ `{o, p, b, d, q, e}`, ký hiệu `\theta, \sigma, \alpha, \phi`.
-     * **0 Vòng kín ($L = 0$):** `{1, 2, 3, 4, 5, 7}`, `{x, y, z, +, -, =, /}`.
-   * *Evidence/Bằng chứng:* Giảm thiểu 100% việc nhầm lẫn giữa `8` và `3`, `0` và `C`, `6` và `C`.
-2. **Junction & Crossing Analysis (Phân loại điểm giao cắt):**
-   * Phát hiện điểm cắt giữa các nét hoặc tự cắt:
-     * **X-Junction (Điểm cắt chữ thập):** Dấu `+`, dấu `\times`, chữ `x`, `X`.
-     * **T-Junction / Y-Junction (Ngã ba):** Dấu `t`, `T`, `\pi`, `\tau`, `Y`.
-     * **Endpoints (Đầu mút tự do):** Dấu `-` (2 đầu mút, 0 giao cắt), dấu `=` (4 đầu mút, 2 nét song song).
-3. **Sharp Cusps vs. Smooth Curvature (Phân biệt góc nhọn và đường cong):**
-   * Tính biến thiên góc tiếp tuyến $\Delta \theta$:
-     * Góc nhọn ($\Delta \theta > 110^\circ$ tại đỉnh): `{V, v, W, w, <, >}`.
-     * Đường cong trơn ($\Delta \theta$ biến thiên liên tục): `{U, u, C, c, S, s}`.
-4. **Order-Agnostic Matching (Bất biến thứ tự vẽ nét):**
-   * Sử dụng giải thuật Hungarian hoặc khoảng cách Chamfer Hausdorff giữa các nét để so khớp không phụ thuộc nét nào vẽ trước, nét nào vẽ sau.
-
-#### 2. Kế hoạch lấy số liệu & Benchmark (Phase 1)
-* **Tập kiểm thử (Benchmark Set P1):** 60 mẫu nét chữ viết tay có độ dị biệt cao (ngược chiều nét, dính nét, nghiêng góc $\pm 25^\circ$).
-* **Chỉ số đo lường (Metrics):**
-  * *Top-1 Accuracy cải thiện:* Mục tiêu từ `58.3%` -> `88.5%`.
-  * *Tỷ lệ loại trừ nhầm lẫn vòng kín:* Đạt `100%` (không bao giờ đoán ký tự 0 vòng thành ký tự 2 vòng).
-  * *Thời gian thực thi CPU:* $\le 0.35$ ms / ký tự.
+1. **Trích xuất đặc trưng hình học bất biến:**
+   * Lấy mẫu đều điểm (Resampling 24 points), chuẩn hóa khung bao và góc tiếp tuyến.
+   * Tính toán khoảng cách Hausdorff Chamfer không phụ thuộc thứ tự vẽ nét.
+2. **Hàng đợi Telemetry phi tập trung:**
+   * Bản Free tự động lưu tạm nét vẽ vào hàng đợi offline (`telemetry_queue.json`).
+   * Đồng bộ ngầm lên Cloudflare Worker khi có mạng, không ảnh hưởng UI.
+3. **Pipeline thẩm định chống đầu độc (`scripts/validate_crowd_data.py`):**
+   * Đọc dữ liệu từ hàng đợi / database.
+   * Gọi Gemini Flash kiểm định thị giác: Phát hiện vẽ bậy, gán nhãn sai, tự động chuẩn hóa nhãn sang mã LaTeX chuẩn.
+   * Xuất tập dữ liệu sạch đưa vào pipeline huấn luyện mô hình ONNX.
 
 ---
 

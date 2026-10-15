@@ -31,8 +31,10 @@ namespace HapiCopi
         /// <summary>Thư mục giữ các bộ cài đã tải, để quay lui được cả khi không có mạng.</summary>
         public static string CacheDirectory => Path.Combine(ResourcePaths.AppDataRoot, "Updates");
 
-        /// <summary>Nguồn mặc định là thư mục trên máy, để build local xong là thử cập nhật được ngay.</summary>
-        public static string DefaultFeed => Path.Combine(ResourcePaths.AppDataRoot, "Releases");
+        /// <summary>Nguồn cập nhật mặc định trỏ về GitHub Releases chính thức của HapiCopi.</summary>
+        public const string OfficialGitHubFeed = "https://raw.githubusercontent.com/ThienHoang56/HapiCopi/main/Releases/versions.json";
+
+        public static string DefaultFeed => OfficialGitHubFeed;
 
         public static string Feed
         {

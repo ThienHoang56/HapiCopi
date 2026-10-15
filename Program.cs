@@ -40,6 +40,24 @@ namespace HapiCopi
                 return RunLicenseSelfTest();
             }
 
+            int genKeyIndex = Array.FindIndex(args, a => a.Equals("--gen-key", StringComparison.OrdinalIgnoreCase));
+            if (genKeyIndex >= 0)
+            {
+                string type = (genKeyIndex + 1 < args.Length) ? args[genKeyIndex + 1] : "PRO";
+                string? targetMachine = (genKeyIndex + 2 < args.Length) ? args[genKeyIndex + 2] : null;
+
+                string key = LicenseService.GenerateKey(type, targetMachine);
+                string mId = targetMachine ?? LicenseService.MachineId;
+                Console.WriteLine("==================================================");
+                Console.WriteLine("   HAPICOPI ADMIN LICENSE KEY GENERATOR           ");
+                Console.WriteLine("==================================================");
+                Console.WriteLine($"Loại gói:      {(type.Equals("CLD", StringComparison.OrdinalIgnoreCase) ? "Cloud AI 1.000 lượt (30 ngày)" : "Bản quyền Pro Trọn Đời")}");
+                Console.WriteLine($"Mã máy đích:   {mId}");
+                Console.WriteLine($"Mã LicenseKey: {key}");
+                Console.WriteLine("==================================================");
+                return 0;
+            }
+
             if (args.Any(a => a.Equals("--selfcheck-pdf", StringComparison.OrdinalIgnoreCase)))
             {
                 string result = PdfHeuristicCleaner.SelfCheck();
@@ -221,45 +239,61 @@ namespace HapiCopi
             Print("   HAPICOPI LICENSE & MONETIZATION SELF-TEST     ");
             Print("==================================================");
 
+            string tempLicenseFile = Path.Combine(Path.GetTempPath(), $"hapicopi_test_lic_{Guid.NewGuid():N}.dat");
             try
             {
-                // Test 1: Daily free quota countdown
-                bool canRec = LicenseService.CanRecognize(false, out string reason, out int remaining, out int maxQ);
-                Print($"[TEST 1] CanRecognize Offline: {canRec}, Remaining: {remaining}/{maxQ}");
-                if (!canRec || remaining <= 0) { Print("FAILED TEST 1"); return 1; }
+                // Cách ly 100% môi trường test: Dùng file tạm, tuyệt đối không chạm vào %APPDATA%\HapiCopi\license.dat
+                LicenseService.CustomStoragePath = tempLicenseFile;
+                LicenseService.Reload();
 
+                // Test 1: Daily free quota ban đầu phải là 50/50
+                bool canRec = LicenseService.CanRecognize(false, out string reason, out int remaining, out int maxQ);
+                Print($"[TEST 1] CanRecognize Offline Free: {canRec}, Remaining: {remaining}/{maxQ}");
+                if (!canRec || remaining != 50) { Print("FAILED TEST 1: Initial free quota must be exactly 50"); return 1; }
+
+                // Test 2: Tiêu thụ 1 lượt
                 LicenseService.ConsumeRecognition(false);
                 int afterConsume = LicenseService.RemainingDailyFreeQuota;
-                Print($"[TEST 2] Consume 1 recognition: {remaining} -> {afterConsume}");
-                if (afterConsume != remaining - 1 && !LicenseService.IsProLifetime) { Print("FAILED TEST 2"); return 1; }
+                Print($"[TEST 2] Consume 1 recognition: 50 -> {afterConsume}");
+                if (afterConsume != 49) { Print("FAILED TEST 2: Free quota after consume must be 49"); return 1; }
 
-                // Test 3: Generate and Validate PRO key
-                string proKey = LicenseService.GenerateKey("PRO");
-                Print($"[TEST 3] Sinh key Pro: {proKey}");
+                // Test 3: Machine ID Binding & Sinh/Kích hoạt Pro Key
+                string currentMachineId = LicenseService.MachineId;
+                Print($"[TEST 3] Mã máy hiện tại (MachineId): {currentMachineId}");
+
+                // 3a. Thử kích hoạt key của máy khác (phải thất bại)
+                string foreignKey = LicenseService.GenerateKey("PRO", "FFFFFFFF");
+                var failAct = LicenseService.ActivateLicenseKey(foreignKey);
+                Print($"[TEST 3a] Kích hoạt key máy khác (FFFFFFFF): success={failAct.success} (Kỳ vọng: False)");
+                if (failAct.success) { Print("FAILED TEST 3a: Key của máy khác không được phép kích hoạt!"); return 1; }
+
+                // 3b. Kích hoạt đúng key của máy này
+                string proKey = LicenseService.GenerateKey("PRO", currentMachineId);
+                Print($"[TEST 3b] Sinh key Pro đúng máy: {proKey}");
                 var actRes = LicenseService.ActivateLicenseKey(proKey);
-                Print($"[TEST 3 KÍCH HOẠT] Kết quả: {actRes.success} - {actRes.message}");
-                if (!actRes.success || !LicenseService.IsPro) { Print("FAILED TEST 3"); return 1; }
+                Print($"[TEST 3b KÍCH HOẠT] Kết quả: {actRes.success} - {actRes.message}");
+                if (!actRes.success || !LicenseService.IsProLifetime) { Print("FAILED TEST 3b"); return 1; }
 
-                // Test 4: CanRecognize when Pro Lifetime
+                // Test 4: CanRecognize sau khi lên Pro Lifetime (phải vô hạn 999999)
                 bool canRecPro = LicenseService.CanRecognize(false, out _, out int remPro, out _);
                 Print($"[TEST 4] CanRecognize sau khi lên Pro: {canRecPro}, Remaining: {remPro}");
                 if (!canRecPro || remPro != 999999) { Print("FAILED TEST 4"); return 1; }
 
-                // Test 5: Generate and Validate CLD key
-                string cldKey = LicenseService.GenerateKey("CLD");
+                // Test 5: Sinh và kích hoạt Cloud Key cho máy này
+                string cldKey = LicenseService.GenerateKey("CLD", currentMachineId);
                 Print($"[TEST 5] Sinh key Cloud: {cldKey}");
                 var actCldRes = LicenseService.ActivateLicenseKey(cldKey);
                 Print($"[TEST 5 KÍCH HOẠT] Kết quả: {actCldRes.success} - {actCldRes.message}");
                 if (!actCldRes.success || !LicenseService.HasActiveCloud) { Print("FAILED TEST 5"); return 1; }
                 Print($"[TEST 5 HẠN MỨC] Cloud Remaining: {LicenseService.CloudQuotaRemaining}/1000");
 
-                // Test 6: Sponsor Service
+                // Test 6: Sponsor Service (ẩn hoàn toàn khi là Pro)
                 var sponsor = SponsorService.GetActiveSponsor();
                 Print($"[TEST 6] Sponsor khi là Pro (phải bằng null): {(sponsor == null ? "NULL (PASS)" : "NOT NULL (FAIL)")}");
                 if (sponsor != null) { Print("FAILED TEST 6"); return 1; }
 
                 Print("==================================================");
-                Print("   ALL 6 LICENSE & SPONSOR TESTS PASSED! (100%)   ");
+                Print("   ALL 6 ISOLATED LICENSE TESTS PASSED! (100%)    ");
                 Print("==================================================");
                 SaveTestReport("license_test_report.txt", sb.ToString());
                 return 0;
@@ -269,6 +303,17 @@ namespace HapiCopi
                 Print($"[ERROR] {ex.Message}");
                 SaveTestReport("license_test_report.txt", sb.ToString());
                 return 1;
+            }
+            finally
+            {
+                // Luôn dọn dẹp môi trường test và trả lại storage thật của người dùng
+                LicenseService.CustomStoragePath = null;
+                LicenseService.Reload();
+                try
+                {
+                    if (File.Exists(tempLicenseFile)) File.Delete(tempLicenseFile);
+                }
+                catch { }
             }
         }
 

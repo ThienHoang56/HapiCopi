@@ -314,65 +314,56 @@ namespace HapiCopi
         {
             if (_isMusicAdminUnlocked) return true;
 
-            using var form = new Form
+            using var form = new Form();
+            UiTheme.ApplyDialog(form, "Khóa thử nghiệm — Soạn nhạc");
+            form.FormBorderStyle = FormBorderStyle.FixedDialog;
+            form.MaximizeBox = false;
+            form.MinimizeBox = false;
+            form.StartPosition = FormStartPosition.CenterScreen;
+            form.ClientSize = new Size(form.LogicalToDeviceUnits(400), form.LogicalToDeviceUnits(180));
+            form.TopMost = true;
+
+            var body = new Panel
             {
-                Text = "🔒 Tính năng đang khóa thử nghiệm",
-                FormBorderStyle = FormBorderStyle.FixedDialog,
-                MaximizeBox = false,
-                MinimizeBox = false,
-                StartPosition = FormStartPosition.CenterScreen,
-                ClientSize = new Size(380, 160),
-                ShowInTaskbar = false,
-                BackColor = Color.FromArgb(248, 250, 252)
+                Dock = DockStyle.Fill,
+                Padding = new Padding(form.LogicalToDeviceUnits(16), form.LogicalToDeviceUnits(14),
+                                      form.LogicalToDeviceUnits(16), form.LogicalToDeviceUnits(10)),
+                BackColor = UiTheme.Background
             };
 
             var lblDesc = new Label
             {
-                Text = "Tính năng Soạn nhạc đang trong giai đoạn hoàn thiện & thử nghiệm nội bộ.\nVui lòng nhập mật khẩu Quản trị viên để mở khóa:",
-                Location = new Point(16, 14),
-                Size = new Size(348, 38),
-                Font = new Font("Segoe UI", 9f, FontStyle.Regular),
-                ForeColor = Color.FromArgb(30, 41, 59)
+                Text = "Tính năng Soạn nhạc đang trong giai đoạn hoàn thiện.\nVui lòng nhập mật khẩu Quản trị viên để mở khóa:",
+                Font = UiTheme.Body,
+                ForeColor = UiTheme.TextPrimary,
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, form.LogicalToDeviceUnits(8))
             };
 
             var txtPass = new TextBox
             {
-                Location = new Point(18, 60),
-                Size = new Size(344, 25),
+                Dock = DockStyle.Top,
                 UseSystemPasswordChar = true,
-                Font = new Font("Segoe UI", 10.5f),
-                BorderStyle = BorderStyle.FixedSingle
+                Font = UiTheme.Body,
+                Margin = new Padding(0, form.LogicalToDeviceUnits(8), 0, form.LogicalToDeviceUnits(12))
             };
 
-            var btnOk = new Button
-            {
-                Text = "Mở khóa",
-                DialogResult = DialogResult.OK,
-                Location = new Point(176, 106),
-                Size = new Size(95, 32),
-                BackColor = UiTheme.Accent,
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-                Cursor = Cursors.Hand
-            };
-            btnOk.FlatAppearance.BorderSize = 0;
+            var btnOk = UiTheme.PrimaryButton("Mở khóa");
+            btnOk.DialogResult = DialogResult.OK;
 
-            var btnCancel = new Button
-            {
-                Text = "Đóng",
-                DialogResult = DialogResult.Cancel,
-                Location = new Point(278, 106),
-                Size = new Size(84, 32),
-                BackColor = UiTheme.Surface,
-                ForeColor = UiTheme.TextMuted,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9f),
-                Cursor = Cursors.Hand
-            };
-            btnCancel.FlatAppearance.BorderColor = UiTheme.Border;
+            var btnCancel = UiTheme.SecondaryButton("Đóng");
+            btnCancel.DialogResult = DialogResult.Cancel;
 
-            form.Controls.AddRange(new Control[] { lblDesc, txtPass, btnOk, btnCancel });
+            var btnRow = UiTheme.ButtonRow(btnCancel, btnOk);
+            btnRow.Dock = DockStyle.Bottom;
+            btnRow.Padding = new Padding(0, form.LogicalToDeviceUnits(8), 0, 0);
+
+            body.Controls.Add(btnRow);
+            body.Controls.Add(txtPass);
+            body.Controls.Add(lblDesc);
+            form.Controls.Add(body);
+
             form.AcceptButton = btnOk;
             form.CancelButton = btnCancel;
 

@@ -50,7 +50,6 @@ namespace HapiCopi
             MinimumSize = new Size(LogicalToDeviceUnits(480), LogicalToDeviceUnits(560));
             ClientSize = new Size(LogicalToDeviceUnits(500), LogicalToDeviceUnits(680));
             KeyPreview = true;
-            FormClosed += (s, e) => MemoryOptimizer.OptimizeMemory();
 
             // Header Bar
             var header = new Panel
@@ -212,6 +211,40 @@ namespace HapiCopi
                 Margin = new Padding(0, 0, 0, LogicalToDeviceUnits(4))
             };
             AddControl(_licenseStatusLabel, 4);
+
+            var upgradeRow = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = Padding.Empty
+            };
+            upgradeRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            upgradeRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+            var machineHint = new Label
+            {
+                Text = $"Mã máy: {LicenseService.MachineId}",
+                Font = UiTheme.Small,
+                ForeColor = UiTheme.TextMuted,
+                AutoSize = true,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            var buyBtn = UiTheme.SecondaryButton("Nâng cấp ngay");
+            buyBtn.Margin = new Padding(LogicalToDeviceUnits(6), 0, 0, 0);
+            buyBtn.Click += (s, e) =>
+            {
+                using var up = new UpgradeForm();
+                if (up.ShowDialog(this) == DialogResult.OK)
+                {
+                    UpdateLicenseStatusUI();
+                }
+            };
+            upgradeRow.Controls.Add(machineHint, 0, 0);
+            upgradeRow.Controls.Add(buyBtn, 1, 0);
+            AddControl(upgradeRow, 6);
 
             var licensePanel = new TableLayoutPanel
             {

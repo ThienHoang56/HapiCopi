@@ -264,6 +264,7 @@ namespace HapiCopi
                 Text = text,
                 Font = Body,
                 FlatStyle = FlatStyle.Flat,
+                TextAlign = ContentAlignment.MiddleCenter,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 UseMnemonic = false,
@@ -272,11 +273,11 @@ namespace HapiCopi
 
             button.Padding = new Padding(
                 button.LogicalToDeviceUnits(14),
-                button.LogicalToDeviceUnits(6),
+                button.LogicalToDeviceUnits(3),
                 button.LogicalToDeviceUnits(14),
-                button.LogicalToDeviceUnits(6));
+                button.LogicalToDeviceUnits(3));
 
-            button.MinimumSize = new Size(button.LogicalToDeviceUnits(92), button.LogicalToDeviceUnits(32));
+            button.MinimumSize = new Size(button.LogicalToDeviceUnits(92), button.LogicalToDeviceUnits(34));
             return button;
         }
 

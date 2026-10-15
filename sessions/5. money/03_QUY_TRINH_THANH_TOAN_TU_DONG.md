@@ -14,7 +14,7 @@
  ┌───────────────────────────────────────────────────────────────┐
  │   HỘP THOẠI THANH TOÁN (Pop-up trong App)                    │
  │   • Hiển thị mã VietQR động chuẩn Napas                       │
- │   • Số tiền: 49.000đ (hoặc 19.000đ)                           │
+ │   • Số tiền: 19.000đ (App trọn đời) hoặc 9.000đ (Cloud/tháng) │
  │   • Nội dung chuyển khoản tự động: HAPI9281                   │
  └─────────────────────┬─────────────────────────────────────────┘
                        │
@@ -56,7 +56,7 @@
 3. **Chuẩn tạo mã VietQR động:**
    * Không cần cài đặt gì phức tạp, chỉ là một đường link ảnh sinh tự động theo chuẩn Napas:
      ```
-     https://qr.sepay.vn/img?acc=SO_TAI_KHOAN&bank=NGAN_HANG&amount=49000&des=HAPI9281
+     https://qr.sepay.vn/img?acc=SO_TAI_KHOAN&bank=NGAN_HANG&amount=19000&des=HAPI9281
      ```
    * App HapiCopi chỉ cần hiển thị ảnh từ đường link này là người dùng quét được ngay trên mọi ứng dụng ngân hàng và MoMo.
 
@@ -67,8 +67,8 @@
 * **Bước 1 (Bấm Nâng cấp):**  
   Người dùng chạm trần 50 lượt/ngày hoặc bấm vào huy hiệu `[✦ Nâng cấp Pro]` trong Bảng vẽ hoặc Cài đặt.
 * **Bước 2 (Chọn gói):**
-  * [x] **Mở khóa App Offline Vĩnh viễn:** 49.000 VNĐ (Thanh toán 1 lần duy nhất).
-  * [ ] **Gói Cloud AI Tốc độ cao:** 19.000 VNĐ / tháng.
+  * [x] **Mở khóa App Offline Vĩnh viễn:** 19.000 VNĐ (Thanh toán 1 lần duy nhất).
+  * [ ] **Gói Cloud AI Tốc độ cao:** 9.000 VNĐ / tháng.
 * **Bước 3 (Quét QR):**  
   App hiện mã QR kèm dòng chữ: *"Mở app ngân hàng bất kỳ để quét mã (Nội dung và số tiền đã được điền sẵn tự động)"*.
 * **Bước 4 (Kích hoạt tức thì):**  

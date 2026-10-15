@@ -92,6 +92,21 @@
             display: inline-flex; align-items: center; justify-content: center;
             font-family: var(--font-math); font-size: 14px; font-weight: 600;
         }
+        .plan-badge {
+            display: inline-flex; align-items: center; gap: 3px;
+            font-size: 9.5px; font-weight: 700; padding: 1.5px 6px; border-radius: 5px;
+            cursor: pointer; transition: all 0.15s ease; text-transform: uppercase; letter-spacing: 0.03em;
+            margin-left: 2px; user-select: none;
+        }
+        .plan-badge.free {
+            background: #E2E8F0; color: #475569; border: 1px solid #CBD5E1;
+        }
+        .plan-badge.free:hover {
+            background: #CBD5E1; color: #1E293B;
+        }
+        .plan-badge.pro {
+            background: #EDE9FE; color: #7C3AED; border: 1px solid #DDD6FE;
+        }
 
         /* Mode Switcher Pills */
         .mode-switch {
@@ -739,6 +754,7 @@
             <div class="brand-badge" title="HapiCopi Math Editor">
                 <span class="brand-logo-icon">∑</span>
                 <span class="brand-title">HapiCopi Math</span>
+                <span id="planBadge" class="plan-badge free" title="Bản Miễn phí — Bấm để nâng cấp">Free</span>
             </div>
 
             <div class="mode-switch">
@@ -856,13 +872,6 @@
                                 Công thức nhận diện sẽ hiển thị ở đây theo thời gian thực (chuẩn MathType)...
                             </div>
                         </div>
-                        <div id="sponsorBar" class="sponsor-bar">
-                            <div style="display: flex; align-items: center; overflow: hidden; flex: 1;">
-                                <span class="sponsor-tag">TÀI TRỢ</span>
-                                <span id="sponsorText" class="sponsor-text"></span>
-                            </div>
-                            <a id="sponsorLink" class="sponsor-link" href="#" target="_blank">Xem ngay →</a>
-                        </div>
                     </div>
 
                     <!-- Bottom Handwriting Canvas Card -->
@@ -913,9 +922,6 @@
                             <div id="inkPlaceholder" class="ink-placeholder">
                                 <svg style="width: 26px; height: 26px; stroke: var(--color-border); fill: none; margin: 0 auto 4px auto; display: block;" viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
                                 Cầm chuột hoặc bút cảm ứng vẽ phương trình vào đây...
-                            </div>
-                            <div id="inkCanvasWatermark" class="ink-canvas-watermark" style="display: none;">
-                                HapiCopi Free — hapicopi.com
                             </div>
                         </div>
                     </div>
@@ -1217,16 +1223,18 @@
             </div>
             <div class="modal-body" style="padding: 16px 20px;">
                 <div style="text-align: center; margin-bottom: 12px;">
-                    <span id="quotaModalIcon" style="font-size: 32px; display: inline-block;">⚡</span>
+                    <div id="quotaModalIcon" style="width: 44px; height: 44px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin: 0 auto; background: #ccfbf1;">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    </div>
                 </div>
                 <p id="quotaModalDesc" style="font-size: 12.5px; line-height: 1.5; color: var(--color-text-primary); text-align: center; margin: 0 0 16px 0;">
-                    Bản Miễn phí hỗ trợ 50 lượt nhận diện offline mỗi ngày (tự động hồi phục sau 00:00).
+                    Bản Miễn phí hỗ trợ nhận diện offline mỗi ngày (tự động hồi phục sau 00:00).
                 </p>
-                <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px; margin-bottom: 14px;">
+                <div style="background: #F8FAFC; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <div>
                             <div style="font-weight: 700; color: var(--color-text-primary); font-size: 13px;">HapiCopi Pro (Trọn đời)</div>
-                            <div style="font-size: 11px; color: var(--color-text-muted);">Không giới hạn lượt Cục bộ, xóa Watermark</div>
+                            <div style="font-size: 11px; color: var(--color-text-muted);">Không giới hạn lượt Cục bộ, Chỉnh sửa trực tiếp trong Word</div>
                         </div>
                         <div style="font-weight: 700; color: var(--color-primary); font-size: 14px;">19.000đ</div>
                     </div>
@@ -1238,8 +1246,11 @@
                         <div style="font-weight: 700; color: #8b5cf6; font-size: 14px;">9.000đ</div>
                     </div>
                 </div>
+                <div style="font-size: 11.5px; color: #0d9488; background: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 6px; padding: 7px 10px; text-align: center; margin-bottom: 8px;">
+                    💡 <b>Nhận thêm lượt miễn phí:</b> Viết 1 ký tự và bấm nút <b>"Lưu mẫu nét"</b> để đóng góp dữ liệu và nhận ngay <b>+5 lượt AI</b>!
+                </div>
                 <div style="font-size: 11px; color: var(--color-text-muted); text-align: center;">
-                    Quét mã QR thanh toán tự động trong 30 giây, kích hoạt ngay lập tức.
+                    Quét mã QR thanh toán chuyển khoản tự động trong 30 giây.
                 </div>
             </div>
             <div class="modal-footer" style="justify-content: flex-end; gap: 8px;">
@@ -2152,6 +2163,9 @@
             if (inkDotStatus) inkDotStatus.className = 'dot-indicator';
             if (inkStatusText) inkStatusText.textContent = 'Kết quả dự đoán AI';
             if (inkLatencyBadge) inkLatencyBadge.textContent = '';
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage(JSON.stringify({ type: 'clearInkSession' }));
+            }
         });
 
         function scheduleInkAutoRecognition() {
@@ -2258,15 +2272,7 @@
             if (typeof newRemaining === 'number') {
                 if (isCloud) currentLicenseInfo.remainingCloud = newRemaining;
                 else currentLicenseInfo.remainingFree = newRemaining;
-
-                if (!currentLicenseInfo.isProLifetime) {
-                    if (quotaBadgeText) {
-                        quotaBadgeText.textContent = isCloud ? ('Cloud: ' + newRemaining) : (newRemaining + '/50');
-                    }
-                    if (quotaBadgeDot) {
-                        quotaBadgeDot.className = newRemaining <= 0 ? 'quota-badge-dot exhausted' : (newRemaining <= 10 ? 'quota-badge-dot warning' : 'quota-badge-dot');
-                    }
-                }
+                if (typeof updateQuotaBadgeUI === 'function') updateQuotaBadgeUI();
             }
 
             var candsBar = document.getElementById('inkCandidatesBar');
@@ -2333,11 +2339,29 @@
         var sponsorText = document.getElementById('sponsorText');
         var sponsorLink = document.getElementById('sponsorLink');
 
-        function openQuotaModal(title, desc, icon) {
+        var modalSvgIcons = {
+            'pro': '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+            'cloud': '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>',
+            'free': '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+            'exhausted': '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'
+        };
+        var modalIconBg = {
+            'pro': 'background: #fef3c7;',
+            'cloud': 'background: #ede9fe;',
+            'free': 'background: #ccfbf1;',
+            'exhausted': 'background: #ffedd5;'
+        };
+
+        function openQuotaModal(title, desc, iconType) {
             if (!quotaModal) return;
             if (title) document.getElementById('quotaModalTitle').textContent = title;
             if (desc) document.getElementById('quotaModalDesc').textContent = desc;
-            if (icon) document.getElementById('quotaModalIcon').textContent = icon;
+            var iconElem = document.getElementById('quotaModalIcon');
+            if (iconElem) {
+                var type = modalSvgIcons[iconType] ? iconType : 'free';
+                iconElem.innerHTML = modalSvgIcons[type];
+                iconElem.style = 'width: 44px; height: 44px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin: 0 auto; ' + modalIconBg[type];
+            }
             quotaModal.classList.add('show');
         }
 
@@ -2358,26 +2382,97 @@
             });
         }
 
+        function updateQuotaBadgeUI() {
+            if (!quotaBadgeText || !quotaBadgeDot) return;
+            var engine = inkEngineSelect ? inkEngineSelect.value : 'local';
+
+            if (engine === 'ai') {
+                if (currentLicenseInfo.hasCloud) {
+                    quotaBadgeText.textContent = 'Cloud: ' + currentLicenseInfo.remainingCloud;
+                    quotaBadgeDot.className = currentLicenseInfo.remainingCloud <= 50 ? 'quota-badge-dot warning' : 'quota-badge-dot';
+                    if (quotaBadgeBtn) quotaBadgeBtn.title = 'Gói Cloud: Còn ' + currentLicenseInfo.remainingCloud + '/1000 lượt tháng này';
+                } else {
+                    quotaBadgeText.textContent = 'Cloud: 0';
+                    quotaBadgeDot.className = 'quota-badge-dot exhausted';
+                    if (quotaBadgeBtn) quotaBadgeBtn.title = 'Chưa kích hoạt gói Cloud AI. Bấm để xem chi tiết hoặc nâng cấp.';
+                }
+            } else {
+                if (currentLicenseInfo.isProLifetime) {
+                    quotaBadgeText.textContent = '✦ Pro';
+                    quotaBadgeDot.className = 'quota-badge-dot pro';
+                    if (quotaBadgeBtn) quotaBadgeBtn.title = 'HapiCopi Pro: Không giới hạn nhận diện Cục bộ trọn đời';
+                } else {
+                    quotaBadgeText.textContent = currentLicenseInfo.remainingFree + '/50';
+                    quotaBadgeDot.className = currentLicenseInfo.remainingFree <= 0 ? 'quota-badge-dot exhausted' : (currentLicenseInfo.remainingFree <= 10 ? 'quota-badge-dot warning' : 'quota-badge-dot');
+                    if (quotaBadgeBtn) quotaBadgeBtn.title = 'Bản Free: Còn ' + currentLicenseInfo.remainingFree + '/50 lượt hôm nay (Hồi phục lúc 00:00)';
+                }
+            }
+        }
+
+        if (inkEngineSelect) {
+            inkEngineSelect.addEventListener('change', function() {
+                updateQuotaBadgeUI();
+            });
+        }
+
         if (quotaBadgeBtn) {
             quotaBadgeBtn.addEventListener('click', function() {
-                if (currentLicenseInfo.isProLifetime) {
-                    openQuotaModal(
-                        'HapiCopi Pro (Trọn đời)',
-                        'Bạn đang sở hữu bản quyền HapiCopi Pro vĩnh viễn! Không giới hạn lượt nhận diện Cục bộ và không có watermark.',
-                        '⭐'
-                    );
-                } else if (currentLicenseInfo.hasCloud) {
-                    openQuotaModal(
-                        'Gói Cloud AI',
-                        'Bạn còn ' + currentLicenseInfo.remainingCloud + ' / 1.000 lượt nhận diện đám mây siêu tốc trong tháng này.',
-                        '☁️'
-                    );
+                var engine = inkEngineSelect ? inkEngineSelect.value : 'local';
+                if (engine === 'ai') {
+                    if (currentLicenseInfo.hasCloud) {
+                        openQuotaModal(
+                            'Gói Cloud AI',
+                            'Bạn còn ' + currentLicenseInfo.remainingCloud + ' / 1.000 lượt nhận diện đám mây trong tháng này.',
+                            'cloud'
+                        );
+                    } else {
+                        openQuotaModal(
+                            'Gói Cloud AI',
+                            'Bạn chưa đăng ký gói Cloud AI (1.000 lượt/tháng). Hãy bấm "Nâng cấp ngay" để đăng ký với mức giá 9.000đ/tháng.',
+                            'cloud'
+                        );
+                    }
                 } else {
-                    openQuotaModal(
-                        'Hạn mức nhận diện hôm nay',
-                        'Bạn còn ' + currentLicenseInfo.remainingFree + ' / 50 lượt nhận diện Cục bộ hôm nay. Hồi phục 50 lượt vào 00:00.',
-                        '⚡'
-                    );
+                    if (currentLicenseInfo.isProLifetime) {
+                        openQuotaModal(
+                            'HapiCopi Pro (Trọn đời)',
+                            'Bạn đang sở hữu bản quyền HapiCopi Pro vĩnh viễn. Không giới hạn số lượt nhận diện Cục bộ và không có watermark.',
+                            'pro'
+                        );
+                    } else {
+                        openQuotaModal(
+                            'Hạn mức nhận diện hôm nay',
+                            'Bạn còn ' + currentLicenseInfo.remainingFree + ' / 50 lượt nhận diện Cục bộ hôm nay. Hạn mức sẽ tự động hồi phục vào 00:00.',
+                            'free'
+                        );
+                    }
+                }
+            });
+        }
+
+        function updatePlanBadgeUI() {
+            var planBadge = document.getElementById('planBadge');
+            if (!planBadge) return;
+            if (currentLicenseInfo.isProLifetime) {
+                planBadge.className = 'plan-badge pro';
+                planBadge.textContent = '✦ Pro';
+                planBadge.title = 'Bản Pro Trọn Đời — Đã kích hoạt trên máy này';
+            } else {
+                planBadge.className = 'plan-badge free';
+                planBadge.textContent = 'Free';
+                planBadge.title = 'Bản Miễn phí (Còn ' + currentLicenseInfo.remainingFree + ' lượt hôm nay) — Bấm để nâng cấp';
+            }
+        }
+
+        var planBadgeElem = document.getElementById('planBadge');
+        if (planBadgeElem) {
+            planBadgeElem.addEventListener('click', function() {
+                if (currentLicenseInfo.isProLifetime) {
+                    showToast('Bạn đang sở hữu Bản quyền HapiCopi Pro vĩnh viễn trên thiết bị này.', 'info');
+                    return;
+                }
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({ type: 'openUpgrade' }));
                 }
             });
         }
@@ -2389,43 +2484,8 @@
             currentLicenseInfo.remainingFree = (typeof remainingFree === 'number') ? remainingFree : 50;
             currentLicenseInfo.remainingCloud = (typeof remainingCloud === 'number') ? remainingCloud : 0;
 
-            if (quotaBadgeText && quotaBadgeDot) {
-                if (currentLicenseInfo.isProLifetime) {
-                    quotaBadgeText.textContent = '✦ Pro';
-                    quotaBadgeDot.className = 'quota-badge-dot pro';
-                    if (quotaBadgeBtn) quotaBadgeBtn.title = 'HapiCopi Pro: Không giới hạn nhận diện Cục bộ trọn đời';
-                } else if (currentLicenseInfo.hasCloud) {
-                    quotaBadgeText.textContent = 'Cloud: ' + currentLicenseInfo.remainingCloud;
-                    quotaBadgeDot.className = currentLicenseInfo.remainingCloud <= 50 ? 'quota-badge-dot warning' : 'quota-badge-dot';
-                    if (quotaBadgeBtn) quotaBadgeBtn.title = 'Gói Cloud: Còn ' + currentLicenseInfo.remainingCloud + '/1000 lượt tháng này';
-                } else {
-                    quotaBadgeText.textContent = currentLicenseInfo.remainingFree + '/50';
-                    quotaBadgeDot.className = currentLicenseInfo.remainingFree <= 0 ? 'quota-badge-dot exhausted' : (currentLicenseInfo.remainingFree <= 10 ? 'quota-badge-dot warning' : 'quota-badge-dot');
-                    if (quotaBadgeBtn) quotaBadgeBtn.title = 'Bản Free: Còn ' + currentLicenseInfo.remainingFree + '/50 lượt hôm nay (Hồi phục lúc 00:00)';
-                }
-            }
-
-            if (inkCanvasWatermark) {
-                inkCanvasWatermark.style.display = isPro ? 'none' : 'block';
-            }
-
-            if (sponsorBar) {
-                if (isPro || !sponsor) {
-                    sponsorBar.style.display = 'none';
-                } else {
-                    sponsorBar.style.display = 'flex';
-                    if (sponsorText) sponsorText.textContent = sponsor.text || '';
-                    if (sponsorLink) {
-                        sponsorLink.textContent = (sponsor.callToAction || 'Xem ngay') + ' →';
-                        sponsorLink.onclick = function(e) {
-                            e.preventDefault();
-                            if (window.chrome && window.chrome.webview) {
-                                window.chrome.webview.postMessage(JSON.stringify({ type: 'openUrl', url: sponsor.url }));
-                            }
-                        };
-                    }
-                }
-            }
+            updateQuotaBadgeUI();
+            updatePlanBadgeUI();
         };
 
         window.onInkLimitReached = function(isCloud, reason, remaining, maxQuota) {
@@ -2433,11 +2493,11 @@
             if (inkDotStatus) inkDotStatus.className = 'dot-indicator error';
             if (inkStatusText) inkStatusText.textContent = 'Đã đạt giới hạn';
             openQuotaModal(
-                isCloud ? 'Hết hạn mức Cloud AI' : 'Hết 50 lượt nhận diện hôm nay',
+                isCloud ? 'Hết hạn mức Cloud AI' : 'Hết lượt nhận diện hôm nay',
                 reason || (isCloud 
-                    ? 'Bạn đã dùng hết hạn mức 1.000 lượt Cloud trong tháng này. Hãy gia hạn gói Cloud hoặc chuyển sang nhận diện Cục bộ (Offline).'
-                    : 'Bạn đã sử dụng hết 50 lượt nhận diện miễn phí hôm nay. Hạn mức sẽ tự động hồi phục 50 lượt mới vào 00:00 đêm nay.'),
-                '⏳'
+                    ? 'Bạn đã sử dụng hết 1.000 lượt Cloud trong tháng này. Bạn có thể gia hạn gói Cloud hoặc chuyển sang nhận diện Cục bộ (Offline).'
+                    : 'Bạn đã sử dụng hết lượt nhận diện miễn phí hôm nay. Bạn có thể lưu mẫu nét (+5 lượt/mẫu) hoặc chờ hồi phục lúc 00:00.'),
+                'exhausted'
             );
         };
 
@@ -2500,11 +2560,21 @@
             });
         }
 
-        window.onInkLearned = function(success, count, label, labelCount) {
+        window.onInkLearned = function(success, count, label, labelCount, remaining, maxQuota) {
             updateProfileBadgeCount(count);
+            if (!success) {
+                showToast('Không thể lưu mẫu cho "' + label + '".', 'warn');
+                return;
+            }
+            if (typeof remaining === 'number') {
+                currentLicenseInfo.remainingFree = remaining;
+                updateQuotaBadgeUI();
+                updatePlanBadgeUI();
+            }
             if (inkDotStatus) inkDotStatus.className = 'dot-indicator';
             if (inkStatusText) inkStatusText.textContent = 'Đã lưu mẫu: ' + label;
-            showToast('Đã lưu mẫu viết tay cho "' + label + '" (' + (labelCount || 1) + ' mẫu).', 'success');
+            var bonusMsg = (typeof remaining === 'number' && !currentLicenseInfo.isPro) ? ' (+5 lượt AI hôm nay)' : '';
+            showToast('🎉 Đã lưu mẫu "' + label + '"' + bonusMsg + ' (Tổng hồ sơ: ' + count + ' mẫu).', 'success');
             setTimeout(triggerInkRecognition, 300);
         };
 

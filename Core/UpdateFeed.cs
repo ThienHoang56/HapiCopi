@@ -58,6 +58,8 @@ namespace HapiCopi
 
         public static string ResolveAssetLocation(string feed, string fileName)
         {
+            if (IsHttp(fileName)) return fileName;
+
             string manifest = ResolveManifestLocation(feed);
             if (IsHttp(manifest))
             {
