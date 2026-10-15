@@ -8,7 +8,7 @@ using System.Windows.Forms;
 namespace HapiCopi
 {
     /// <summary>
-    /// Một mục trong lịch sử clipboard (có cache preview siêu tốc, tránh xử lý chuỗi lớn khi lăn chuột).
+    /// Một mục trong lịch sử clipboard (có cache preview siêu tốc, tự nhận diện nội dung thông minh).
     /// </summary>
     public class ClipboardHistoryItem
     {
@@ -41,8 +41,16 @@ namespace HapiCopi
             {
                 if (_cachedPreview != null) return _cachedPreview;
                 string src = !string.IsNullOrEmpty(_processedText) ? _processedText : _originalText;
-                if (string.IsNullOrWhiteSpace(src)) return _cachedPreview = "(Không có nội dung văn bản)";
-                // Tối ưu hóa tuyệt đối: Chỉ lấy 120 ký tự đầu tiên để format, tránh xử lý chuỗi 100KB gây lag khi lăn chuột
+                if (string.IsNullOrWhiteSpace(src))
+                {
+                    if (!string.IsNullOrEmpty(ProcessedHtml) || !string.IsNullOrEmpty(OriginalHtml))
+                        src = "[Nội dung định dạng HTML / Office]";
+                    else if (ClipboardFormats?.Count > 0)
+                        src = $"[{string.Join(", ", ClipboardFormats.Keys.Take(2))}]";
+                    else
+                        src = "(Không có nội dung văn bản)";
+                    return _cachedPreview = src;
+                }
                 if (src.Length > 120) src = src.Substring(0, 120);
                 src = src.Replace("\r", " ").Replace("\n", " ").Trim();
                 _cachedPreview = src.Length > 65 ? src.Substring(0, 65) + "…" : src;
@@ -52,11 +60,11 @@ namespace HapiCopi
     }
 
     /// <summary>
-    /// ListBox có hỗ trợ Double-Buffering phần cứng qua WS_EX_COMPOSITED, loại bỏ hoàn toàn hiện tượng giật/lag khi lăn chuột.
+    /// ListBox chuẩn Double-Buffered hiển thị từng trang (không dùng WS_EX_COMPOSITED để tránh nháy trên Windows 11).
     /// </summary>
-    internal sealed class SmoothListBox : ListBox
+    internal sealed class PageListBox : ListBox
     {
-        public SmoothListBox()
+        public PageListBox()
         {
             SetStyle(
                 ControlStyles.OptimizedDoubleBuffer |
@@ -65,24 +73,17 @@ namespace HapiCopi
                 true);
             DoubleBuffered = true;
         }
-
-        protected override CreateParams CreateParams
-        {
-            get
-            {
-                var cp = base.CreateParams;
-                cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED: Bật offscreen buffer mượt mà
-                return cp;
-            }
-        }
     }
 
     /// <summary>
-    /// Cửa sổ lịch sử clipboard dạng Mini Popup tinh gọn, responsive, mượt mà 60 FPS.
+    /// Cửa sổ lịch sử clipboard phân trang (Pagination): 6 mục/trang, lăn chuột đổi trang mượt mà 0ms, không lag, không nháy.
     /// </summary>
     public class ClipboardHistoryForm : Form
     {
-        // Cache tĩnh các tài nguyên GDI để không tạo rác/GC khi lăn chuột liên tục
+        private const int PageSize = 6;
+        private int _currentPage = 0;
+
+        // Cache tĩnh tài nguyên GDI tái sử dụng vĩnh viễn (Zero-Allocation on paint)
         private static readonly SolidBrush _surfaceBrush = new(UiTheme.Surface);
         private static readonly SolidBrush _selectedBgBrush = new(UiTheme.AccentLight);
         private static readonly SolidBrush _selectedBarBrush = new(UiTheme.Accent);
@@ -99,26 +100,20 @@ namespace HapiCopi
             FormatFlags = StringFormatFlags.NoWrap
         };
 
-        protected override CreateParams CreateParams
-        {
-            get
-            {
-                var cp = base.CreateParams;
-                cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED: Loại bỏ hoàn toàn giật/chớp tắt toàn form
-                return cp;
-            }
-        }
-
         private readonly List<ClipboardHistoryItem> _historySource;
         private readonly List<ClipboardHistoryItem> _filteredList = new();
-        private readonly SmoothListBox _historyList;
+        private readonly PageListBox _historyList;
         private readonly TextBox _searchBox;
-        private readonly Label _countLabel;
+        private readonly Label _pageLabel;
+        private readonly Button _prevPageBtn;
+        private readonly Button _nextPageBtn;
         private readonly Panel _emptyPanel;
         private readonly Button _copyButton;
         private readonly Button _deleteButton;
         private readonly Button _clearAllButton;
         private readonly Button _closeButton;
+
+        private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filteredList.Count / (double)PageSize));
 
         public ClipboardHistoryForm(List<ClipboardHistoryItem> history)
         {
@@ -130,24 +125,25 @@ namespace HapiCopi
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
 
-            // Kích thước chuẩn Mini Popup gọn gàng, tương đồng với Math Editor thu nhỏ
-            MinimumSize = new Size(LogicalToDeviceUnits(440), LogicalToDeviceUnits(380));
-            ClientSize = new Size(LogicalToDeviceUnits(480), LogicalToDeviceUnits(480));
+            // Kích thước chuẩn Mini Popup vừa khít 6 mục thẻ
+            MinimumSize = new Size(LogicalToDeviceUnits(440), LogicalToDeviceUnits(440));
+            ClientSize = new Size(LogicalToDeviceUnits(480), LogicalToDeviceUnits(470));
             KeyPreview = true;
             FormClosed += (s, e) => MemoryOptimizer.OptimizeMemory();
 
-            // 1. Header Bar: Tiêu đề + Đếm số mục + Nút Xóa sạch
+            // 1. Header Bar: Tiêu đề + Phân trang (< Trang 1/4 >) + Nút Xóa tất cả
             var header = new TableLayoutPanel
             {
                 Dock = DockStyle.Top,
                 AutoSize = true,
-                ColumnCount = 3,
-                Padding = new Padding(LogicalToDeviceUnits(14), LogicalToDeviceUnits(12),
-                                      LogicalToDeviceUnits(14), LogicalToDeviceUnits(8)),
+                ColumnCount = 4,
+                Padding = new Padding(LogicalToDeviceUnits(14), LogicalToDeviceUnits(10),
+                                      LogicalToDeviceUnits(14), LogicalToDeviceUnits(6)),
                 BackColor = UiTheme.Surface
             };
             header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
             var titleLabel = new Label
@@ -157,18 +153,58 @@ namespace HapiCopi
                 ForeColor = UiTheme.TextPrimary,
                 AutoSize = true,
                 Margin = new Padding(0, 0, LogicalToDeviceUnits(8), 0),
-                Anchor = AnchorStyles.Left | AnchorStyles.Top
+                Anchor = AnchorStyles.Left
             };
 
-            _countLabel = new Label
+            _pageLabel = new Label
             {
                 Text = "",
                 Font = UiTheme.Small,
                 ForeColor = UiTheme.TextMuted,
                 AutoSize = true,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top,
-                Margin = new Padding(0, LogicalToDeviceUnits(2), 0, 0)
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, LogicalToDeviceUnits(1), LogicalToDeviceUnits(8), 0)
             };
+
+            // Cụm nút chuyển trang (❮ và ❯)
+            var pageNavPanel = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                WrapContents = false,
+                Margin = Padding.Empty,
+                Anchor = AnchorStyles.Right
+            };
+
+            _prevPageBtn = new Button
+            {
+                Text = "❮",
+                Font = UiTheme.Small,
+                ForeColor = UiTheme.TextPrimary,
+                BackColor = UiTheme.Surface,
+                FlatStyle = FlatStyle.Flat,
+                Size = new Size(LogicalToDeviceUnits(26), LogicalToDeviceUnits(24)),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, LogicalToDeviceUnits(4), 0)
+            };
+            _prevPageBtn.FlatAppearance.BorderColor = UiTheme.Border;
+            _prevPageBtn.Click += (s, e) => GoToPrevPage();
+
+            _nextPageBtn = new Button
+            {
+                Text = "❯",
+                Font = UiTheme.Small,
+                ForeColor = UiTheme.TextPrimary,
+                BackColor = UiTheme.Surface,
+                FlatStyle = FlatStyle.Flat,
+                Size = new Size(LogicalToDeviceUnits(26), LogicalToDeviceUnits(24)),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, LogicalToDeviceUnits(10), 0)
+            };
+            _nextPageBtn.FlatAppearance.BorderColor = UiTheme.Border;
+            _nextPageBtn.Click += (s, e) => GoToNextPage();
+
+            pageNavPanel.Controls.Add(_prevPageBtn);
+            pageNavPanel.Controls.Add(_nextPageBtn);
 
             _clearAllButton = new Button
             {
@@ -179,15 +215,16 @@ namespace HapiCopi
                 FlatStyle = FlatStyle.Flat,
                 AutoSize = true,
                 Cursor = Cursors.Hand,
-                Anchor = AnchorStyles.Right | AnchorStyles.Top,
+                Anchor = AnchorStyles.Right,
                 Margin = Padding.Empty
             };
             _clearAllButton.FlatAppearance.BorderSize = 0;
             _clearAllButton.Click += (s, e) => ClearAllHistory();
 
             header.Controls.Add(titleLabel, 0, 0);
-            header.Controls.Add(_countLabel, 1, 0);
-            header.Controls.Add(_clearAllButton, 2, 0);
+            header.Controls.Add(_pageLabel, 1, 0);
+            header.Controls.Add(pageNavPanel, 2, 0);
+            header.Controls.Add(_clearAllButton, 3, 0);
 
             // 2. Ô tìm kiếm nhanh (Instant Filter)
             var searchPanel = new Panel
@@ -215,15 +252,15 @@ namespace HapiCopi
                 BackColor = UiTheme.Border
             };
 
-            // 3. Body: Danh sách lịch sử gọn gàng
+            // 3. Body: Danh sách lịch sử phân trang (Đúng 6 thẻ, vừa vặn không scrollbar)
             var listHost = new Panel
             {
                 Dock = DockStyle.Fill,
                 BackColor = UiTheme.Surface,
-                Padding = new Padding(LogicalToDeviceUnits(6), LogicalToDeviceUnits(4), LogicalToDeviceUnits(6), 0)
+                Padding = new Padding(LogicalToDeviceUnits(6), LogicalToDeviceUnits(2), LogicalToDeviceUnits(6), 0)
             };
 
-            _historyList = new SmoothListBox
+            _historyList = new PageListBox
             {
                 Dock = DockStyle.Fill,
                 BackColor = UiTheme.Surface,
@@ -231,12 +268,19 @@ namespace HapiCopi
                 Font = UiTheme.Body,
                 BorderStyle = BorderStyle.None,
                 DrawMode = DrawMode.OwnerDrawFixed,
-                ItemHeight = LogicalToDeviceUnits(54),
+                ItemHeight = LogicalToDeviceUnits(52),
                 IntegralHeight = false
             };
             _historyList.DrawItem += HistoryList_DrawItem;
             _historyList.DoubleClick += (s, e) => CopySelectedItem();
             _historyList.SelectedIndexChanged += (s, e) => UpdateButtonStates();
+
+            // Lăn chuột đổi trang mượt mà 0ms
+            _historyList.MouseWheel += (s, e) =>
+            {
+                if (e.Delta < 0) GoToNextPage();
+                else if (e.Delta > 0) GoToPrevPage();
+            };
 
             // Màn hình trống
             _emptyPanel = new Panel
@@ -322,7 +366,7 @@ namespace HapiCopi
             footerLayout.Controls.Add(rightButtons, 1, 0);
             footer.Controls.Add(footerLayout);
 
-            // Đưa tất cả vào Form
+            // Đưa tất cả vào Form theo Z-Order chuẩn WinForms
             Controls.Add(listHost);
             Controls.Add(headerBorder);
             Controls.Add(searchPanel);
@@ -352,6 +396,16 @@ namespace HapiCopi
                 DeleteSelectedItem();
                 e.Handled = true;
             }
+            else if (e.KeyCode == Keys.PageDown || (e.KeyCode == Keys.Right && !_searchBox.Focused))
+            {
+                GoToNextPage();
+                e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.PageUp || (e.KeyCode == Keys.Left && !_searchBox.Focused))
+            {
+                GoToPrevPage();
+                e.Handled = true;
+            }
         }
 
         public void RefreshHistoryList()
@@ -376,24 +430,58 @@ namespace HapiCopi
                 }
             }
 
+            _currentPage = 0;
+            RenderCurrentPage();
+        }
+
+        private void RenderCurrentPage()
+        {
+            if (_currentPage >= TotalPages) _currentPage = Math.Max(0, TotalPages - 1);
+            if (_currentPage < 0) _currentPage = 0;
+
             _historyList.BeginUpdate();
             _historyList.Items.Clear();
-            foreach (var item in _filteredList)
+
+            int startIdx = _currentPage * PageSize;
+            int count = Math.Min(PageSize, _filteredList.Count - startIdx);
+            for (int i = 0; i < count; i++)
             {
-                _historyList.Items.Add(item);
+                _historyList.Items.Add(_filteredList[startIdx + i]);
             }
             _historyList.EndUpdate();
 
-            bool empty = _historyList.Items.Count == 0;
+            bool empty = _filteredList.Count == 0;
             _emptyPanel.Visible = empty;
-            _countLabel.Text = $"({_filteredList.Count} mục)";
 
-            if (!empty && _historyList.SelectedIndex < 0)
+            // Cập nhật nhãn trang & nút chuyển trang
+            _pageLabel.Text = empty ? "(0 mục)" : $"Trang {_currentPage + 1}/{TotalPages} ({_filteredList.Count} mục)";
+            _prevPageBtn.Enabled = !empty && _currentPage > 0;
+            _nextPageBtn.Enabled = !empty && _currentPage < TotalPages - 1;
+
+            if (!empty && _historyList.Items.Count > 0 && _historyList.SelectedIndex < 0)
             {
                 _historyList.SelectedIndex = 0;
             }
 
             UpdateButtonStates();
+        }
+
+        private void GoToPrevPage()
+        {
+            if (_currentPage > 0)
+            {
+                _currentPage--;
+                RenderCurrentPage();
+            }
+        }
+
+        private void GoToNextPage()
+        {
+            if (_currentPage < TotalPages - 1)
+            {
+                _currentPage++;
+                RenderCurrentPage();
+            }
         }
 
         private void UpdateButtonStates()
@@ -428,7 +516,13 @@ namespace HapiCopi
 
             _historySource.Remove(item);
             HistoryManager.SaveHistory(_historySource);
-            FilterHistory();
+            _filteredList.Remove(item);
+
+            if (_currentPage >= TotalPages && _currentPage > 0)
+            {
+                _currentPage--;
+            }
+            RenderCurrentPage();
         }
 
         private void ClearAllHistory()
@@ -462,7 +556,7 @@ namespace HapiCopi
             }
 
             int left = e.Bounds.Left + LogicalToDeviceUnits(10);
-            int top = e.Bounds.Top + LogicalToDeviceUnits(6);
+            int top = e.Bounds.Top + LogicalToDeviceUnits(5);
             int right = e.Bounds.Right - LogicalToDeviceUnits(10);
 
             // Dòng 1: AppName + Timestamp + PII Badge
@@ -483,7 +577,7 @@ namespace HapiCopi
             }
 
             // Dòng 2: Nội dung trích đoạn (PreviewText)
-            top += LogicalToDeviceUnits(18);
+            top += LogicalToDeviceUnits(17);
             string preview = item.PreviewText;
             var textRect = new RectangleF(left, top, right - left, e.Bounds.Bottom - top - LogicalToDeviceUnits(4));
             g.DrawString(preview, UiTheme.Body, isSelected ? _accentHoverBrush : _textPrimaryBrush, textRect, _previewFormat);
