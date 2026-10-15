@@ -13,9 +13,9 @@
     <ApplicationIcon>Assets\hapicopi.ico</ApplicationIcon>
 
     <!-- Thông tin phiên bản & metadata cho file .exe -->
-    <Version>1.2.4</Version>
-    <AssemblyVersion>1.2.4.0</AssemblyVersion>
-    <FileVersion>1.2.4.0</FileVersion>
+    <Version>1.2.5</Version>
+    <AssemblyVersion>1.2.5.0</AssemblyVersion>
+    <FileVersion>1.2.5.0</FileVersion>
     <Product>HapiCopi</Product>
     <AssemblyTitle>HapiCopi - Clipboard DLP &amp; Auto-Format</AssemblyTitle>
     <Company>HapiCopi</Company>

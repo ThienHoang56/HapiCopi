@@ -486,7 +486,7 @@ namespace HapiCopi
             if (isSelected)
             {
                 using var path = GetRoundedPath(itemRect, 6);
-                using var selectBrush = new SolidBrush(Color.FromArgb(226, 236, 247));
+                using var selectBrush = new SolidBrush(UiTheme.AccentLight);
                 e.Graphics.FillPath(selectBrush, path);
             }
 

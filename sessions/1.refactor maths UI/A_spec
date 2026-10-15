@@ -1,0 +1,51 @@
+Tổng thể
+Phong cách: phẳng, ít đổ bóng, ít viền đậm. Gần như mọi thứ là nền trắng hoặc xám rất nhạt, chỉ có một màu nhấn duy nhất.
+Bo góc: nút và ô nhập bo 8px, các thẻ mẫu công thức 10px, khung công thức 14px, cửa sổ ngoài 12px. Bo góc nhẹ như vậy làm giao diện mềm mà vẫn gọn.
+Nhịp khoảng cách: khoảng cách giữa các phần là 14 hoặc 16px, giữa các nút trong lưới là 6 hoặc 8px. Việc lặp lại cùng vài con số này làm mọi thứ thẳng hàng.
+Màu sắc
+Dùng cho	Màu
+Nền cửa sổ, vùng soạn	Xám rất nhạt 
+#F6F7F9
+Thanh và panel	Trắng
+Đường kẻ, viền nút	Xám nhạt 
+#E3E6EC
+Chữ chính	Xanh đen 
+#1B2230 (không dùng đen thuần)
+Chữ phụ, nhãn	Xám xanh 
+#5B6578
+Màu nhấn	Xanh teal 
+#0E7C86
+Tô vùng đang chọn	Teal nhạt 
+#CFF1F3
+
+Màu teal chỉ xuất hiện ở vài chỗ: nút chính, tab đang chọn, viền khi rê chuột, và vùng đang chọn trong công thức. Nhờ vậy mắt luôn biết chỗ nào quan trọng.
+
+Chữ
+Giao diện: font IBM Plex Sans, dạng sans gọn, dễ đọc cỡ nhỏ. Nút và nhãn cỡ 13px, đậm vừa (weight 500–600).
+Công thức và ký hiệu: font STIX Two Text, kiểu chữ toán học có chân. Chữ biến như H, n, R in nghiêng, đúng chuẩn sách toán.
+Tiêu đề nhóm: chữ hoa, cỡ 12px, xám, giãn chữ nhẹ (MẪU CÔNG THỨC, THUỘC TÍNH...).
+Mã LaTeX: font monospace trong ô nền xám nhạt.
+Artboard 1: cửa sổ đầy đủ (1200×760)
+
+Từ trên xuống dưới:
+
+Thanh tiêu đề (cao 52px): logo vuông bo góc nền teal có chữ ∑, tên tài liệu in đậm, chữ “Đã lưu” xám nhỏ, rồi hai nút “Hoàn tác” và “Làm lại”. Nút “Sao chép LaTeX” nền teal, chữ trắng, nằm ở góc phải.
+Thanh tab (cao 48px): Công thức, Ký hiệu, Ma trận, Hy Lạp, Tập hợp. Tab đang chọn có nền teal nhạt và chữ teal đậm, các tab còn lại chỉ đổi nền khi rê chuột. Góc phải có ô chọn cỡ chữ.
+Thân (3 cột):
+Cột trái, rộng 300px: 6 thẻ mẫu công thức xếp 3 cột. Mỗi thẻ có ký hiệu lớn ở trên và chữ nhãn nhỏ ở dưới (Phân số, Căn bậc, Tổng...). Bên dưới là lưới 6×4 ký hiệu thường dùng: ± × ÷ ≠ ≤ ≥, rồi ≈ ∞ ∂ ∇ ∈ ∀, rồi chữ Hy Lạp.
+Cột giữa, co giãn: một thẻ trắng 540×300 đặt giữa nền xám, trong đó là công thức cỡ 40px. Phần phân số đang chọn được tô teal nhạt và có viền teal 2px.
+Cột phải, rộng 280px: ba nhóm. THUỘC TÍNH có Kiểu, Kích thước, Màu chữ. MÃ LATEX là khung code nền xám. XUẤT RA có ba nút Word, PNG, SVG.
+Thanh trạng thái (cao 30px): Kiểu, Cỡ, Thu phóng ở bên trái, “Đang chọn: phân số” ở bên phải.
+Artboard 2: cửa sổ nhỏ tại con trỏ Word (760×480)
+Nền: giả một trang Word, gồm vài thanh xám bo tròn thay cho dòng chữ và một con trỏ nhấp nháy màu teal ở cuối dòng cuối.
+Cửa sổ nổi: rộng 440px, nền trắng, viền xám, bo 14px, đổ bóng mềm và rộng để trông như nổi lên trên văn bản.
+Ô gõ: viền teal 1.5px để báo đang được focus. Có biểu tượng ∑ nhỏ bên trái, mã LaTeX bằng monospace.
+Khung xem trước: nền xám nhạt, cao 96px, công thức cỡ 26px, cập nhật theo ô gõ.
+Hàng nút nhanh: 7 nút ký hiệu và nút “Thêm ▾” kéo dài hết chỗ còn lại.
+Hàng cuối: gợi ý phím tắt dạng Esc và Ctrl+Enter trong khung phím nhỏ, kèm nút “Chèn vào Word” nền teal.
+Vì sao trông sạch
+Chỉ có một màu nhấn, còn lại là trắng và xám.
+Viền rất nhạt, nên không bị rối.
+Mỗi vùng có một nhiệm vụ rõ: chọn ở trái, soạn ở giữa, chỉnh ở phải.
+Nút có chữ nhãn đi kèm, không bắt người dùng đoán icon.
+Khoảng trống nhiều quanh công thức, nên công thức nổi bật nhất.

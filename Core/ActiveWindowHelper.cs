@@ -95,6 +95,63 @@ namespace HapiCopi
         [DllImport("user32.dll", SetLastError = true)]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentThreadId();
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool BringWindowToTop(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_SHOWWINDOW = 0x0040;
+        private const int SW_SHOW = 5;
+
+        public static void ForceForeground(IntPtr hWnd)
+        {
+            if (hWnd == IntPtr.Zero) return;
+            try
+            {
+                IntPtr foreWnd = GetForegroundWindow();
+                uint foreThread = GetWindowThreadProcessId(foreWnd, out _);
+                uint currentThread = GetCurrentThreadId();
+
+                if (foreThread != 0 && foreThread != currentThread)
+                {
+                    AttachThreadInput(currentThread, foreThread, true);
+                    BringWindowToTop(hWnd);
+                    ShowWindow(hWnd, SW_SHOW);
+                    SetForegroundWindow(hWnd);
+                    AttachThreadInput(currentThread, foreThread, false);
+                }
+                else
+                {
+                    BringWindowToTop(hWnd);
+                    ShowWindow(hWnd, SW_SHOW);
+                    SetForegroundWindow(hWnd);
+                }
+
+                SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[ActiveWindowHelper] ForceForeground lỗi: {ex.Message}");
+            }
+        }
+
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 

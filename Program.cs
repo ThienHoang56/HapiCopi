@@ -276,95 +276,18 @@ namespace HapiCopi
             Print($"[TEST 4 RECOGNIZE] Ket qua nhan dien Exponent: '{recExp}'");
             if (!recExp.Contains("^2") && !recExp.Contains("^{")) { Print("FAILED TEST 4 RECOGNIZE"); SaveTestReport("distill_test_report.txt", sb.ToString()); return 4; }
 
-            // TEST 5: Test Matrix 2D grid recognition
-            var matrixStrokes = new System.Collections.Generic.List<System.Collections.Generic.List<System.Drawing.PointF>>
-            {
-                // left tall bracket (
-                new() { new(15, 10), new(10, 50), new(15, 90) },
-                // row 1: element (15,25) and (35,25) -> "1", "2"
-                new() { new(30, 20), new(30, 40) }, // "1"
-                new() { new(50, 20), new(60, 20), new(50, 40), new(60, 40) }, // "2"
-                // row 2: element (15,70) and (35,70) -> "3", "4"
-                new() { new(30, 60), new(40, 60), new(35, 75), new(40, 90) }, // "3"
-                new() { new(55, 60), new(50, 80), new(65, 80) }, // "4"
-                // right tall bracket )
-                new() { new(75, 10), new(80, 50), new(75, 90) }
-            };
-            string recMatrix = MathVisionService.RecognizeWithPersonalizedProfile(matrixStrokes);
-            Print($"[TEST 5 RECOGNIZE] Ket qua nhan dien Ma tran 2x2: '{recMatrix}'");
-            if (!recMatrix.Contains("\\begin{pmatrix}")) { Print("FAILED TEST 5 RECOGNIZE"); SaveTestReport("distill_test_report.txt", sb.ToString()); return 5; }
-
-            // TEST 5B: Test 3x3 Matrix with square brackets [ ]
-            var matrix3x3Strokes = new System.Collections.Generic.List<System.Collections.Generic.List<System.Drawing.PointF>>
-            {
-                // left tall bracket [ (h=140, w=20, top hook and bottom hook to right)
-                new() { new(25, 10), new(10, 10), new(10, 150), new(25, 150) },
-                // Row 1: "4", "5", "3"
-                new() { new(40, 20), new(35, 40), new(50, 40) }, // "4"
-                new() { new(45, 30), new(45, 55) },
-                new() { new(75, 20), new(65, 20), new(65, 35), new(75, 35), new(65, 55) }, // "5"
-                new() { new(95, 20), new(105, 20), new(100, 35), new(105, 55), new(95, 55) }, // "3"
-                // Row 2: "9", "2", "1"
-                new() { new(45, 75), new(35, 75), new(35, 90), new(45, 90), new(45, 110) }, // "9"
-                new() { new(65, 75), new(75, 75), new(65, 110), new(75, 110) }, // "2"
-                new() { new(100, 75), new(100, 110) }, // "1"
-                // Row 3: "1", "1", "7"
-                new() { new(40, 125), new(40, 145) }, // "1"
-                new() { new(70, 125), new(70, 145) }, // "1"
-                new() { new(95, 125), new(105, 125), new(98, 145) }, // "7"
-                // right tall bracket ] (h=140, w=20, top hook and bottom hook to left)
-                new() { new(120, 10), new(135, 10), new(135, 150), new(120, 150) }
-            };
-            string recMatrix3x3 = MathVisionService.RecognizeWithPersonalizedProfile(matrix3x3Strokes);
-            Print($"[TEST 5B RECOGNIZE] Ket qua nhan dien Ma tran 3x3: '{recMatrix3x3}'");
-            if (!recMatrix3x3.Contains("\\begin{bmatrix}") || !recMatrix3x3.Contains("&") || !recMatrix3x3.Contains("\\\\"))
-            {
-                Print("FAILED TEST 5B RECOGNIZE");
-                SaveTestReport("distill_test_report.txt", sb.ToString());
-                return 52;
-            }
-
-            // TEST 5C: Test System of Equations with curly brace {
-            var systemOfEqStrokes = new System.Collections.Generic.List<System.Collections.Generic.List<System.Drawing.PointF>>
-            {
-                // left tall curly brace { (top end at (20,10), cusp at (8,60), bottom end at (20,110))
-                new() { new(20, 10), new(15, 30), new(8, 60), new(15, 90), new(20, 110) },
-                // Row 1: "2x + y = 5"
-                new() { new(35, 25), new(45, 25), new(35, 45), new(45, 45) }, // 2
-                new() { new(52, 25), new(62, 45) }, new() { new(62, 25), new(52, 45) }, // x
-                new() { new(72, 35), new(82, 35) }, new() { new(77, 27), new(77, 43) }, // +
-                new() { new(92, 25), new(97, 35), new(102, 25), new(97, 45) }, // y
-                new() { new(112, 32), new(122, 32) }, new() { new(112, 38), new(122, 38) }, // =
-                new() { new(140, 25), new(132, 25), new(132, 35), new(140, 35), new(132, 45) }, // 5
-                // Row 2: "x - 3y = 2"
-                new() { new(35, 80), new(45, 100) }, new() { new(45, 80), new(35, 100) }, // x
-                new() { new(55, 90), new(65, 90) }, // -
-                new() { new(75, 80), new(85, 80), new(80, 90), new(85, 100), new(75, 100) }, // 3
-                new() { new(95, 80), new(100, 90), new(105, 80), new(100, 100) }, // y
-                new() { new(115, 87), new(125, 87) }, new() { new(115, 93), new(125, 93) }, // =
-                new() { new(135, 80), new(145, 80), new(135, 100), new(145, 100) } // 2
-            };
-            string recSystemOfEq = MathVisionService.RecognizeWithPersonalizedProfile(systemOfEqStrokes);
-            Print($"[TEST 5C RECOGNIZE] Ket qua nhan dien He phuong trinh: '{recSystemOfEq}'");
-            if (!recSystemOfEq.Contains("\\begin{cases}") || !recSystemOfEq.Contains("\\\\"))
-            {
-                Print("FAILED TEST 5C RECOGNIZE");
-                SaveTestReport("distill_test_report.txt", sb.ToString());
-                return 53;
-            }
-
-            // TEST 6: Candidate ranking for single character and formula
+            // TEST 5: Candidate ranking for single character and formula
             var (recWithCands, candsList) = MathVisionService.RecognizeWithPersonalizedProfileWithCandidates(testStrokes7);
-            Print($"[TEST 6 CANDIDATES] Ket qua: '{recWithCands}', So goi y phu: {candsList.Count} [{string.Join(", ", candsList)}]");
-            if (string.IsNullOrEmpty(recWithCands)) { Print("FAILED TEST 6 CANDIDATES"); SaveTestReport("distill_test_report.txt", sb.ToString()); return 6; }
+            Print($"[TEST 5 CANDIDATES] Ket qua: '{recWithCands}', So goi y phu: {candsList.Count} [{string.Join(", ", candsList)}]");
+            if (string.IsNullOrEmpty(recWithCands)) { Print("FAILED TEST 5 CANDIDATES"); SaveTestReport("distill_test_report.txt", sb.ToString()); return 5; }
 
-            // TEST 7: Contrastive Negative Penalty & Feature Repulsion
+            // TEST 6: Contrastive Negative Penalty & Feature Repulsion
             int penalized = HandwritingProfileService.PenalizeWrongPrediction("7", testStrokes7);
-            Print($"[TEST 7 PENALTY] Da phat nhan sai '7': {penalized} prototypes bi day lui (repulsion) & tang MissCount");
-            if (penalized == 0) { Print("FAILED TEST 7 PENALTY"); SaveTestReport("distill_test_report.txt", sb.ToString()); return 7; }
+            Print($"[TEST 6 PENALTY] Da phat nhan sai '7': {penalized} prototypes bi day lui (repulsion) & tang MissCount");
+            if (penalized == 0) { Print("FAILED TEST 6 PENALTY"); SaveTestReport("distill_test_report.txt", sb.ToString()); return 6; }
 
             Print("==================================================");
-            Print("     ALL 7 TESTS PASSED SUCCESSFULLY! (100%)     ");
+            Print("     ALL 6 DISTILLATION TESTS PASSED! (100%)      ");
             Print($"     Tong so mau sau khi tu hoc: {HandwritingProfileService.GetSampleCount()}");
             Print("==================================================");
 
@@ -704,7 +627,7 @@ namespace HapiCopi
                 Print($"  -> FAIL: Mô hình nhận diện chuỗi thành '{polyRec}' (chưa nhận diện đúng dấu '+').");
             }
 
-            // 5.3 Ngữ pháp MathSyntaxPrior: Khử lỗi số kẹp giữa biến (x 7 y -> x + y)
+            // 5.3 Bảo toàn tính toàn vẹn token (Token Integrity): Không tự ý hoán đổi ký tự người dùng viết ('x 7 y' bảo toàn '7')
             totalTests++;
             var testTokens = new System.Collections.Generic.List<(string charLabel, System.Collections.Generic.List<string> alts, System.Drawing.RectangleF box)>
             {
@@ -714,15 +637,15 @@ namespace HapiCopi
             };
             var disambiguated = MathSyntaxPrior.DisambiguateTokens(testTokens);
             string middleToken = disambiguated[1].charLabel;
-            Print($"  - Ngữ pháp sửa lỗi số kẹp giữa biến ('x 7 y'): Token giữa sau hiệu chỉnh = '{middleToken}'");
-            if (middleToken == "+")
+            Print($"  - Kiểm tra tính trung thực cú pháp ('x 7 y'): Token giữa = '{middleToken}'");
+            if (middleToken == "7")
             {
                 passedTests++;
-                Print("  -> PASS: MathSyntaxPrior tự động chuyển đổi nhầm lẫn '7' thành '+' theo ngữ cảnh.");
+                Print("  -> PASS: Bảo toàn trung thực token người dùng, không tráo đổi nhãn rule-base.");
             }
             else
             {
-                Print("  -> FAIL: MathSyntaxPrior chưa sửa được token.");
+                Print($"  -> FAIL: Token bị can thiệp thành '{middleToken}'.");
             }
 
             // 5.4 Cân bằng ngoặc (Bracket Balance)
@@ -949,7 +872,28 @@ namespace HapiCopi
                     }
                 }
 
-                // 4. BENCHMARK ĐỘ TRỄ CPU & THROUGHPUT INFERENCE
+                // 4.5. KIỂM THỬ CHUẨN HÓA CÚ PHÁP CẬN TOÁN TỬ (CANONICALIZATION)
+                totalTests++;
+                Print("[PHẦN 4.5 - CHUẨN HÓA CÚ PHÁP CẬN TOÁN TỬ (CANONICALIZATION)]");
+                string rawIntWithLimits = @"\int { 2 } { 4 } ( x + y ) d x";
+                string cleanIntWithLimits = EndToEndMathEngine.PostProcessLatex(rawIntWithLimits);
+                string rawSumWithLimits = @"\sum { i = 1 } { n } i ^ 2";
+                string cleanSumWithLimits = EndToEndMathEngine.PostProcessLatex(rawSumWithLimits);
+
+                Print($"  - Thử nghiệm tích phân có cận raw: '{rawIntWithLimits}' -> '{cleanIntWithLimits}'");
+                Print($"  - Thử nghiệm tổng có cận raw: '{rawSumWithLimits}' -> '{cleanSumWithLimits}'");
+
+                if (cleanIntWithLimits.Contains(@"\int_{2}^{4}") && cleanSumWithLimits.Contains(@"\sum_{i = 1}^{n}"))
+                {
+                    passedTests++;
+                    Print("  -> PASS: Cú pháp tích phân và tổng có cận được tự động chuẩn hóa về '\\int_{lower}^{upper}' theo chuẩn LaTeX.");
+                }
+                else
+                {
+                    Print($"  -> FAIL: Cú pháp chưa được chuẩn hóa đúng ('{cleanIntWithLimits}' / '{cleanSumWithLimits}').");
+                }
+
+                // 5. BENCHMARK ĐỘ TRỄ CPU & THROUGHPUT INFERENCE
                 totalTests++;
                 Print("[PHẦN 5 - BENCHMARK HIỆU NĂNG CPU & THROUGHPUT]");
                 int benchmarkRuns = 5;

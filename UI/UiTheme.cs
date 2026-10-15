@@ -17,19 +17,20 @@ namespace HapiCopi
         // MÀU
         // ============================
 
-        public static readonly Color Background = Color.White;
-        public static readonly Color Surface = Color.FromArgb(247, 248, 250);
-        public static readonly Color Border = Color.FromArgb(223, 226, 230);
+        public static readonly Color Background = Color.FromArgb(248, 250, 252);
+        public static readonly Color Surface = Color.White;
+        public static readonly Color Border = Color.FromArgb(226, 232, 240);
 
-        public static readonly Color TextPrimary = Color.FromArgb(32, 35, 40);
-        public static readonly Color TextMuted = Color.FromArgb(106, 115, 125);
-        public static readonly Color TextDisabled = Color.FromArgb(150, 157, 165);
+        public static readonly Color TextPrimary = Color.FromArgb(30, 41, 59);
+        public static readonly Color TextMuted = Color.FromArgb(100, 116, 139);
+        public static readonly Color TextDisabled = Color.FromArgb(148, 163, 184);
 
-        public static readonly Color Accent = Color.FromArgb(0, 103, 192);
-        public static readonly Color AccentHover = Color.FromArgb(0, 90, 168);
-        public static readonly Color Success = Color.FromArgb(14, 115, 60);
-        public static readonly Color Warning = Color.FromArgb(180, 83, 9);
-        public static readonly Color Danger = Color.FromArgb(185, 28, 28);
+        public static readonly Color Accent = Color.FromArgb(14, 124, 134);
+        public static readonly Color AccentHover = Color.FromArgb(10, 100, 112);
+        public static readonly Color AccentLight = Color.FromArgb(230, 244, 245);
+        public static readonly Color Success = Color.FromArgb(16, 185, 129);
+        public static readonly Color Warning = Color.FromArgb(217, 119, 6);
+        public static readonly Color Danger = Color.FromArgb(220, 38, 38);
 
         // ============================
         // PHÔNG

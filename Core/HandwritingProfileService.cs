@@ -131,17 +131,8 @@ namespace HapiCopi
                         SaveProfile();
                     }
 
-                    // Đảm bảo các mẫu cơ sở hoặc mẫu đã nạp đều có Topo hợp lệ nếu chưa được gán
-                    foreach (var p in _prototypes)
-                    {
-                        if (p.LoopCount == 0 && p.CrossingCount == 0 && p.CuspCount == 0)
-                        {
-                            if (p.Label == "8") p.LoopCount = 2;
-                            else if (p.Label is "0" or "6" or "9" or "b" or "d" or "p" or "q" or "o") p.LoopCount = 1;
-                            else if (p.Label is "+" or "\\times") p.CrossingCount = 1;
-                            else if (p.Label is "v" or "V" or "7") p.CuspCount = 1;
-                        }
-                    }
+                    // Không gán cứng Topo bằng if-else trên nhãn chuỗi;
+                    // Thuộc tính hình thái Topo phải được trích xuất từ dữ liệu hình học thực tế.
                 }
             }
         }
@@ -562,94 +553,8 @@ namespace HapiCopi
             int learnedCount = 0;
             bool spatialChanged = false;
 
-            // 1. Nhận diện & bóc tách Vector: \vec{v} hoặc \overrightarrow{AB}
-            if ((cleanLabel.StartsWith("\\vec{") || cleanLabel.StartsWith("\\overrightarrow{")) && cleanLabel.EndsWith("}"))
-            {
-                int start = cleanLabel.IndexOf('{') + 1;
-                string innerSymbol = cleanLabel.Substring(start, cleanLabel.Length - start - 1).Trim();
-
-                if (strokes.Count >= 2 && !string.IsNullOrEmpty(innerSymbol))
-                {
-                    var sortedByY = strokes.OrderBy(s => s.Min(p => p.Y)).ToList();
-                    var arrowStroke = sortedByY.First();
-                    var baseStrokes = sortedByY.Skip(1).ToList();
-
-                    float arrowH = Math.Max(1f, arrowStroke.Max(p => p.Y) - arrowStroke.Min(p => p.Y));
-                    float baseH = Math.Max(1f, baseStrokes.SelectMany(s => s).Max(p => p.Y) - baseStrokes.SelectMany(s => s).Min(p => p.Y));
-
-                    Spatial.VectorArrowMaxHeightRatio = Math.Min(0.55f, Math.Max(0.20f, (arrowH / baseH) * 1.15f));
-                    spatialChanged = true;
-
-                    learnedCount += LearnClusterWithAugmentation(innerSymbol, baseStrokes, isFromCloud);
-                }
-            }
-            // 2. Nhận diện & bóc tách Phân số: \frac{A}{B}
-            else if (cleanLabel.StartsWith("\\frac{") && cleanLabel.Contains("}{") && cleanLabel.EndsWith("}"))
-            {
-                var match = System.Text.RegularExpressions.Regex.Match(cleanLabel, @"^\\frac\{([^{}]+)\}\{([^{}]+)\}$");
-                if (match.Success)
-                {
-                    string numLabel = match.Groups[1].Value.Trim();
-                    string denLabel = match.Groups[2].Value.Trim();
-
-                    var strokeBoxes = strokes.Select(s => new
-                    {
-                        Stroke = s,
-                        MinX = s.Min(p => p.X), MaxX = s.Max(p => p.X),
-                        MinY = s.Min(p => p.Y), MaxY = s.Max(p => p.Y),
-                        W = s.Max(p => p.X) - s.Min(p => p.X),
-                        H = s.Max(p => p.Y) - s.Min(p => p.Y)
-                    }).ToList();
-
-                    var barCandidate = strokeBoxes
-                        .Where(s => s.W > 20 && s.W > s.H * 2.2f)
-                        .OrderByDescending(s => s.W)
-                        .FirstOrDefault();
-
-                    if (barCandidate != null)
-                    {
-                        var numStrokes = strokeBoxes.Where(s => s != barCandidate && s.MaxY <= barCandidate.MinY + 6).Select(s => s.Stroke).ToList();
-                        var denStrokes = strokeBoxes.Where(s => s != barCandidate && s.MinY >= barCandidate.MaxY - 6).Select(s => s.Stroke).ToList();
-
-                        if (numStrokes.Count > 0)
-                        {
-                            learnedCount += DistillAndAugmentSample(numLabel, numStrokes, isFromCloud);
-                        }
-                        if (denStrokes.Count > 0)
-                        {
-                            learnedCount += DistillAndAugmentSample(denLabel, denStrokes, isFromCloud);
-                        }
-                    }
-                }
-            }
-            // 3. Nhận diện & bóc tách Số mũ (Superscript): X^{Y} hoặc X^Y
-            else if (cleanLabel.Contains("^") && !cleanLabel.Contains("\\"))
-            {
-                var match = System.Text.RegularExpressions.Regex.Match(cleanLabel, @"^([a-zA-Z0-9]+)\^\{?([a-zA-Z0-9]+)\}?$");
-                if (match.Success)
-                {
-                    string baseLabel = match.Groups[1].Value.Trim();
-                    string expLabel = match.Groups[2].Value.Trim();
-
-                    var clustered = ClusterStrokesWithBoxes(strokes);
-                    if (clustered.Count == 2)
-                    {
-                        var baseBox = clustered[0].box;
-                        var expBox = clustered[1].box;
-
-                        float ratio = expBox.Height / Math.Max(1f, baseBox.Height);
-                        float shift = ((baseBox.Y + baseBox.Height / 2f) - (expBox.Y + expBox.Height / 2f)) / Math.Max(1f, baseBox.Height);
-                        Spatial.ExponentMaxHeightRatio = Math.Min(0.95f, Math.Max(0.40f, ratio * 1.15f));
-                        Spatial.ExponentMinVerticalShift = Math.Min(0.45f, Math.Max(0.10f, shift * 0.85f));
-                        spatialChanged = true;
-
-                        learnedCount += LearnClusterWithAugmentation(baseLabel, clustered[0].cluster, isFromCloud);
-                        learnedCount += LearnClusterWithAugmentation(expLabel, clustered[1].cluster, isFromCloud);
-                    }
-                }
-            }
-
-            // 4. Bóc tách dãy ký tự tuyến tính (Tokenize): ví dụ "347" -> "3", "4", "7"
+            // Chỉ chắt lọc và học các ký hiệu nguyên tử (Atomic Labels) hoặc dãy ký tự phân rã rõ ràng
+            // Tuyệt đối KHÔNG dùng heuristic hộp bao phỏng đoán cắt xẻ công thức phức tạp (phân số, số mũ, ma trận) để tránh ô nhiễm profile.
             var tokens = TokenizeLabel(cleanLabel);
             var clustersWithBoxes = ClusterStrokesWithBoxes(strokes);
 
@@ -657,16 +562,18 @@ namespace HapiCopi
             {
                 for (int i = 0; i < tokens.Count; i++)
                 {
-                    learnedCount += LearnClusterWithAugmentation(tokens[i], clustersWithBoxes[i].cluster, isFromCloud);
+                    if (IsValidAtomicLabel(tokens[i]))
+                    {
+                        learnedCount += LearnClusterWithAugmentation(tokens[i], clustersWithBoxes[i].cluster, isFromCloud);
+                    }
                 }
             }
-            else if (tokens.Count == 1 && clustersWithBoxes.Count == 1)
+            else if (tokens.Count == 1 && clustersWithBoxes.Count == 1 && IsValidAtomicLabel(tokens[0]))
             {
                 learnedCount += LearnClusterWithAugmentation(tokens[0], clustersWithBoxes[0].cluster, isFromCloud);
             }
             else if (IsValidAtomicLabel(cleanLabel))
             {
-                // Fallback chỉ chạy khi không bóc tách được cụm đơn lẻ nhưng cả biểu thức là 1 ký hiệu nguyên tử
                 learnedCount += LearnSinglePrototype(cleanLabel, strokes, isDistilled: isFromCloud, isAugmented: false) ? 1 : 0;
             }
 

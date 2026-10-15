@@ -55,14 +55,14 @@ namespace HapiCopi
             WebViewManager.Initialize();
 
             // 1. Thiết lập Menu chuột phải cho System Tray Icon
-            var contextMenu = new ContextMenuStrip();
+            var contextMenu = new ContextMenuStrip { Font = UiTheme.Body };
 
             var titleItem = new ToolStripMenuItem($"HapiCopi v{UpdateManager.CurrentVersionText}") { Enabled = false };
             titleItem.Font = new Font(titleItem.Font, FontStyle.Bold);
 
             _pauseMenuItem = new ToolStripMenuItem("Tạm dừng", null, OnPauseClicked);
             var historyMenuItem = new ToolStripMenuItem("Lịch sử Clipboard...", null, OnHistoryClicked);
-            var mathEditorMenuItem = new ToolStripMenuItem("Soạn công thức toán...", null, OnMathEditorClicked);
+            var mathEditorMenuItem = new ToolStripMenuItem("Soạn công thức toán (Ctrl+Alt)...", null, OnMathEditorClicked);
             var abcEditorMenuItem = new ToolStripMenuItem("🔒 Soạn nhạc (Chưa hoàn thiện)...", null, OnAbcEditorClicked);
             var settingsMenuItem = new ToolStripMenuItem("Cài đặt...", null, OnSettingsClicked);
             _updateMenuItem = new ToolStripMenuItem("Phiên bản & Cập nhật...", null, OnUpdateClicked);
@@ -96,9 +96,10 @@ namespace HapiCopi
             _listener = new ClipboardListener();
             _listener.ClipboardChanged += OnClipboardChanged;
 
-            // 4. Đăng ký Hook bàn phím bắt sự kiện dán chủ động
+            // 4. Đăng ký Hook bàn phím bắt sự kiện dán chủ động & mở nhanh soạn toán
             _keyboardHook = new KeyboardHook();
             _keyboardHook.PastePressed += OnPastePressed;
+            _keyboardHook.MathHotkeyPressed += () => _syncContext.Post(_ => OnMathEditorClicked(this, EventArgs.Empty), null);
 
             // 4b. Đăng ký Hook chuột phát hiện click sửa công thức trực tiếp
             try
@@ -201,9 +202,22 @@ namespace HapiCopi
                     _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
                 }
 
-                _mathEditorForm.ResetWordMode();
-                EditorWindow.Present(_mathEditorForm);
-                _mathEditorForm.RequestReady();
+                // Nếu nhấn hotkey từ trong Word hoặc Google Docs -> mở Mini Popup (560x360)
+                var activeApp = ActiveWindowHelper.GetActiveAppInfo();
+                if (activeApp.IsAnyWord)
+                {
+                    _mathEditorForm.OpenForWordFormula(new WordFormulaInfo { Formula = "", FontSize = 11f });
+                }
+                else if (activeApp.IsGoogleDocs)
+                {
+                    _mathEditorForm.OpenForFormulaText("", mode: "latex", fontSize: 11f, isDocs: true, sourceWindow: activeApp.WindowHandle);
+                }
+                else
+                {
+                    _mathEditorForm.ResetWordMode();
+                    EditorWindow.Present(_mathEditorForm);
+                    _mathEditorForm.RequestReady();
+                }
             }
             catch (Exception ex)
             {
@@ -320,7 +334,7 @@ namespace HapiCopi
                 DialogResult = DialogResult.OK,
                 Location = new Point(176, 106),
                 Size = new Size(95, 32),
-                BackColor = Color.FromArgb(37, 99, 235),
+                BackColor = UiTheme.Accent,
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Segoe UI", 9f, FontStyle.Bold),
@@ -334,13 +348,13 @@ namespace HapiCopi
                 DialogResult = DialogResult.Cancel,
                 Location = new Point(278, 106),
                 Size = new Size(84, 32),
-                BackColor = Color.FromArgb(241, 245, 249),
-                ForeColor = Color.FromArgb(71, 85, 105),
+                BackColor = UiTheme.Surface,
+                ForeColor = UiTheme.TextMuted,
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Segoe UI", 9f),
                 Cursor = Cursors.Hand
             };
-            btnCancel.FlatAppearance.BorderColor = Color.FromArgb(203, 213, 225);
+            btnCancel.FlatAppearance.BorderColor = UiTheme.Border;
 
             form.Controls.AddRange(new Control[] { lblDesc, txtPass, btnOk, btnCancel });
             form.AcceptButton = btnOk;

@@ -30,7 +30,7 @@ dotnet run -- --test-ai-math
 ```powershell
 dotnet run -- --test-distill
 ```
-- **Mục tiêu:** Kiểm tra 7 biến thể hình học khi học nét mới, nhận diện chuỗi ký tự, căn chỉnh không gian vector/số mũ, ma trận 2x2, gợi ý ứng viên đa tầng, và phạt đẩy lùi (Feature Repulsion) khi nhận diện sai.
+- **Mục tiêu:** Kiểm tra 7 biến thể hình học khi học nét mới, nhận diện chuỗi ký tự nguyên tử, căn chỉnh thông số không gian vector/số mũ, gợi ý ứng viên đa tầng (Candidate Ranking), và phạt đẩy lùi (Feature Repulsion) khi nhận diện sai.
 - **Báo cáo xuất ra:** [`reports/distill_test_report.txt`](./reports/distill_test_report.txt).
 
 ### 2.3. Kiểm thử Bất biến Topo & Hình thái học (Topological Invariants)
@@ -44,5 +44,5 @@ dotnet run -- --test-topo
 ```powershell
 dotnet run -- --test-e2e-math
 ```
-- **Mục tiêu:** Kiểm tra mô hình Sequence Transformer giải mã trực tiếp ảnh công thức 2D sang LaTeX (không cắt dán hộp bao, không heuristic phân tách nét). Đo lường kích thước ONNX (< 30 MB), độ trễ CPU (< 300 ms / toàn bộ công thức), RAM Working Set (< 150 MB), và kiểm thử trên ảnh công thức thực tế của người dùng ($\int 2x dx$).
+- **Mục tiêu:** Kiểm tra mô hình Sequence Transformer giải mã trực tiếp ảnh công thức 2D sang LaTeX (không cắt dán hộp bao, không heuristic phân tách nét). Đo lường kích thước ONNX (< 30 MB), độ trễ CPU (< 300 ms / toàn bộ công thức), RAM Working Set (< 150 MB), nhận diện ma trận 2D & vector cột thực tế từ tập MathWriting, và kiểm thử trên ảnh công thức thực tế của người dùng ($\int 2x dx$).
 - **Báo cáo xuất ra:** [`reports/e2e_math_benchmark_report.txt`](./reports/e2e_math_benchmark_report.txt).

@@ -470,14 +470,16 @@ namespace HapiCopi
 
             string s = raw.Trim();
 
-            // Chuáº©n hÃ³a cÃ¡c dáº¥u ngoáº·c vÃ  chá»‰ sá»‘ trÃªn/dÆ°á»›i chuáº©n LaTeX
+            // 1. Chuan hoa cac dau ngoac va chi so tren/duoi co ban
             s = s.Replace(" {", "{")
                  .Replace("{ ", "{")
                  .Replace(" }", "}")
                  .Replace(" ^ ", "^")
-                 .Replace(" _ ", "_");
+                 .Replace(" _ ", "_")
+                 .Replace("( ", "(")
+                 .Replace(" )", ")");
 
-            // Format chuẩn cú pháp tên môi trường LaTeX: \begin{m a t r i x} -> \begin{matrix}, \end{m a t r i x} -> \end{matrix}
+            // 2. Format chuan cu phap ten moi truong LaTeX: \begin{m a t r i x} -> \begin{matrix}, \end{m a t r i x} -> \end{matrix}
             s = System.Text.RegularExpressions.Regex.Replace(s, @"\\(begin|end)\{([^}]+)\}", m =>
             {
                 string envType = m.Groups[1].Value;
@@ -485,7 +487,32 @@ namespace HapiCopi
                 return $"\\{envType}{{{envName}}}";
             });
 
-            // RÃºt gá»n khoáº£ng tráº¯ng thá»«a
+            // 3. Chuan hoa cu phap toan tu co can (Canonicalization cho Integral, Sum, Prod, Lim...):
+            // Mo hinh Vision Transformer doi khi sinh hai khoi dong mo ngoac {can_duoi}{can_tren} ma khong co _ va ^.
+            // Cu phap LaTeX chuan cho can toan tu bat buoc phai la: \op_{can_duoi}^{can_tren}
+            const string BalancedBlock = @"\{((?>[^{}]+|\{(?<D>)|\}(?<-D>))*(?(D)(?!)))\}";
+
+            // 3.1. Hai khoi ngoac lien tiep sau toan tu: \int{2}{4} -> \int_{2}^{4}, \sum{i=1}{n} -> \sum_{i=1}^{n}
+            string twoBlocksPattern = $@"\\(int|iint|iiint|oint|sum|prod|coprod|bigcap|bigcup)\s*{BalancedBlock}\s*{BalancedBlock}";
+            s = System.Text.RegularExpressions.Regex.Replace(s, twoBlocksPattern, m =>
+                $"\\{m.Groups[1].Value}_{{{m.Groups[2].Value}}}^{{{m.Groups[3].Value}}}");
+
+            // 3.2. Can duoi da co _ nhung can tren thieu ^: \int_{2}{4} -> \int_{2}^{4}
+            string subOnlyPattern = $@"\\(int|iint|iiint|oint|sum|prod|coprod|bigcap|bigcup)\s*_{BalancedBlock}\s*{BalancedBlock}";
+            s = System.Text.RegularExpressions.Regex.Replace(s, subOnlyPattern, m =>
+                $"\\{m.Groups[1].Value}_{{{m.Groups[2].Value}}}^{{{m.Groups[3].Value}}}");
+
+            // 3.3. Can tren da co ^ nhung can duoi thieu _: \int^{4}{2} -> \int^{4}_{2}
+            string supOnlyPattern = $@"\\(int|iint|iiint|oint|sum|prod|coprod|bigcap|bigcup)\s*\^{BalancedBlock}\s*{BalancedBlock}";
+            s = System.Text.RegularExpressions.Regex.Replace(s, supOnlyPattern, m =>
+                $"\\{m.Groups[1].Value}^{{{m.Groups[2].Value}}}_{{{m.Groups[3].Value}}}");
+
+            // 3.4. Toan tu gioi han chi co mot can duoi: \lim{x -> 0} -> \lim_{x -> 0}
+            string limPattern = $@"\\lim\s*{BalancedBlock}";
+            s = System.Text.RegularExpressions.Regex.Replace(s, limPattern, m =>
+                $"\\lim_{{{m.Groups[1].Value}}}");
+
+            // 4. Rut gon khoang trang thua
             while (s.Contains("  "))
             {
                 s = s.Replace("  ", " ");

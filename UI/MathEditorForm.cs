@@ -20,6 +20,7 @@ namespace HapiCopi
         private IntPtr _docsSourceWindow = IntPtr.Zero;
         private (string formula, string mode, float fontSize, bool isWord, bool isDocs)? _pendingFormula;
         private Panel? _loadingPanel;
+        private bool _isMiniMode = false;
 
         public MathEditorForm(Action<string, string> setClipboard)
         {
@@ -28,9 +29,8 @@ namespace HapiCopi
             Text = "HapiCopi - Soạn công thức toán";
             AutoScaleMode = AutoScaleMode.Font;
             AutoScaleDimensions = new SizeF(7F, 17F);
-            Width = 980;
-            Height = 620;
-            MinimumSize = new Size(740, 480);
+            ClientSize = new Size(760, 480);
+            MinimumSize = new Size(580, 380);
             StartPosition = FormStartPosition.CenterScreen;
 
             try { Icon = UiTheme.AppIcon; } catch { }
@@ -80,15 +80,11 @@ namespace HapiCopi
                     }
                     RequestReady();
                     SyncWordFontSize();
-                    BeginInvoke(new Action(() => _web.Focus()));
-                }
-                else
-                {
-                    if (_web.CoreWebView2 != null)
+                    BeginInvoke(new Action(() =>
                     {
-                        try { _web.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low; } catch { }
-                    }
-                    MemoryOptimizer.OptimizeMemory();
+                        _web.Focus();
+                        _web.CoreWebView2?.ExecuteScriptAsync("if (typeof mathField !== 'undefined' && mathField) { mathField.focus(); }");
+                    }));
                 }
             };
         }
@@ -162,6 +158,9 @@ namespace HapiCopi
                 _pendingFormula = null;
                 SendFormulaToWebView(pending.formula, pending.mode, pending.fontSize, pending.isWord, pending.isDocs);
             }
+
+            string modeStr = _isMiniMode ? "mini" : "fullscreen";
+            _web.CoreWebView2?.ExecuteScriptAsync($"if (typeof setDisplayMode === 'function') setDisplayMode('{modeStr}');");
         }
 
         private Panel CreateLoadingPanel()
@@ -257,6 +256,33 @@ namespace HapiCopi
             return panel;
         }
 
+        public void SetDisplayMode(bool isMini)
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(() => SetDisplayMode(isMini)));
+                return;
+            }
+
+            _isMiniMode = isMini;
+            if (isMini)
+            {
+                MinimumSize = new Size(580, 380);
+                ClientSize = new Size(760, 480);
+            }
+            else
+            {
+                MinimumSize = new Size(760, 480);
+                ClientSize = new Size(960, 620);
+            }
+
+            string modeStr = isMini ? "mini" : "fullscreen";
+            if (_ready && _web.CoreWebView2 != null)
+            {
+                _web.CoreWebView2.ExecuteScriptAsync($"if (typeof setDisplayMode === 'function') setDisplayMode('{modeStr}');");
+            }
+        }
+
         public void OpenForWordFormula(WordFormulaInfo info)
         {
             if (InvokeRequired)
@@ -268,6 +294,7 @@ namespace HapiCopi
             _isDocsMode = false;
             _docsSourceWindow = IntPtr.Zero;
 
+            SetDisplayMode(true);
             EditorWindow.Present(this);
             RequestReady();
 
@@ -286,6 +313,7 @@ namespace HapiCopi
             _isDocsMode = isDocs;
             _docsSourceWindow = sourceWindow;
 
+            SetDisplayMode(isDocs || sourceWindow != IntPtr.Zero);
             EditorWindow.Present(this);
             RequestReady();
 
@@ -296,10 +324,11 @@ namespace HapiCopi
         {
             _isDocsMode = false;
             _docsSourceWindow = IntPtr.Zero;
+            SetDisplayMode(false);
             if (_ready && _web.CoreWebView2 != null)
             {
                 _web.CoreWebView2.ExecuteScriptAsync(
-                    "window._isWordMode = false; window._isDocsMode = false; var b = document.getElementById('copyBtn'); if (b) b.textContent = 'Copy ảnh công thức (Ctrl+Enter)';");
+                    "window._isWordMode = false; window._isDocsMode = false; var b = document.getElementById('copyBtnText'); if (b) b.textContent = 'Chèn vào Word';");
             }
         }
 
@@ -369,6 +398,18 @@ namespace HapiCopi
                 if (type == "ready")
                 {
                     HideLoadingScreen();
+                    return;
+                }
+
+                if (type == "expand")
+                {
+                    BeginInvoke(new Action(() => SetDisplayMode(false)));
+                    return;
+                }
+
+                if (type == "collapse")
+                {
+                    BeginInvoke(new Action(() => SetDisplayMode(true)));
                     return;
                 }
 

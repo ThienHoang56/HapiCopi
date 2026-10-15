@@ -97,6 +97,11 @@
             clean = clean.replace(/([&0-9a-zA-Z\)\}])\s*\\\s+([0-9a-zA-Z\(\{])/g, '$1 \\\\ $2');
             // Sửa lỗi định thức không có gạch chéo: "det(" -> "\det("
             clean = clean.replace(/(^|[^\\a-zA-Z])det\s*\(/g, '$1\\det(');
+            // Chuẩn hóa cú pháp toán tử có cận bị thiếu _ và ^: \int{2}{4} -> \int_{2}^{4}, \sum{i=1}{n} -> \sum_{i=1}^{n}
+            clean = clean.replace(/\\(int|iint|iiint|oint|sum|prod|coprod|bigcap|bigcup)\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, '\\$1_{$2}^{$3}');
+            clean = clean.replace(/\\(int|iint|iiint|oint|sum|prod|coprod|bigcap|bigcup)\s*_\{([^{}]+)\}\s*\{([^{}]+)\}/g, '\\$1_{$2}^{$3}');
+            clean = clean.replace(/\\(int|iint|iiint|oint|sum|prod|coprod|bigcap|bigcup)\s*\^\{([^{}]+)\}\s*\{([^{}]+)\}/g, '\\$1^{$2}_{$3}');
+            clean = clean.replace(/\\lim\s*\{([^{}]+)\}/g, '\\lim_{$1}');
             return clean;
         }
 
