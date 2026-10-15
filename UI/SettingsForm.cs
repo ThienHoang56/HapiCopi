@@ -251,9 +251,9 @@ namespace HapiCopi
             {
                 Dock = DockStyle.Fill,
                 Font = UiTheme.Body,
-                PlaceholderText = "Nhập License Key (HAPI-PRO-...)"
+                PlaceholderText = "Nhập mã kích hoạt (nếu có)"
             };
-            _toolTip.SetToolTip(_licenseKeyBox, "Nhập mã bản quyền Pro (19.000đ) hoặc gói Cloud (9.000đ) để kích hoạt");
+            _toolTip.SetToolTip(_licenseKeyBox, "Nhập mã kích hoạt thử nghiệm");
 
             var activateBtn = UiTheme.PrimaryButton("Kích hoạt");
             activateBtn.Margin = new Padding(LogicalToDeviceUnits(6), 0, 0, 0);
