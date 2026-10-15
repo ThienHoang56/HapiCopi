@@ -478,15 +478,16 @@
             padding: 1px 5px; border-radius: 4px; background: #E3E6EC; color: var(--color-text-muted);
         }
 
-        /* Template Grid (6 cards + 1 custom placeholder) */
+        /* Template Grid (6 cards + 1 custom add button) */
         .template-grid {
             display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px;
         }
         .template-card {
             background: var(--color-surface); border: 1px solid var(--color-border);
-            border-radius: 10px; padding: 8px 4px; display: flex; flex-direction: column;
+            border-radius: 10px; padding: 7px 4px; display: flex; flex-direction: column;
             align-items: center; justify-content: center; cursor: pointer;
-            transition: all 0.15s ease; min-height: 58px; text-align: center;
+            transition: all 0.15s ease; min-height: 56px; text-align: center;
+            position: relative; user-select: none;
         }
         .template-card:hover {
             border-color: var(--color-primary); background: #ffffff;
@@ -497,26 +498,37 @@
             border-color: var(--color-primary); background: var(--color-primary-light);
         }
         .template-symbol {
-            font-family: var(--font-math); font-size: 18px; line-height: 1.2;
-            color: var(--color-text-primary); font-style: italic; margin-bottom: 3px;
+            font-family: var(--font-math); font-size: 15px; font-weight: 600; line-height: 1.2;
+            color: var(--color-text-primary); margin-bottom: 2px;
         }
         .template-label {
-            font-size: 10.5px; font-weight: 500; color: var(--color-text-muted);
+            font-size: 10px; font-weight: 500; color: var(--color-text-muted);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
         }
 
-        /* Custom template placeholder */
-        .template-card--placeholder {
-            border: 1.5px dashed var(--color-warning) !important;
-            background: var(--color-warning-bg) !important;
-            cursor: not-allowed !important; opacity: 0.85;
+        /* Custom template cards & delete button */
+        .template-card-custom {
+            border-color: #cbd5e1;
+            background: #ffffff;
         }
-        .template-card--placeholder:hover {
-            transform: none !important; box-shadow: none !important;
+        .template-card-del-btn {
+            position: absolute; top: 2px; right: 3px; width: 15px; height: 15px;
+            border-radius: 50%; background: rgba(220, 38, 38, 0.1); color: #dc2626;
+            border: none; display: none; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: bold; cursor: pointer; line-height: 1; padding: 0;
+            z-index: 2; transition: all 0.1s;
         }
-        .coming-soon-badge {
-            font-size: 9px; font-weight: 700; color: var(--color-warning);
-            text-transform: uppercase; margin-bottom: 2px;
+        .template-card-custom:hover .template-card-del-btn { display: flex; }
+        .template-card-del-btn:hover { background: #dc2626; color: #fff; transform: scale(1.1); }
+
+        .template-card-add-new {
+            border: 1.5px dashed var(--color-primary) !important;
+            background: #f0fdfa !important; color: var(--color-primary) !important;
+            cursor: pointer !important;
+        }
+        .template-card-add-new:hover {
+            background: var(--color-primary-light) !important; transform: translateY(-1px) !important;
+            box-shadow: 0 2px 6px rgba(14, 124, 134, 0.15) !important;
         }
 
         /* Sidebar Properties Rows */
@@ -624,6 +636,7 @@
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             z-index: 10000; display: none; align-items: center; justify-content: center;
         }
+        .modal-overlay.show { display: flex !important; }
         .modal-backdrop {
             position: absolute; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(27, 34, 48, 0.45); backdrop-filter: blur(3px);
@@ -867,9 +880,10 @@
                 <button type="button" class="quick-btn" data-latex="\alpha " title="Alpha">α</button>
                 <button type="button" class="quick-btn" data-latex="\pi " title="Pi">π</button>
                 <button type="button" class="quick-btn" id="quickMoreBtn" title="Xem thêm ký hiệu">···</button>
-                <div class="quick-btn-custom" id="quickAddCustomBtn" title="Thêm mẫu công thức tùy chỉnh (Mẫu tự tạo)">
+                <div id="quickCustomList" style="display: inline-flex; gap: 5px; margin-left: 2px;"></div>
+                <div class="quick-btn-custom" id="quickAddCustomBtn" title="Lưu công thức hiện tại thành mẫu riêng tái sử dụng">
                     <svg viewBox="0 0 16 16"><rect x="1.5" y="1.5" width="13" height="13" rx="2.5" stroke-dasharray="2.5 1.5" stroke-width="1.3"/><path d="M8 5v6M5 8h6" stroke-width="1.3" stroke-linecap="round"/></svg>
-                    <span>Thêm</span>
+                    <span>+ Mẫu riêng</span>
                 </div>
             </div>
 
@@ -891,42 +905,56 @@
 
         <!-- 6. Right Sidebar (Fullscreen mode only) -->
         <aside class="sidebar" id="sidebar">
-            <!-- Section: MẪU CÔNG THỨC -->
+            <!-- Section: CÔNG THỨC MẪU HOÀN CHỈNH (PRESETS) -->
             <div class="sidebar-section">
                 <div class="sidebar-section-header">
-                    <span>Mẫu công thức</span>
+                    <span>Công thức mẫu</span>
+                    <span class="sidebar-section-badge">Chuẩn</span>
                 </div>
                 <div class="template-grid">
-                    <!-- 1. Phân số -->
-                    <div class="template-card" data-latex="\frac{#@}{#?}" title="Chèn mẫu Phân số">
-                        <div class="template-symbol">a/b</div>
-                        <div class="template-label">Phân số</div>
+                    <!-- 1. Bậc hai -->
+                    <div class="template-card" data-latex="x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}" title="Phương trình bậc hai">
+                        <div class="template-symbol" style="font-size:13px;">x₁₂</div>
+                        <div class="template-label">Bậc 2</div>
                     </div>
-                    <!-- 2. Căn thức -->
-                    <div class="template-card" data-latex="\sqrt{#@}" title="Chèn mẫu Căn thức">
-                        <div class="template-symbol">√a+b</div>
-                        <div class="template-label">Căn thức</div>
+                    <!-- 2. Từng phần -->
+                    <div class="template-card" data-latex="\int u \, dv = uv - \int v \, du" title="Tích phân từng phần">
+                        <div class="template-symbol" style="font-size:13px;">∫u dv</div>
+                        <div class="template-label">Từng phần</div>
                     </div>
-                    <!-- 3. Sigma -->
-                    <div class="template-card" data-latex="\sum_{i=1}^{n} #?" title="Chèn mẫu Tổng Sigma">
-                        <div class="template-symbol">∑</div>
-                        <div class="template-label">Sigma</div>
+                    <!-- 3. Hệ 2 ẩn -->
+                    <div class="template-card" data-latex="\begin{cases} a_1 x + b_1 y = c_1 \\ a_2 x + b_2 y = c_2 \end{cases}" title="Hệ 2 phương trình">
+                        <div class="template-symbol" style="font-size:13px;">{ : 2×2</div>
+                        <div class="template-label">Hệ 2 ẩn</div>
                     </div>
-                    <!-- 4. Tích phân -->
-                    <div class="template-card" data-latex="\int_{a}^{b} #? \, dx" title="Chèn mẫu Tích phân">
-                        <div class="template-symbol">∫</div>
-                        <div class="template-label">Tích phân</div>
+                    <!-- 4. Taylor -->
+                    <div class="template-card" data-latex="\sum_{n=0}^{\infty} \frac{f^{(n)}(a)}{n!}(x-a)^n" title="Chuỗi Taylor">
+                        <div class="template-symbol" style="font-size:13px;">∑ fⁿ</div>
+                        <div class="template-label">Taylor</div>
                     </div>
-                    <!-- 5. Giới hạn -->
-                    <div class="template-card" data-latex="\lim_{n \to \infty} #?" title="Chèn mẫu Giới hạn">
-                        <div class="template-symbol" style="font-size:15px; margin-bottom:1px;">lim<sub style="font-size:10px;">n→∞</sub></div>
-                        <div class="template-label">Giới hạn</div>
+                    <!-- 5. Pythagoras -->
+                    <div class="template-card" data-latex="a^2 + b^2 = c^2" title="Định lý Pythagoras">
+                        <div class="template-symbol" style="font-size:13px;">a²+b²</div>
+                        <div class="template-label">Pythagoras</div>
                     </div>
-                    <!-- 6. Placeholder: Custom Template Coming Soon -->
-                    <div class="template-card template-card--placeholder" title="Tính năng Mẫu riêng đang phát triển">
-                        <div class="coming-soon-badge">⏳ Coming Soon</div>
-                        <div class="template-label" style="color: var(--color-warning); font-weight: 600;">+ Thêm mẫu riêng</div>
+                    <!-- 6. Gauss -->
+                    <div class="template-card" data-latex="f(x) = \frac{1}{\sigma \sqrt{2\pi}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}" title="Phân phối chuẩn Gauss">
+                        <div class="template-symbol" style="font-size:13px;">N(μ,σ)</div>
+                        <div class="template-label">Gauss</div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Section: MẪU CỦA BẠN (CUSTOM TEMPLATES) -->
+            <div class="sidebar-section">
+                <div class="sidebar-section-header">
+                    <span>Mẫu tự tạo</span>
+                    <button type="button" class="btn-sm-action" id="sidebarAddCustomTplBtn" style="padding: 2px 7px; font-size: 10px;" title="Lưu công thức hiện tại thành mẫu riêng">
+                        + Tạo mẫu
+                    </button>
+                </div>
+                <div class="template-grid" id="customTemplateGrid">
+                    <!-- Dynamic custom templates rendered via JS -->
                 </div>
             </div>
 
@@ -1002,9 +1030,15 @@
         <div class="modal-backdrop" id="helpModalBackdrop"></div>
         <div class="modal-dialog">
             <div class="modal-header">
-                <div>
-                    <h3 class="modal-title">📖 Hướng dẫn & Phím tắt Soạn thảo</h3>
-                    <p style="margin: 2px 0 0 0; font-size: 11.5px; color: var(--color-text-muted);">Gõ phím chuẩn Microsoft Word Equation & MathType</p>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--color-primary); flex-shrink: 0;">
+                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                    </svg>
+                    <div>
+                        <h3 class="modal-title" style="margin: 0; font-size: 14px;">Hướng dẫn & Phím tắt Soạn thảo</h3>
+                        <p style="margin: 2px 0 0 0; font-size: 11.5px; color: var(--color-text-muted);">Phím tắt & mẹo gõ nhanh</p>
+                    </div>
                 </div>
                 <button type="button" class="modal-close" id="helpModalCloseBtn">&times;</button>
             </div>
@@ -1020,32 +1054,70 @@
                         <tr><td>Vector</td><td><code>vec</code> + <b>Space</b> hoặc <code>Alt+V</code></td><td>\(\vec{F}\)</td></tr>
                         <tr><td>Tích phân</td><td><code>int</code> + <b>Space</b> hoặc <code>Alt+I</code></td><td>\(\int_{a}^{b} f(x) dx\)</td></tr>
                         <tr><td>Tổng / Tích</td><td><code>sum</code> + <b>Space</b>, <code>prod</code> + <b>Space</b></td><td>\(\sum, \prod\)</td></tr>
-                        <tr><td>Toán tử</td><td><code>times</code> (\(\times\)), <code>*</code> (\(\cdot\)), <code>+-</code> (\(\pm\)), <code>nabla</code> (\(\nabla\))</td><td>\(\times, \cdot, \pm, \nabla\)</td></tr>
-                        <tr><td>Quan hệ</td><td><code>&lt;=</code> (\(\le\)), <code>&gt;=</code> (\(\ge\)), <code>!=</code> (\(\ne\)), <code>-&gt;</code> (\(\to\))</td><td>\(\le, \ge, \ne, \to\)</td></tr>
-                        <tr><td>Ký tự Hy Lạp</td><td><code>alpha</code>, <code>beta</code>, <code>pi</code>, <code>lambda</code>, <code>theta</code>, <code>oo</code></td><td>\(\alpha, \beta, \pi, \lambda, \theta, \infty\)</td></tr>
+                        <tr><td>Toán tử</td><td><code>times</code> (×), <code>*</code> (·), <code>+-</code> (±), <code>nabla</code> (∇)</td><td>\(\times, \cdot, \pm, \nabla\)</td></tr>
+                        <tr><td>Quan hệ</td><td><code>&lt;=</code> (≤), <code>&gt;=</code> (≥), <code>!=</code> (≠), <code>-&gt;</code> (→)</td><td>\(\le, \ge, \ne, \to\)</td></tr>
+                        <tr><td>Ký tự Hy Lạp</td><td><code>alpha</code>, <code>beta</code>, <code>pi</code>, <code>lambda</code>, <code>theta</code>, <code>oo</code> (∞)</td><td>\(\alpha, \beta, \pi, \lambda, \theta, \infty\)</td></tr>
                     </tbody>
                 </table>
 
                 <h4 style="margin: 10px 0 4px 0; font-size: 12.5px; color: var(--color-text-primary);">2. Phím tắt điều khiển</h4>
                 <ul style="margin: 0; padding-left: 18px; line-height: 1.6;">
-                    <li><b>Ctrl + Alt (hoặc Ctrl + Alt + M):</b> Mở nhanh cửa sổ soạn toán từ Word, Docs hoặc System Tray.</li>
+                    <li><b>Ctrl + Alt (hoặc Ctrl + Alt + M):</b> Bật/tắt nhanh cửa sổ soạn toán từ Word, Docs hoặc System Tray.</li>
                     <li><b>Ctrl + Enter:</b> Chèn ngay công thức sắc nét vào Word / Google Docs hoặc Copy ảnh.</li>
                     <li><b>Ctrl + M:</b> Chuyển đổi nhanh giữa Gõ Trực quan và Gõ mã LaTeX.</li>
                     <li><b>Shift + Enter hoặc Alt + R:</b> Thêm dòng mới khi đang ở trong ma trận.</li>
                     <li><b>Alt + C:</b> Thêm cột mới trong ma trận.</li>
-                    <li><b>Nhấp đúp chuột vào ảnh công thức trong Word:</b> Mở lại cửa sổ sửa trực tiếp in-place.</li>
                 </ul>
 
-                <h4 style="margin: 10px 0 4px 0; font-size: 12.5px; color: var(--color-text-primary);">3. Mẹo viết tay AI (Chuẩn MathType)</h4>
+                <h4 style="margin: 10px 0 4px 0; font-size: 12.5px; color: var(--color-text-primary);">3. Mẹo viết tay AI</h4>
                 <ul style="margin: 0; padding-left: 18px; line-height: 1.6;">
-                    <li>Khi vẽ nét ở bảng dưới, kết quả nhận diện sẽ xuất hiện <b>ngay ở khung dự đoán phía trên</b> theo thời gian thực giống hệt MathType.</li>
-                    <li>Nếu máy nhận diện nhầm ký tự nào, chỉ cần chọn gợi ý đúng hoặc bấm vào khung kết quả sửa lại và bấm <b>Lưu mẫu nét</b>.</li>
-                    <li><b>Lưu ý an toàn:</b> Chỉ lưu mẫu nét cho từng ký hiệu đơn lẻ (\(x, y, 5, +, \alpha, \int...\)) để củng cố độ chính xác mà không làm sai cấu trúc công thức lớn.</li>
+                    <li>Cầm chuột hoặc bút vẽ tự nhiên ở bảng bên dưới; AI tự động nhận diện thời gian thực.</li>
+                    <li>Bấm vào các viên thuốc gợi ý phía trên nếu muốn đổi ký tự dự đoán.</li>
                 </ul>
             </div>
             <div class="modal-footer">
-                <span>HapiCopi v1.2.5 — Offline & Riêng tư 100%</span>
+                <span>HapiCopi v1.2.5</span>
                 <button type="button" class="btn-primary" id="helpModalDoneBtn" style="padding: 4px 14px;">Đã hiểu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Template Modal -->
+    <div id="customTemplateModal" class="modal-overlay">
+        <div class="modal-backdrop" id="customTemplateBackdrop"></div>
+        <div class="modal-dialog" style="max-width: 440px;">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--color-primary); flex-shrink: 0;">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+                    </svg>
+                    <div>
+                        <h3 class="modal-title" style="margin: 0; font-size: 14px;">Lưu mẫu công thức riêng</h3>
+                        <p style="margin: 2px 0 0 0; font-size: 11.5px; color: var(--color-text-muted);">Tạo mẫu tái sử dụng từ công thức đang soạn</p>
+                    </div>
+                </div>
+                <button type="button" class="modal-close" id="customTemplateCloseBtn">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 14px 16px;">
+                <label style="font-size: 11.5px; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 5px;">Tên mẫu gợi nhớ</label>
+                <input type="text" id="tplNameInput" class="select-input select-full" placeholder="Ví dụ: Định lý Bayes, Tích phân suy rộng..." style="margin-bottom: 12px; font-size: 12.5px; width: 100%; box-sizing: border-box;" />
+
+                <label style="font-size: 11.5px; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 5px;">Xem trước công thức</label>
+                <div id="tplPreviewBox" style="background: #ffffff; border: 1px solid var(--color-border); border-radius: 6px; padding: 10px; min-height: 48px; display: flex; align-items: center; justify-content: center; overflow-x: auto; margin-bottom: 12px;"></div>
+
+                <label style="font-size: 11.5px; font-weight: 600; color: var(--color-text-muted); display: block; margin-bottom: 5px;">Mã LaTeX mẫu</label>
+                <textarea id="tplLatexInput" class="sidebar-code-box" style="height: 60px; margin-bottom: 10px; font-family: var(--font-mono); font-size: 11.5px;"></textarea>
+
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" class="btn-sm-action" id="tplAutoPlaceholderBtn" title="Tự động thay các con số thành ô trống (#?) để thuận tiện điền">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 3"/></svg>
+                        <span>Tự động biến số thành ô trống (#?)</span>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content: flex-end; gap: 8px;">
+                <button type="button" class="btn-icon" id="tplCancelBtn">Hủy</button>
+                <button type="button" class="btn-primary" id="tplSaveBtn" style="padding: 5px 16px;">Lưu mẫu</button>
             </div>
         </div>
     </div>
@@ -1417,15 +1489,230 @@
         });
 
         // --- SIDEBAR TEMPLATE GALLERY & PROPERTIES (FULLSCREEN) ---
-        document.querySelectorAll('.template-card[data-latex]').forEach(function(card) {
-            card.addEventListener('mousedown', function(e) {
-                e.preventDefault();
-                handleFormulaInsert(card.getAttribute('data-latex'));
+        function attachTemplateCardEvents() {
+            document.querySelectorAll('.template-card[data-latex]').forEach(function(card) {
+                if (card._hasTplEvent) return;
+                card._hasTplEvent = true;
+                card.addEventListener('mousedown', function(e) {
+                    if (e.target.closest('.template-card-del-btn')) return;
+                    e.preventDefault();
+                    handleFormulaInsert(card.getAttribute('data-latex'));
+                });
+                card.addEventListener('click', function(e) {
+                    if (e.target.closest('.template-card-del-btn')) return;
+                    handleFormulaInsert(card.getAttribute('data-latex'));
+                });
             });
-            card.addEventListener('click', function(e) {
-                handleFormulaInsert(card.getAttribute('data-latex'));
+        }
+        attachTemplateCardEvents();
+
+        // --- CUSTOM FORMULA TEMPLATES (AUTO TEMPLATE GENERATOR) ---
+        var customTemplates = [];
+        try {
+            var rawTpl = localStorage.getItem('hapicopi_custom_templates');
+            if (rawTpl) customTemplates = JSON.parse(rawTpl);
+        } catch (e) { customTemplates = []; }
+
+        function saveCustomTemplatesToStorage() {
+            try {
+                localStorage.setItem('hapicopi_custom_templates', JSON.stringify(customTemplates));
+            } catch (e) {}
+            if (window.chrome && window.chrome.webview) {
+                try {
+                    window.chrome.webview.postMessage(JSON.stringify({
+                        type: 'saveCustomTemplates',
+                        templates: customTemplates
+                    }));
+                } catch (e) {}
+            }
+        }
+
+        function renderCustomTemplatesUI() {
+            var sidebarGrid = document.getElementById('customTemplateGrid');
+            var quickContainer = document.getElementById('quickCustomList');
+
+            if (sidebarGrid) {
+                sidebarGrid.innerHTML = '';
+                if (customTemplates.length === 0) {
+                    var emptyHint = document.createElement('div');
+                    emptyHint.style.gridColumn = '1 / -1';
+                    emptyHint.style.fontSize = '10.5px';
+                    emptyHint.style.color = 'var(--color-text-muted)';
+                    emptyHint.style.fontStyle = 'italic';
+                    emptyHint.style.textAlign = 'center';
+                    emptyHint.style.padding = '8px 0';
+                    emptyHint.textContent = 'Chưa có mẫu riêng. Bấm "+ Tạo mẫu" để lưu công thức đang soạn.';
+                    sidebarGrid.appendChild(emptyHint);
+                } else {
+                    customTemplates.forEach(function(tpl, idx) {
+                        var card = document.createElement('div');
+                        card.className = 'template-card template-card-custom';
+                        card.setAttribute('data-latex', tpl.latex);
+                        card.title = tpl.name + ': ' + tpl.latex;
+
+                        var delBtn = document.createElement('button');
+                        delBtn.type = 'button';
+                        delBtn.className = 'template-card-del-btn';
+                        delBtn.title = 'Xóa mẫu này';
+                        delBtn.innerHTML = '&times;';
+                        delBtn.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            customTemplates.splice(idx, 1);
+                            saveCustomTemplatesToStorage();
+                            renderCustomTemplatesUI();
+                            showToast('Đã xóa mẫu riêng.', 'info');
+                        });
+                        card.appendChild(delBtn);
+
+                        var sym = document.createElement('div');
+                        sym.className = 'template-symbol';
+                        sym.style.fontSize = '11.5px';
+                        sym.textContent = tpl.name.length > 8 ? tpl.name.substring(0, 7) + '…' : tpl.name;
+                        card.appendChild(sym);
+
+                        var lbl = document.createElement('div');
+                        lbl.className = 'template-label';
+                        lbl.textContent = tpl.name;
+                        card.appendChild(lbl);
+
+                        sidebarGrid.appendChild(card);
+                    });
+                    attachTemplateCardEvents();
+                }
+            }
+
+            if (quickContainer) {
+                quickContainer.innerHTML = '';
+                var maxMini = Math.min(customTemplates.length, 3);
+                for (var i = 0; i < maxMini; i++) {
+                    (function(t) {
+                        var btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'quick-btn';
+                        btn.style.fontFamily = 'var(--font-ui)';
+                        btn.style.fontSize = '11px';
+                        btn.style.fontWeight = '600';
+                        btn.style.padding = '0 6px';
+                        btn.style.maxWidth = '60px';
+                        btn.style.overflow = 'hidden';
+                        btn.style.textOverflow = 'ellipsis';
+                        btn.style.whiteSpace = 'nowrap';
+                        btn.textContent = t.name;
+                        btn.title = t.name + ' (' + t.latex + ')';
+                        btn.addEventListener('click', function() {
+                            handleFormulaInsert(t.latex);
+                        });
+                        quickContainer.appendChild(btn);
+                    })(customTemplates[i]);
+                }
+            }
+        }
+
+        function openCustomTemplateModal() {
+            var curFormula = getActiveFormula().trim();
+            if (!curFormula) {
+                showToast('Hãy nhập một công thức trước khi lưu làm mẫu!', 'warn');
+                return;
+            }
+
+            var tplModal = document.getElementById('customTemplateModal');
+            var tplNameInput = document.getElementById('tplNameInput');
+            var tplLatexInput = document.getElementById('tplLatexInput');
+            var tplPreviewBox = document.getElementById('tplPreviewBox');
+
+            if (tplNameInput) tplNameInput.value = 'Mẫu ' + (customTemplates.length + 1);
+            if (tplLatexInput) tplLatexInput.value = curFormula;
+
+            function updateTplPreview() {
+                if (!tplPreviewBox) return;
+                var val = tplLatexInput.value.trim();
+                if (!val) {
+                    tplPreviewBox.innerHTML = '<span style="color:var(--color-text-disabled); font-size:12px;">Chưa có công thức</span>';
+                    return;
+                }
+                if (window.MathJax && typeof MathJax.tex2svg === 'function') {
+                    try {
+                        tplPreviewBox.innerHTML = '';
+                        var svgNode = MathJax.tex2svg(val, { display: false });
+                        tplPreviewBox.appendChild(svgNode);
+                    } catch (e) {
+                        tplPreviewBox.textContent = val;
+                    }
+                } else {
+                    tplPreviewBox.textContent = val;
+                }
+            }
+
+            if (tplLatexInput) {
+                tplLatexInput.oninput = updateTplPreview;
+            }
+
+            updateTplPreview();
+            if (tplModal) tplModal.classList.add('show');
+            setTimeout(function() { if (tplNameInput) { tplNameInput.focus(); tplNameInput.select(); } }, 50);
+        }
+
+        function closeCustomTemplateModal() {
+            var tplModal = document.getElementById('customTemplateModal');
+            if (tplModal) tplModal.classList.remove('show');
+        }
+
+        var quickAddCustomBtn = document.getElementById('quickAddCustomBtn');
+        if (quickAddCustomBtn) quickAddCustomBtn.addEventListener('click', openCustomTemplateModal);
+
+        var sidebarAddCustomTplBtn = document.getElementById('sidebarAddCustomTplBtn');
+        if (sidebarAddCustomTplBtn) sidebarAddCustomTplBtn.addEventListener('click', openCustomTemplateModal);
+
+        var customTemplateCloseBtn = document.getElementById('customTemplateCloseBtn');
+        if (customTemplateCloseBtn) customTemplateCloseBtn.addEventListener('click', closeCustomTemplateModal);
+
+        var customTemplateBackdrop = document.getElementById('customTemplateBackdrop');
+        if (customTemplateBackdrop) customTemplateBackdrop.addEventListener('click', closeCustomTemplateModal);
+
+        var tplCancelBtn = document.getElementById('tplCancelBtn');
+        if (tplCancelBtn) tplCancelBtn.addEventListener('click', closeCustomTemplateModal);
+
+        var tplSaveBtn = document.getElementById('tplSaveBtn');
+        if (tplSaveBtn) {
+            tplSaveBtn.addEventListener('click', function() {
+                var tplNameInput = document.getElementById('tplNameInput');
+                var tplLatexInput = document.getElementById('tplLatexInput');
+                var name = tplNameInput ? tplNameInput.value.trim() : '';
+                var latex = tplLatexInput ? tplLatexInput.value.trim() : '';
+
+                if (!name) name = 'Mẫu ' + (customTemplates.length + 1);
+                if (!latex) {
+                    showToast('Mã công thức không được để trống.', 'warn');
+                    return;
+                }
+
+                customTemplates.push({ name: name, latex: latex, createdAt: Date.now() });
+                saveCustomTemplatesToStorage();
+                renderCustomTemplatesUI();
+                closeCustomTemplateModal();
+                showToast('Đã lưu mẫu công thức "' + name + '" thành công!', 'success');
             });
-        });
+        }
+
+        var tplAutoPlaceholderBtn = document.getElementById('tplAutoPlaceholderBtn');
+        if (tplAutoPlaceholderBtn) {
+            tplAutoPlaceholderBtn.addEventListener('click', function() {
+                var tplLatexInput = document.getElementById('tplLatexInput');
+                if (!tplLatexInput) return;
+                var s = tplLatexInput.value;
+                var replaced = s.replace(/\b\d+(\.\d+)?\b/g, '{#?}');
+                if (replaced === s) {
+                    showToast('Không tìm thấy con số cụ thể để thay thế.', 'info');
+                    return;
+                }
+                tplLatexInput.value = replaced;
+                if (tplLatexInput.oninput) tplLatexInput.oninput();
+                showToast('Đã biến các số thành ô trống {#?}!', 'success');
+            });
+        }
+
+        // Render templates ban đầu
+        renderCustomTemplatesUI();
 
         // Sync Font Size select between Header & Sidebar
         var headerFsSelect = document.getElementById('fontSizeSelect');

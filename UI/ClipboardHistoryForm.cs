@@ -27,37 +27,29 @@ namespace HapiCopi
         {
             get
             {
-                string src = !string.IsNullOrEmpty(OriginalText) ? OriginalText : "(Không có text)";
+                string src = !string.IsNullOrEmpty(ProcessedText) ? ProcessedText : OriginalText;
+                if (string.IsNullOrEmpty(src)) src = "(Không có nội dung văn bản)";
                 src = src.Replace("\r", "").Replace("\n", " ").Trim();
-                return src.Length > 45 ? src.Substring(0, 45) + "..." : src;
+                return src.Length > 65 ? src.Substring(0, 65) + "…" : src;
             }
         }
     }
 
     /// <summary>
-    /// Cửa sổ lịch sử clipboard: xem bản gốc / bản đã xử lý, thanh tra format, kéo thả SVG.
+    /// Cửa sổ lịch sử clipboard dạng Mini Popup tinh gọn, responsive, tự giải thích.
     /// </summary>
     public class ClipboardHistoryForm : Form
     {
         private readonly List<ClipboardHistoryItem> _historySource;
+        private readonly List<ClipboardHistoryItem> _filteredList = new();
         private readonly ListBox _historyList;
-        private readonly RichTextBox _originalBox;
-        private readonly RichTextBox _processedBox;
-        private readonly Label _statusLabel;
-        private readonly Label _piiWarningLabel;
-        private readonly Label _securityStatusLabel;
-        private readonly Label _emptyLabel;
+        private readonly TextBox _searchBox;
+        private readonly Label _countLabel;
         private readonly Panel _emptyPanel;
-        private readonly CheckBox _showRawCheckbox;
-        private bool _showUnmasked;
-
-        private readonly TableLayoutPanel _textPanel;
-        private readonly Panel _inspectorPanel;
-        private readonly ListBox _formatListBox;
-        private readonly RichTextBox _formatContentBox;
-        private readonly Button _btnPreview;
-        private readonly Button _btnInspector;
-        private bool _isInInspectorMode;
+        private readonly Button _copyButton;
+        private readonly Button _deleteButton;
+        private readonly Button _clearAllButton;
+        private readonly Button _closeButton;
 
         public ClipboardHistoryForm(List<ClipboardHistoryItem> history)
         {
@@ -65,38 +57,87 @@ namespace HapiCopi
 
             UiTheme.ApplyDialog(this, "HapiCopi — Lịch sử Clipboard");
             FormBorderStyle = FormBorderStyle.Sizable;
-            MinimizeBox = true;
-            MaximizeBox = true;
-            MinimumSize = new Size(LogicalToDeviceUnits(800), LogicalToDeviceUnits(500));
-            Size = new Size(LogicalToDeviceUnits(1000), LogicalToDeviceUnits(640));
+            MinimizeBox = false;
+            MaximizeBox = false;
+            StartPosition = FormStartPosition.CenterScreen;
+
+            // Kích thước chuẩn Mini Popup gọn gàng, tương đồng với Math Editor thu nhỏ
+            MinimumSize = new Size(LogicalToDeviceUnits(420), LogicalToDeviceUnits(360));
+            Size = new Size(LogicalToDeviceUnits(480), LogicalToDeviceUnits(460));
+            KeyPreview = true;
             FormClosed += (s, e) => MemoryOptimizer.OptimizeMemory();
 
+            // 1. Header Bar: Tiêu đề + Đếm số mục + Nút Xóa sạch
             var header = new TableLayoutPanel
             {
                 Dock = DockStyle.Top,
                 AutoSize = true,
-                ColumnCount = 2,
-                Padding = new Padding(LogicalToDeviceUnits(16), LogicalToDeviceUnits(10),
-                                      LogicalToDeviceUnits(16), LogicalToDeviceUnits(10)),
+                ColumnCount = 3,
+                Padding = new Padding(LogicalToDeviceUnits(14), LogicalToDeviceUnits(12),
+                                      LogicalToDeviceUnits(14), LogicalToDeviceUnits(8)),
                 BackColor = UiTheme.Surface
             };
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-            var title = UiTheme.PageTitleLabel("Lịch sử Clipboard");
-            title.Dock = DockStyle.Fill;
-            header.Controls.Add(title, 0, 0);
-
-            _securityStatusLabel = new Label
+            var titleLabel = new Label
             {
+                Text = "Lịch sử Clipboard",
+                Font = UiTheme.SectionTitle,
+                ForeColor = UiTheme.TextPrimary,
                 AutoSize = true,
+                Margin = new Padding(0, 0, LogicalToDeviceUnits(8), 0),
+                Anchor = AnchorStyles.Left | AnchorStyles.Top
+            };
+
+            _countLabel = new Label
+            {
+                Text = "",
                 Font = UiTheme.Small,
                 ForeColor = UiTheme.TextMuted,
-                TextAlign = ContentAlignment.MiddleRight,
-                UseMnemonic = false,
-                Anchor = AnchorStyles.Right
+                AutoSize = true,
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                Margin = new Padding(0, LogicalToDeviceUnits(2), 0, 0)
             };
-            header.Controls.Add(_securityStatusLabel, 1, 0);
+
+            _clearAllButton = new Button
+            {
+                Text = "Xóa tất cả",
+                Font = UiTheme.Small,
+                ForeColor = UiTheme.Danger,
+                BackColor = Color.Transparent,
+                FlatStyle = FlatStyle.Flat,
+                AutoSize = true,
+                Cursor = Cursors.Hand,
+                Anchor = AnchorStyles.Right | AnchorStyles.Top,
+                Margin = Padding.Empty
+            };
+            _clearAllButton.FlatAppearance.BorderSize = 0;
+            _clearAllButton.Click += (s, e) => ClearAllHistory();
+
+            header.Controls.Add(titleLabel, 0, 0);
+            header.Controls.Add(_countLabel, 1, 0);
+            header.Controls.Add(_clearAllButton, 2, 0);
+
+            // 2. Ô tìm kiếm nhanh (Instant Filter)
+            var searchPanel = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = LogicalToDeviceUnits(36),
+                Padding = new Padding(LogicalToDeviceUnits(14), 0, LogicalToDeviceUnits(14), LogicalToDeviceUnits(6)),
+                BackColor = UiTheme.Surface
+            };
+
+            _searchBox = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Font = UiTheme.Body,
+                PlaceholderText = "Tìm kiếm nội dung đã sao chép...",
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            _searchBox.TextChanged += (s, e) => FilterHistory();
+            searchPanel.Controls.Add(_searchBox);
 
             var headerBorder = new Panel
             {
@@ -105,37 +146,12 @@ namespace HapiCopi
                 BackColor = UiTheme.Border
             };
 
-            var sidebar = new Panel
+            // 3. Body: Danh sách lịch sử gọn gàng
+            var listHost = new Panel
             {
-                Dock = DockStyle.Left,
-                Width = LogicalToDeviceUnits(280),
+                Dock = DockStyle.Fill,
                 BackColor = UiTheme.Surface,
-                Padding = new Padding(LogicalToDeviceUnits(12))
-            };
-
-            var sidebarTitle = new Label
-            {
-                Text = "Sự kiện gần đây",
-                Font = UiTheme.BodyStrong,
-                ForeColor = UiTheme.Accent,
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                UseMnemonic = false,
-                Padding = new Padding(0, 0, 0, LogicalToDeviceUnits(8))
-            };
-
-            Button clearButton = UiTheme.SecondaryButton("Xóa lịch sử");
-            clearButton.Dock = DockStyle.Bottom;
-            clearButton.Click += (s, e) =>
-            {
-                _historySource.Clear();
-                HistoryManager.SaveHistory(_historySource);
-                RefreshHistoryList();
-                _originalBox.Text = "";
-                _processedBox.Text = "";
-                _statusLabel.Text = "Chọn một mục bên trái để xem chi tiết";
-                _piiWarningLabel.Text = "";
-                _piiWarningLabel.Height = 0;
+                Padding = new Padding(LogicalToDeviceUnits(6), LogicalToDeviceUnits(4), LogicalToDeviceUnits(6), 0)
             };
 
             _historyList = new ListBox
@@ -146,609 +162,289 @@ namespace HapiCopi
                 Font = UiTheme.Body,
                 BorderStyle = BorderStyle.None,
                 DrawMode = DrawMode.OwnerDrawFixed,
-                ItemHeight = LogicalToDeviceUnits(58),
+                ItemHeight = LogicalToDeviceUnits(54),
                 IntegralHeight = false
             };
             _historyList.DrawItem += HistoryList_DrawItem;
-            _historyList.SelectedIndexChanged += HistoryList_SelectedIndexChanged;
+            _historyList.DoubleClick += (s, e) => CopySelectedItem();
+            _historyList.SelectedIndexChanged += (s, e) => UpdateButtonStates();
 
-            sidebar.Controls.Add(_historyList);
-            sidebar.Controls.Add(sidebarTitle);
-            sidebar.Controls.Add(clearButton);
-
-            var sidebarBorder = new Panel
-            {
-                Dock = DockStyle.Left,
-                Width = Math.Max(1, LogicalToDeviceUnits(1)),
-                BackColor = UiTheme.Border
-            };
-
-            var content = new Panel
-            {
-                Dock = DockStyle.Fill,
-                Padding = new Padding(LogicalToDeviceUnits(16)),
-                BackColor = UiTheme.Background
-            };
-
-            var statusRow = new TableLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                ColumnCount = 2,
-                Margin = new Padding(0, 0, 0, LogicalToDeviceUnits(8))
-            };
-            statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-
-            _statusLabel = new Label
-            {
-                Text = "Chọn một mục bên trái để xem chi tiết",
-                Font = UiTheme.Small,
-                ForeColor = UiTheme.TextMuted,
-                AutoSize = true,
-                UseMnemonic = false,
-                Tag = UiTheme.WrapTag,
-                Dock = DockStyle.Fill
-            };
-            statusRow.Controls.Add(_statusLabel, 0, 0);
-
-            var tabButtons = new FlowLayoutPanel
-            {
-                AutoSize = true,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                BackColor = Color.Transparent
-            };
-            _btnPreview = UiTheme.PrimaryButton("Xem trước");
-            _btnPreview.Click += (s, e) => { _isInInspectorMode = false; UpdateTabSelection(); };
-            _btnInspector = UiTheme.SecondaryButton("Thanh tra");
-            _btnInspector.Click += (s, e) => { _isInInspectorMode = true; UpdateTabSelection(); };
-            _btnPreview.Margin = new Padding(0, 0, LogicalToDeviceUnits(8), 0);
-            tabButtons.Controls.Add(_btnPreview);
-            tabButtons.Controls.Add(_btnInspector);
-            statusRow.Controls.Add(tabButtons, 1, 0);
-
-            _piiWarningLabel = new Label
-            {
-                Text = "",
-                ForeColor = Color.White,
-                BackColor = UiTheme.Danger,
-                Font = UiTheme.BodyStrong,
-                Dock = DockStyle.Top,
-                Height = 0,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(LogicalToDeviceUnits(12), 0, LogicalToDeviceUnits(12), 0),
-                UseMnemonic = false
-            };
-
-            var actionBar = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Bottom,
-                AutoSize = true,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = true,
-                Padding = new Padding(0, LogicalToDeviceUnits(10), 0, 0),
-                BackColor = Color.Transparent
-            };
-
-            Button copyOriginalBtn = UiTheme.SecondaryButton("Sao chép bản gốc");
-            copyOriginalBtn.Click += (s, e) => CopySelectedToClipboard(original: true);
-            copyOriginalBtn.Margin = new Padding(0, 0, LogicalToDeviceUnits(8), LogicalToDeviceUnits(4));
-
-            Button copyProcessedBtn = UiTheme.PrimaryButton("Sao chép bản mới");
-            copyProcessedBtn.Click += (s, e) => CopySelectedToClipboard(original: false);
-            copyProcessedBtn.Margin = new Padding(0, 0, LogicalToDeviceUnits(16), LogicalToDeviceUnits(4));
-
-            _showRawCheckbox = UiTheme.Option("Hiện thông tin gốc (bỏ che)");
-            _showRawCheckbox.Font = UiTheme.Small;
-            _showRawCheckbox.CheckedChanged += (s, e) =>
-            {
-                _showUnmasked = _showRawCheckbox.Checked;
-                RefreshDetailView();
-            };
-
-            actionBar.Controls.Add(copyOriginalBtn);
-            actionBar.Controls.Add(copyProcessedBtn);
-            actionBar.Controls.Add(_showRawCheckbox);
-
-            _textPanel = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 2,
-                RowCount = 2,
-                BackColor = Color.Transparent
-            };
-            _textPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            _textPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            _textPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            _textPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-            var originalTitle = new Label
-            {
-                Text = "Nội dung gốc (khi copy)",
-                Font = UiTheme.BodyStrong,
-                ForeColor = UiTheme.Warning,
-                AutoSize = true,
-                UseMnemonic = false,
-                Margin = new Padding(0, 0, LogicalToDeviceUnits(8), LogicalToDeviceUnits(4))
-            };
-            var processedTitle = new Label
-            {
-                Text = "Nội dung sau xử lý (bản mới)",
-                Font = UiTheme.BodyStrong,
-                ForeColor = UiTheme.Success,
-                AutoSize = true,
-                UseMnemonic = false,
-                Margin = new Padding(LogicalToDeviceUnits(8), 0, 0, LogicalToDeviceUnits(4))
-            };
-
-            _originalBox = MakeReadBox();
-            _originalBox.Margin = new Padding(0, 0, LogicalToDeviceUnits(8), 0);
-            _processedBox = MakeReadBox();
-            _processedBox.Margin = new Padding(LogicalToDeviceUnits(8), 0, 0, 0);
-
-            _textPanel.Controls.Add(originalTitle, 0, 0);
-            _textPanel.Controls.Add(processedTitle, 1, 0);
-            _textPanel.Controls.Add(_originalBox, 0, 1);
-            _textPanel.Controls.Add(_processedBox, 1, 1);
-
-            _inspectorPanel = new Panel { Dock = DockStyle.Fill, Visible = false };
-            var inspectorLayout = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 2,
-                RowCount = 2
-            };
-            inspectorLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35F));
-            inspectorLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65F));
-            inspectorLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            inspectorLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-            var formatTitle = new Label
-            {
-                Text = "Các định dạng clipboard",
-                Font = UiTheme.BodyStrong,
-                ForeColor = UiTheme.Accent,
-                AutoSize = true,
-                UseMnemonic = false,
-                Margin = new Padding(0, 0, LogicalToDeviceUnits(8), LogicalToDeviceUnits(4))
-            };
-            var contentTitle = new Label
-            {
-                Text = "Nội dung của định dạng",
-                Font = UiTheme.BodyStrong,
-                ForeColor = UiTheme.Success,
-                AutoSize = true,
-                UseMnemonic = false,
-                Margin = new Padding(LogicalToDeviceUnits(8), 0, 0, LogicalToDeviceUnits(4))
-            };
-
-            _formatListBox = new ListBox
-            {
-                Dock = DockStyle.Fill,
-                Font = new Font("Consolas", 9f),
-                BorderStyle = BorderStyle.FixedSingle,
-                Margin = new Padding(0, 0, LogicalToDeviceUnits(8), 0)
-            };
-            _formatListBox.SelectedIndexChanged += FormatListBox_SelectedIndexChanged;
-
-            _formatContentBox = MakeReadBox();
-            _formatContentBox.Margin = new Padding(LogicalToDeviceUnits(8), 0, 0, 0);
-
-            inspectorLayout.Controls.Add(formatTitle, 0, 0);
-            inspectorLayout.Controls.Add(contentTitle, 1, 0);
-            inspectorLayout.Controls.Add(_formatListBox, 0, 1);
-            inspectorLayout.Controls.Add(_formatContentBox, 1, 1);
-            _inspectorPanel.Controls.Add(inspectorLayout);
-
+            // Màn hình trống
             _emptyPanel = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = UiTheme.Background
-            };
-            _emptyLabel = UiTheme.Description(
-                "Chưa có mục nào.\n\nCopy văn bản ở bất kỳ đâu — HapiCopi sẽ ghi lại ở đây.\n" +
-                "Kéo thả file .svg vào cửa sổ này để chuyển thành PNG ngay trên máy.");
-            _emptyLabel.TextAlign = ContentAlignment.MiddleCenter;
-            _emptyLabel.Dock = DockStyle.Fill;
-            _emptyPanel.Controls.Add(_emptyLabel);
-
-            content.Controls.Add(_textPanel);
-            content.Controls.Add(_inspectorPanel);
-            content.Controls.Add(_emptyPanel);
-            content.Controls.Add(_piiWarningLabel);
-            content.Controls.Add(statusRow);
-            content.Controls.Add(actionBar);
-
-            Controls.Add(content);
-            Controls.Add(sidebarBorder);
-            Controls.Add(sidebar);
-            Controls.Add(headerBorder);
-            Controls.Add(header);
-
-            content.ClientSizeChanged += (s, e) =>
-                UiTheme.ApplyWrapWidth(content, content.ClientSize.Width - content.Padding.Horizontal);
-
-            UpdateTabSelection();
-            RefreshHistoryList();
-            EnableSvgDrop(this);
-        }
-
-        private RichTextBox MakeReadBox()
-        {
-            return new RichTextBox
-            {
-                ScrollBars = RichTextBoxScrollBars.Vertical,
-                WordWrap = true,
-                ReadOnly = true,
                 BackColor = UiTheme.Surface,
-                ForeColor = UiTheme.TextPrimary,
-                Font = new Font("Consolas", 9.5f),
-                BorderStyle = BorderStyle.FixedSingle,
+                Visible = false
+            };
+            var emptyLabel = new Label
+            {
+                Text = "Chưa có nội dung sao chép nào.\n\nSao chép văn bản ở bất kỳ đâu — HapiCopi sẽ lưu lại tại đây.",
+                Font = UiTheme.Body,
+                ForeColor = UiTheme.TextMuted,
+                TextAlign = ContentAlignment.MiddleCenter,
                 Dock = DockStyle.Fill
             };
-        }
+            _emptyPanel.Controls.Add(emptyLabel);
 
-        private void EnableSvgDrop(Control control)
-        {
-            if (control is not RichTextBox)
+            listHost.Controls.Add(_historyList);
+            listHost.Controls.Add(_emptyPanel);
+
+            // 4. Footer Bar: Nút hành động nhanh (Copy, Xóa mục, Đóng)
+            var footerBorder = new Panel
             {
-                control.AllowDrop = true;
-                control.DragEnter += SvgDrop_DragEnter;
-                control.DragDrop += SvgDrop_DragDrop;
-            }
-
-            foreach (Control child in control.Controls)
-            {
-                EnableSvgDrop(child);
-            }
-        }
-
-        private static bool TryGetDraggedSvgPaths(IDataObject? data, out string[] paths)
-        {
-            paths = Array.Empty<string>();
-            if (data == null || !data.GetDataPresent(DataFormats.FileDrop))
-            {
-                return false;
-            }
-
-            if (data.GetData(DataFormats.FileDrop) is not string[] dropped)
-            {
-                return false;
-            }
-
-            paths = dropped.Where(SvgClipboardSource.IsSvgPath).ToArray();
-            return paths.Length > 0;
-        }
-
-        private void SvgDrop_DragEnter(object? sender, DragEventArgs e)
-        {
-            e.Effect = TryGetDraggedSvgPaths(e.Data, out _) ? DragDropEffects.Copy : DragDropEffects.None;
-        }
-
-        private async void SvgDrop_DragDrop(object? sender, DragEventArgs e)
-        {
-            if (!TryGetDraggedSvgPaths(e.Data, out string[] paths))
-            {
-                return;
-            }
-
-            string path = paths[0];
-            string fileName = System.IO.Path.GetFileName(path);
-
-            string? markup = SvgClipboardSource.ReadSvgFile(path);
-            if (markup == null)
-            {
-                _statusLabel.Text = $"Không đọc được {fileName}";
-                return;
-            }
-
-            _statusLabel.Text = $"Đang chuyển {fileName} sang PNG...";
-
-            var payload = new SvgPayload
-            {
-                Markup = markup,
-                SourceLabel = $"file {fileName}",
-                SuggestedName = System.IO.Path.GetFileNameWithoutExtension(path)
+                Dock = DockStyle.Bottom,
+                Height = Math.Max(1, LogicalToDeviceUnits(1)),
+                BackColor = UiTheme.Border
             };
 
-            SvgPasteResult result = await SvgPasteService.ConvertAndPublishAsync(payload, new[] { path });
-
-            if (IsDisposed || Disposing)
+            var footer = new Panel
             {
-                return;
-            }
+                Dock = DockStyle.Bottom,
+                Height = LogicalToDeviceUnits(48),
+                BackColor = UiTheme.Surface,
+                Padding = new Padding(LogicalToDeviceUnits(14), LogicalToDeviceUnits(8),
+                                      LogicalToDeviceUnits(14), LogicalToDeviceUnits(8))
+            };
 
-            _statusLabel.Text = result.Message;
+            var footerLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                Margin = Padding.Empty
+            };
+            footerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            footerLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+            _deleteButton = new Button
+            {
+                Text = "Xóa mục",
+                Font = UiTheme.Small,
+                ForeColor = UiTheme.TextMuted,
+                BackColor = Color.Transparent,
+                FlatStyle = FlatStyle.Flat,
+                AutoSize = true,
+                Height = LogicalToDeviceUnits(28),
+                Cursor = Cursors.Hand,
+                Anchor = AnchorStyles.Left | AnchorStyles.Top
+            };
+            _deleteButton.FlatAppearance.BorderSize = 0;
+            _deleteButton.Click += (s, e) => DeleteSelectedItem();
+
+            var rightButtons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.RightToLeft,
+                AutoSize = true,
+                WrapContents = false,
+                Margin = Padding.Empty
+            };
+
+            _copyButton = UiTheme.PrimaryButton("Sao chép (Enter)");
+            _copyButton.Height = LogicalToDeviceUnits(28);
+            _copyButton.Click += (s, e) => CopySelectedItem();
+
+            _closeButton = UiTheme.SecondaryButton("Đóng (Esc)");
+            _closeButton.Height = LogicalToDeviceUnits(28);
+            _closeButton.Click += (s, e) => Close();
+            _closeButton.Margin = new Padding(0, 0, LogicalToDeviceUnits(8), 0);
+
+            rightButtons.Controls.Add(_copyButton);
+            rightButtons.Controls.Add(_closeButton);
+
+            footerLayout.Controls.Add(_deleteButton, 0, 0);
+            footerLayout.Controls.Add(rightButtons, 1, 0);
+            footer.Controls.Add(footerLayout);
+
+            // Đưa tất cả vào Form
+            Controls.Add(listHost);
+            Controls.Add(headerBorder);
+            Controls.Add(searchPanel);
+            Controls.Add(header);
+            Controls.Add(footerBorder);
+            Controls.Add(footer);
+
+            KeyDown += ClipboardHistoryForm_KeyDown;
+            RefreshHistoryList();
         }
 
-        private void HistoryList_DrawItem(object? sender, DrawItemEventArgs e)
+        private void ClipboardHistoryForm_KeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.Index < 0 || e.Index >= _historyList.Items.Count)
+            if (e.KeyCode == Keys.Escape)
             {
-                return;
+                Close();
+                e.Handled = true;
             }
-
-            if (_historyList.Items[e.Index] is not ClipboardHistoryItem item)
+            else if (e.KeyCode == Keys.Enter && !e.Control && !e.Alt)
             {
-                return;
+                CopySelectedItem();
+                e.Handled = true;
             }
-
-            bool isSelected = (e.State & DrawItemState.Selected) != 0;
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-
-            using (var bg = new SolidBrush(UiTheme.Surface))
+            else if (e.KeyCode == Keys.Delete && !_searchBox.Focused)
             {
-                e.Graphics.FillRectangle(bg, e.Bounds);
+                DeleteSelectedItem();
+                e.Handled = true;
             }
-
-            Rectangle itemRect = new Rectangle(e.Bounds.X + 4, e.Bounds.Y + 3, e.Bounds.Width - 8, e.Bounds.Height - 6);
-            if (isSelected)
-            {
-                using var path = GetRoundedPath(itemRect, 6);
-                using var selectBrush = new SolidBrush(UiTheme.AccentLight);
-                e.Graphics.FillPath(selectBrush, path);
-            }
-
-            Color indicatorColor = UiTheme.TextDisabled;
-            if (item.PiiResult?.HasPii == true)
-            {
-                indicatorColor = item.Status.Contains("khôi phục") ? UiTheme.Warning : UiTheme.Danger;
-            }
-            else if (item.Status == "Đã xử lý" || item.Status.Contains("Mặc định"))
-            {
-                indicatorColor = UiTheme.Success;
-            }
-
-            using (var path = GetRoundedPath(new Rectangle(e.Bounds.X + 10, e.Bounds.Y + 12, 4, e.Bounds.Height - 24), 2))
-            using (var brush = new SolidBrush(indicatorColor))
-            {
-                e.Graphics.FillPath(brush, path);
-            }
-
-            string app = item.AppName.ToUpperInvariant();
-            if (app.Length > 12)
-            {
-                app = app.Substring(0, 10) + "..";
-            }
-
-            using (var font = new Font("Segoe UI", 7.5f, FontStyle.Bold))
-            using (var brush = new SolidBrush(UiTheme.TextMuted))
-            {
-                e.Graphics.DrawString(app, font, brush, e.Bounds.X + 22, e.Bounds.Y + 8);
-            }
-
-            using (var font = new Font("Segoe UI Semibold", 8f))
-            using (var brush = new SolidBrush(UiTheme.TextMuted))
-            {
-                e.Graphics.DrawString(item.Timestamp.ToString("HH:mm:ss"), font, brush, e.Bounds.X + 110, e.Bounds.Y + 8);
-            }
-
-            using (var font = new Font("Segoe UI", 8.5f))
-            using (var brush = new SolidBrush(UiTheme.TextPrimary))
-            {
-                e.Graphics.DrawString(item.PreviewText, font, brush,
-                    new RectangleF(e.Bounds.X + 22, e.Bounds.Y + 30, e.Bounds.Width - 36, 22));
-            }
-
-            if (item.PiiResult?.HasPii == true)
-            {
-                string badgeText = item.Status.Contains("khôi phục") ? "REVERTED" : "DLP";
-                Color badgeBg = item.Status.Contains("khôi phục") ? UiTheme.Warning : UiTheme.Danger;
-                using var font = new Font("Segoe UI", 7f, FontStyle.Bold);
-                var textSize = e.Graphics.MeasureString(badgeText, font);
-                int badgeW = (int)textSize.Width + 10;
-                var badgeRect = new Rectangle(e.Bounds.Right - badgeW - 10, e.Bounds.Y + 8, badgeW, 16);
-                using var badgePath = GetRoundedPath(badgeRect, 8);
-                using var badgeBrush = new SolidBrush(badgeBg);
-                e.Graphics.FillPath(badgeBrush, badgePath);
-                e.Graphics.DrawString(badgeText, font, Brushes.White,
-                    badgeRect.X + (badgeRect.Width - textSize.Width) / 2,
-                    badgeRect.Y + (badgeRect.Height - textSize.Height) / 2);
-            }
-        }
-
-        private void HistoryList_SelectedIndexChanged(object? sender, EventArgs e)
-        {
-            RefreshDetailView();
         }
 
         public void RefreshHistoryList()
         {
+            FilterHistory();
+        }
+
+        private void FilterHistory()
+        {
+            string query = _searchBox.Text.Trim().ToLowerInvariant();
+            _filteredList.Clear();
+
+            var items = _historySource.AsEnumerable().Reverse();
+            foreach (var item in items)
+            {
+                if (string.IsNullOrEmpty(query) ||
+                    (item.OriginalText?.ToLowerInvariant().Contains(query) == true) ||
+                    (item.ProcessedText?.ToLowerInvariant().Contains(query) == true) ||
+                    (item.AppName?.ToLowerInvariant().Contains(query) == true))
+                {
+                    _filteredList.Add(item);
+                }
+            }
+
+            _historyList.BeginUpdate();
             _historyList.Items.Clear();
-            foreach (var item in _historySource.AsEnumerable().Reverse())
+            foreach (var item in _filteredList)
             {
                 _historyList.Items.Add(item);
             }
+            _historyList.EndUpdate();
 
             bool empty = _historyList.Items.Count == 0;
             _emptyPanel.Visible = empty;
-            _textPanel.Visible = !empty && !_isInInspectorMode;
-            _inspectorPanel.Visible = !empty && _isInInspectorMode;
+            _countLabel.Text = $"({_filteredList.Count} mục)";
 
-            if (!empty)
+            if (!empty && _historyList.SelectedIndex < 0)
             {
                 _historyList.SelectedIndex = 0;
             }
 
-            UpdateSecurityStatusIndicator();
+            UpdateButtonStates();
         }
 
-        private void UpdateSecurityStatusIndicator()
+        private void UpdateButtonStates()
         {
-            string saveToDisk = AppConfig.Get("SAVE_HISTORY_TO_DISK") ?? "true";
-            string encryptHistory = AppConfig.Get("ENCRYPT_HISTORY_DATA") ?? "true";
-
-            if (saveToDisk.ToLower() == "false")
-            {
-                _securityStatusLabel.Text = "Chỉ lưu trên RAM";
-                _securityStatusLabel.ForeColor = UiTheme.Accent;
-            }
-            else if (encryptHistory.ToLower() == "true")
-            {
-                _securityStatusLabel.Text = "Đã mã hóa cục bộ (DPAPI)";
-                _securityStatusLabel.ForeColor = UiTheme.Success;
-            }
-            else
-            {
-                _securityStatusLabel.Text = "Lưu văn bản rõ";
-                _securityStatusLabel.ForeColor = UiTheme.Warning;
-            }
+            bool hasSelection = _historyList.SelectedItem is ClipboardHistoryItem;
+            _copyButton.Enabled = hasSelection;
+            _deleteButton.Enabled = hasSelection;
+            _clearAllButton.Enabled = _historySource.Count > 0;
         }
 
-        private void RefreshDetailView()
+        private void CopySelectedItem()
         {
-            if (_historyList.SelectedItem is not ClipboardHistoryItem item)
-            {
-                return;
-            }
+            if (_historyList.SelectedItem is not ClipboardHistoryItem item) return;
 
-            _statusLabel.Text = $"{item.Timestamp:yyyy-MM-dd HH:mm:ss}  ·  Nguồn: {item.AppName}  ·  {item.Status}";
-
-            if (item.PiiResult?.HasPii == true)
-            {
-                if (item.Status.Contains("khôi phục"))
-                {
-                    _piiWarningLabel.Text = $"Đã khôi phục bản gốc nhạy cảm: {item.PiiResult.GetSummary()} ({item.PiiResult.Matches.Count} mục)";
-                    _piiWarningLabel.BackColor = UiTheme.Warning;
-                }
-                else
-                {
-                    _piiWarningLabel.Text = $"Đã tự động che: {item.PiiResult.GetSummary()} ({item.PiiResult.Matches.Count} mục)";
-                    _piiWarningLabel.BackColor = UiTheme.Success;
-                }
-                _piiWarningLabel.Height = LogicalToDeviceUnits(32);
-            }
-            else
-            {
-                _piiWarningLabel.Text = "";
-                _piiWarningLabel.Height = 0;
-            }
-
-            if (_showUnmasked || item.PiiResult == null || !item.PiiResult.HasPii)
-            {
-                _originalBox.Text = item.OriginalText;
-            }
-            else
-            {
-                _originalBox.Text = item.PiiResult.GetSanitizedText(item.OriginalText);
-            }
-
-            _processedBox.Text = !string.IsNullOrEmpty(item.ProcessedText) ? item.ProcessedText : "(Không thay đổi)";
-
-            _formatListBox.Items.Clear();
-            if (item.ClipboardFormats != null && item.ClipboardFormats.Count > 0)
-            {
-                foreach (var format in item.ClipboardFormats.Keys)
-                {
-                    _formatListBox.Items.Add(format);
-                }
-                _formatListBox.SelectedIndex = 0;
-            }
-            else
-            {
-                _formatListBox.Items.Add("(Không có dữ liệu)");
-                _formatContentBox.Text = "(Không có dữ liệu định dạng)";
-            }
-        }
-
-        private void CopySelectedToClipboard(bool original)
-        {
-            if (_historyList.SelectedItem is not ClipboardHistoryItem item)
-            {
-                return;
-            }
+            string textToCopy = !string.IsNullOrEmpty(item.ProcessedText) ? item.ProcessedText : item.OriginalText;
+            if (string.IsNullOrEmpty(textToCopy)) return;
 
             try
             {
-                string textToCopy = original ? item.OriginalText : item.ProcessedText;
-                if (string.IsNullOrEmpty(textToCopy))
-                {
-                    textToCopy = item.OriginalText;
-                }
-
-                if (!string.IsNullOrEmpty(textToCopy))
-                {
-                    Clipboard.SetText(textToCopy);
-                    _statusLabel.Text = original
-                        ? "Đã sao chép bản gốc vào clipboard"
-                        : "Đã sao chép bản đã xử lý vào clipboard";
-                }
+                Clipboard.SetText(textToCopy);
+                Close();
             }
             catch (Exception ex)
             {
-                Program.Log($"[History] Lỗi copy: {ex.Message}");
+                MessageBox.Show(this, "Không thể sao chép vào clipboard: " + ex.Message, "Lỗi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
-        private static GraphicsPath GetRoundedPath(Rectangle rect, int radius)
+        private void DeleteSelectedItem()
         {
-            var path = new GraphicsPath();
-            int diameter = radius * 2;
-            if (rect.Width <= diameter) diameter = Math.Max(1, rect.Width - 1);
-            if (rect.Height <= diameter) diameter = Math.Max(1, rect.Height - 1);
+            if (_historyList.SelectedItem is not ClipboardHistoryItem item) return;
 
-            path.AddArc(rect.X, rect.Y, diameter, diameter, 180, 90);
-            path.AddArc(rect.Right - diameter, rect.Y, diameter, diameter, 270, 90);
-            path.AddArc(rect.Right - diameter, rect.Bottom - diameter, diameter, diameter, 0, 90);
-            path.AddArc(rect.X, rect.Bottom - diameter, diameter, diameter, 90, 90);
-            path.CloseFigure();
-            return path;
+            _historySource.Remove(item);
+            HistoryManager.SaveHistory(_historySource);
+            FilterHistory();
         }
 
-        private void FormatListBox_SelectedIndexChanged(object? sender, EventArgs e)
+        private void ClearAllHistory()
         {
-            if (_historyList.SelectedItem is not ClipboardHistoryItem item)
-            {
-                return;
-            }
+            if (_historySource.Count == 0) return;
 
-            string? selectedFormat = _formatListBox.SelectedItem as string;
-            if (!string.IsNullOrEmpty(selectedFormat) && item.ClipboardFormats.TryGetValue(selectedFormat, out string? content))
+            if (MessageBox.Show(this, "Bạn có chắc chắn muốn xóa toàn bộ lịch sử clipboard?", "Xác nhận",
+                                MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
             {
-                _formatContentBox.Text = content;
-            }
-            else
-            {
-                _formatContentBox.Text = "(Không có nội dung)";
+                _historySource.Clear();
+                HistoryManager.SaveHistory(_historySource);
+                FilterHistory();
             }
         }
 
-        private void UpdateTabSelection()
+        private void HistoryList_DrawItem(object? sender, DrawItemEventArgs e)
         {
-            bool empty = _historyList.Items.Count == 0;
-            _emptyPanel.Visible = empty;
+            if (e.Index < 0 || e.Index >= _historyList.Items.Count) return;
+            if (_historyList.Items[e.Index] is not ClipboardHistoryItem item) return;
 
-            if (_isInInspectorMode)
-            {
-                StyleTab(_btnPreview, selected: false);
-                StyleTab(_btnInspector, selected: true);
-                _textPanel.Visible = false;
-                _inspectorPanel.Visible = !empty;
-            }
-            else
-            {
-                StyleTab(_btnPreview, selected: true);
-                StyleTab(_btnInspector, selected: false);
-                _textPanel.Visible = !empty;
-                _inspectorPanel.Visible = false;
-            }
-        }
+            bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
 
-        private static void StyleTab(Button button, bool selected)
-        {
-            if (selected)
+            // Nền thẻ
+            Color bgColor = isSelected ? UiTheme.AccentLight : UiTheme.Surface;
+            using (var bgBrush = new SolidBrush(bgColor))
             {
-                button.BackColor = UiTheme.Accent;
-                button.ForeColor = Color.White;
-                button.FlatAppearance.BorderSize = 0;
+                g.FillRectangle(bgBrush, e.Bounds);
             }
-            else
+
+            if (isSelected)
             {
-                button.BackColor = UiTheme.Background;
-                button.ForeColor = UiTheme.TextPrimary;
-                button.FlatAppearance.BorderColor = UiTheme.Border;
-                button.FlatAppearance.BorderSize = 1;
+                using var barBrush = new SolidBrush(UiTheme.Accent);
+                g.FillRectangle(barBrush, e.Bounds.Left, e.Bounds.Top, LogicalToDeviceUnits(3), e.Bounds.Height);
+            }
+
+            int left = e.Bounds.Left + LogicalToDeviceUnits(10);
+            int top = e.Bounds.Top + LogicalToDeviceUnits(6);
+            int right = e.Bounds.Right - LogicalToDeviceUnits(10);
+
+            // Dòng 1: AppName + Timestamp + PII Badge
+            string timeStr = item.Timestamp.ToString("HH:mm:ss");
+            string metaText = $"{item.AppName}  ·  {timeStr}";
+            using (var metaFont = UiTheme.Small)
+            using (var metaBrush = new SolidBrush(UiTheme.TextMuted))
+            {
+                g.DrawString(metaText, metaFont, metaBrush, left, top);
+            }
+
+            if (item.PiiResult?.HasPii == true)
+            {
+                string badge = "Đã che PII";
+                using var badgeFont = new Font(Font.FontFamily, 7.5f, FontStyle.Bold);
+                SizeF bSize = g.MeasureString(badge, badgeFont);
+                int bLeft = right - (int)bSize.Width - LogicalToDeviceUnits(8);
+                int bTop = top - LogicalToDeviceUnits(1);
+                var bRect = new Rectangle(bLeft, bTop, (int)bSize.Width + LogicalToDeviceUnits(8), (int)bSize.Height + LogicalToDeviceUnits(2));
+
+                using var bBg = new SolidBrush(Color.FromArgb(220, 252, 231));
+                using var bText = new SolidBrush(Color.FromArgb(22, 101, 52));
+                g.FillRectangle(bBg, bRect);
+                g.DrawString(badge, badgeFont, bText, bLeft + LogicalToDeviceUnits(4), bTop + LogicalToDeviceUnits(1));
+            }
+
+            // Dòng 2: Nội dung trích đoạn (PreviewText)
+            top += LogicalToDeviceUnits(18);
+            string preview = item.PreviewText;
+            using (var textFont = UiTheme.Body)
+            using (var textBrush = new SolidBrush(isSelected ? UiTheme.AccentHover : UiTheme.TextPrimary))
+            {
+                var textRect = new RectangleF(left, top, right - left, e.Bounds.Bottom - top - LogicalToDeviceUnits(4));
+                var sf = new StringFormat
+                {
+                    Trimming = StringTrimming.EllipsisWord,
+                    FormatFlags = StringFormatFlags.NoWrap
+                };
+                g.DrawString(preview, textFont, textBrush, textRect, sf);
+            }
+
+            // Đường viền ngăn cách
+            using (var linePen = new Pen(UiTheme.Border, 1))
+            {
+                g.DrawLine(linePen, e.Bounds.Left + LogicalToDeviceUnits(6), e.Bounds.Bottom - 1, e.Bounds.Right - LogicalToDeviceUnits(6), e.Bounds.Bottom - 1);
             }
         }
     }
