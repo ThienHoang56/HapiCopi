@@ -282,7 +282,7 @@ namespace HapiCopi
 
         private void LoadCurrentValues()
         {
-            _piiScanCheck.Checked = (AppConfig.Get("PII_SCAN_ENABLED") ?? "true").ToLower() != "false";
+            _piiScanCheck.Checked = (AppConfig.Get("PII_SCAN_ENABLED") ?? "false").ToLower() == "true";
             _piiToastCheck.Checked = (AppConfig.Get("PII_TOAST_ENABLED") ?? "true").ToLower() != "false";
             _piiMaskHistoryCheck.Checked = (AppConfig.Get("PII_MASK_HISTORY") ?? "true").ToLower() != "false";
 

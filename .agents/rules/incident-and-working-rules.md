@@ -22,7 +22,7 @@
    - Lời nói không đi đôi với việc làm, tạo cảm giác coi thường người dùng và coi thường công sức của họ đối với đồ án tốt nghiệp.
 
 4. **Không đọc và phớt lờ tài liệu kiến trúc `.AGENT/`:**
-   - Dù trong thư mục `.AGENT/` đã có sẵn các tài liệu cảnh báo cấm code chắp vá ([`music_engine_rules.md`](./music_engine_rules.md) và [`handoff-ui-va-vong-doi.md`](./handoff-ui-va-vong-doi.md)), Agent vẫn không đối chiếu trước khi sửa mã nguồn.
+   - Dù trong thư mục `.AGENT/` đã có sẵn các tài liệu quy chuẩn kỹ thuật ([`AGENTS.md`](../../.AGENT/AGENTS.md) và [`ai_math_engine_rules.md`](./ai_math_engine_rules.md)), Agent vẫn không đối chiếu trước khi sửa mã nguồn.
 
 ---
 
@@ -55,8 +55,8 @@ Từ thời điểm này, mọi Agent can thiệp vào repo HapiCopi **BẮT BU�
 ### 🔄 Điều 4: QUY TRÌNH KIỂM THỬ HỒI QUY BẮT BUỘC (REGRESSION CHECKLIST)
 Mỗi khi có bất kỳ can thiệp nào, phải kiểm tra chéo toàn bộ các chức năng liên quan:
 - [ ] Chức năng vừa sửa có hoạt động chuẩn xác theo kịch bản thực tế không?
-- [ ] Tính năng nghe nhạc (Play / Pause / Spacebar / Seek) có hoạt động bình thường không?
-- [ ] Việc chèn nốt, sửa nốt, vạch nhịp có đúng vị trí chuột click không?
+- [ ] Chức năng Clipboard DLP và Auto-Format (Markdown/LaTeX sang Office OMML) có hoạt động tức thì không?
+- [ ] Bảng vẽ AI Math (vẽ nét, nhận diện, tự học nét cá nhân) có phản hồi chuẩn xác không?
 - [ ] Sau khi thao tác, RAM có giải phóng về mức an toàn (< 120 MB) hay tiếp tục tăng dần?
 
 ### 🤝 Điều 5: TÔN TRỌNG NGƯỜI DÙNG VÀ CÔNG SỨC ĐỒ ÁN

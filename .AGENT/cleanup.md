@@ -9,13 +9,15 @@
 
 `AppConfig` đọc `.env` từ `BaseDirectory` (thư mục chạy app), không từ `Backend/`.
 
-## Đã dọn dẹp & sắp xếp lại (2026-10-09)
+## Đã dọn dẹp & sắp xếp lại (2026-10)
 
 | Mục | Trạng thái mới | Lý do |
 |-----|----------------|-------|
 | `test-diagrams/` | Chuyển vào [`testing/diagrams/`](../testing/diagrams/) | Gom toàn bộ dữ liệu kiểm thử về thư mục `testing/` |
-| `*.txt` báo cáo test ở root (`ai_math_benchmark_report.txt`, `distill_test_report.txt`, `topo_test_report.txt`) | Chuyển vào [`testing/reports/`](../testing/reports/) | Tránh làm bừa bộn thư mục gốc khi chạy benchmark |
-| `musescore_grade_music_engine_plan.md` | Chuyển vào [`document/`](../document/musescore_grade_music_engine_plan.md) | Thống nhất toàn bộ tài liệu đặc tả kỹ thuật vào `document/` |
+| `*.txt` báo cáo test ở root | Chuyển vào [`testing/reports/`](../testing/reports/) | Tránh làm bừa bộn thư mục gốc khi chạy benchmark |
+| Music Engine (`AbcEditorForm`, Web assets, docs) | Đã xóa hoàn toàn | Loại bỏ tính năng không cốt lõi để tập trung 100% vào DLP và AI Math |
+| License, Sponsor, Quota, Telemetry | Đã xóa hoàn toàn | Ứng dụng hoạt động 100% offline, không phiền phức, không gửi dữ liệu ra mạng |
+| `Core/` | Tổ chức thành 6 module: `Clipboard/`, `Dlp/`, `Formatters/`, `Math/`, `Storage/`, `System/` | Codebase gọn gàng, rõ trách nhiệm, dễ bảo trì |
 
 ## Chưa xóa (cố ý)
 

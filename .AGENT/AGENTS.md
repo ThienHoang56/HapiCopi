@@ -11,23 +11,23 @@ Tuyệt đối tuân thủ phân vùng thư mục, **cấm xả file test, file 
 
 | Thư mục | Vai trò kỹ thuật | Quy chuẩn can thiệp |
 |---------|------------------|---------------------|
-| [`.agents/rules/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/.agents/rules) | Các quy chuẩn hoạt động tự động của Antigravity AI IDE | Đọc trước mọi thay đổi (`incident-and-working-rules`, `ai_math_engine_rules`, `music_engine_rules`). |
+| [`.agents/rules/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/.agents/rules) | Các quy chuẩn hoạt động tự động của Antigravity AI IDE | Đọc trước mọi thay đổi (`incident-and-working-rules`, `ai_math_engine_rules`). |
 | [`.AGENT/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/.AGENT) | Tài liệu bàn giao, bài học sự cố và kiến trúc bộ nhớ Agent | Luôn đồng bộ với `.agents/rules/` và kiểm tra trước khi commit/push. |
-| [`Core/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/Core) | Bộ máy xử lý lõi backend C# (.NET 10.0 x64 WinForms) | Quản lý clipboard, quét DLP nhạy cảm, suy luận ONNX, tự học nét cá nhân. |
+| [`Core/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/Core) | Bộ máy xử lý lõi backend C# (.NET 10.0 x64 WinForms) | Tổ chức module hóa: `Clipboard/` (hook, thao tác), `Dlp/` (quét PII), `Formatters/` (Word OMML, SVG), `Math/` (suy luận ONNX, tự học nét), `Storage/` (config, history), `System/` (vòng đời, update). |
 | [`UI/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/UI) | Giao diện điều khiển WinForms & WebView2 Host | Đảm bảo High-DPI (PerMonitorV2), giữ RAM thấp, không đơ UI. |
-| [`WebViewResources/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/WebViewResources) | Canvas HTML5/CSS/JS chạy trong WebView2 | Math Canvas vẽ nét thời gian thực, Music Editor, Clipboard History. |
-| [`models/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/models) | Trọng số mạng nơ-ron cục bộ đã đóng gói (`math_rec.onnx`) | Tự động copy ra build output, kích thước cố định ~633 KB, không cần Python khi chạy. |
+| [`WebViewResources/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/WebViewResources) | Canvas HTML5/CSS/JS chạy trong WebView2 | Math Canvas vẽ nét thời gian thực, Clipboard History, Markdown Renderer. |
+| [`models/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/models) | Trọng số mạng nơ-ron cục bộ đã đóng gói (`math_rec.onnx`, BTTR encoder/decoder) | Tự động copy ra build output, không cần Python khi chạy. |
 | [`scripts/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/scripts) | Pipeline Python hỗ trợ huấn luyện và export mô hình | Sử dụng uv, PyTorch CPU, xuất mô hình single-file (`dynamo=False`). |
 | [`testing/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/testing) | Toàn bộ tài nguyên kiểm thử, fixtures và benchmark | Báo cáo lưu tại [`reports/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/testing/reports), fixtures tại [`diagrams/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/testing/diagrams), ảnh chụp tại [`shots/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/testing/shots). |
-| [`document/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/document) | Báo cáo kỹ thuật, lộ trình phát triển và đặc tả nghiệp vụ | Báo cáo AI Toán học, Kế hoạch Music Engine chuẩn MuseScore, Báo cáo Logic Âm thanh. |
+| [`document/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/document) | Báo cáo kỹ thuật, lộ trình phát triển và đặc tả nghiệp vụ | Báo cáo AI Toán học, Kế hoạch Mở rộng Dataset Ma trận & Vector. |
 
 ---
 
-## 2. Ba Trụ cột Kỹ thuật của HapiCopi (Core Engineering Pillars)
+## 2. Hai Trụ cột Kỹ thuật của HapiCopi (Core Engineering Pillars)
 
 ### 2.1. Trụ cột 1: Local Clipboard DLP & Formatting Engine
 - **Kiến trúc:** 100% Desktop Offline, chạy ngầm dưới System Tray, tuyệt đối không có máy chủ hay truyền dữ liệu ra Internet.
-- **Bảo mật:** Quét PII / mã số thẻ / mật khẩu thời gian thực, lưu trữ cục bộ bảo vệ qua Windows DPAPI.
+- **Bảo mật:** Quét PII / mã số thẻ / mật khẩu thời gian thực, lưu trữ cục bộ bảo vệ qua Windows DPAPI. Mặc định ở chế độ tắt, người dùng chủ động bật trong Cài đặt khi có nhu cầu.
 - **Tự động định dạng:** Chuyển đổi công thức Markdown/LaTeX sang định dạng Word/Office gốc với độ trễ tức thì (< 5 ms).
 
 ### 2.2. Trụ cột 2: AI Math Handwriting Engine (Single-User Domain)
@@ -36,7 +36,7 @@ Tuyệt đối tuân thủ phân vùng thư mục, **cấm xả file test, file 
   - **Độ chính xác định lượng:** Đạt **90% – 95%** (đo đạc thực tế bằng benchmark, không võ đoán).
   - **Dung sai viết vội (Intra-Personal Generalization):** Nhận diện nét viết biến thể khi viết nhanh mà không bị overfit pixel.
 - **Ràng buộc tài nguyên:**
-  - Dung lượng mô hình $\le$ vài MB (Thực tế: `math_rec.onnx` = **633.3 KB**).
+  - Dung lượng mô hình $\le$ vài MB (Thực tế: `math_rec.onnx` = **633.3 KB**; bộ mô hình End-to-End sequence = **25 MB** < 30 MB).
   - Độ trễ CPU $\le$ 15 ms/ký tự (Thực tế: **0.35 – 0.45 ms/ký tự**, throughput > 2,000 ký tự/giây).
   - Mức tiêu thụ RAM: Mục tiêu 5–8% tài nguyên (Thực tế: Working set **69.3 MB**).
 - **Kiến trúc phân tầng:**
@@ -44,10 +44,6 @@ Tuyệt đối tuân thủ phân vùng thư mục, **cấm xả file test, file 
   - **Tầng 2 — Ký tự toán học:** Biến số ($x, y, z$), toán tử ($+, -, =, \times$), hàm ($\sin, \cos$), ký hiệu ($\alpha, \pi$).
   - **Tầng 3 — Quan hệ cấu trúc 2D:** Phân số ($\frac{a}{b}$), căn thức ($\sqrt{x}$), số mũ với Baseline Tracking ($x^2 + y^2$), vector ($\vec{v}$), ma trận ($\begin{pmatrix}\dots\end{pmatrix}$), ngữ pháp sửa lỗi `MathSyntaxPrior`.
   - **Cơ chế tự thích ứng:** Tự sinh 7 biến thể hình học cho nét mới, ưu tiên 75% nét cá nhân hóa, phạt đẩy lùi (Contrastive Repulsion) khi nhận diện sai.
-
-### 2.3. Trụ cột 3: Music Engine (ĐÓNG BĂNG TẠM THỜI / ARCHIVED)
-- **Trạng thái:** Đã đóng băng và lưu trữ tài liệu vào `.AGENT/archive/music/` và `document/archive/music/`.
-- **Định hướng:** Toàn bộ nguồn lực kỹ thuật hiện tại **tập trung 100% vào Trụ cột 2: AI Math Engine**, phần Music Engine sẽ kích hoạt lại sau.
 
 ---
 

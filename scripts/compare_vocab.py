@@ -1,8 +1,11 @@
 import json
 import re
 
+import os
+
 vocab_json = json.load(open('models/math_vocab.json', encoding='utf-8'))['latex_vocabulary']
-with open('Core/OnnxMathVisionEngine.cs', encoding='utf-8') as f:
+cs_path = 'Core/Math/OnnxMathVisionEngine.cs' if os.path.exists('Core/Math/OnnxMathVisionEngine.cs') else 'Core/OnnxMathVisionEngine.cs'
+with open(cs_path, encoding='utf-8') as f:
     cs = f.read()
 
 m = re.search(r'public static readonly string\[\] Vocabulary = new\[\]\s*\{(.*?)\};', cs, re.DOTALL)

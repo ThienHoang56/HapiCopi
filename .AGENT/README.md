@@ -11,6 +11,5 @@
 | [git.md](./git.md) | Commit/push **không** gắn Cursor co-author |
 | [cleanup.md](./cleanup.md) | Rác đã bỏ / còn giữ |
 | [packaging.md](./packaging.md) | Bộ cài + uninstall + UX phân phối |
-| [archive/music/](./archive/music/) | **LƯU TRỮ:** Tài liệu Music Engine cũ (tạm đóng băng để tập trung vào Toán học) |
 
 Author git dự kiến: `ThienNLH3 <thiennlh3@fpt.com>`.

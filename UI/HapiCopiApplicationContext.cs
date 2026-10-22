@@ -1145,8 +1145,8 @@ namespace HapiCopi
                     Program.Log($"[DLP] Lỗi đọc danh sách formats từ clipboard: {ex.Message}");
                 }
 
-                // Nếu là Startup hoặc không cần định dạng và không quét bảo mật (hoặc chỉ quét bảo mật)
-                bool piiScanEnabled = (AppConfig.Get("PII_SCAN_ENABLED") ?? "true").ToLower() != "false";
+                // Mặc định chế độ quét bảo mật DLP tắt (người dùng tự bật trong Cài đặt nếu có nhu cầu)
+                bool piiScanEnabled = (AppConfig.Get("PII_SCAN_ENABLED") ?? "false").ToLower() == "true";
 
                 // Chạy luồng xử lý ngầm (đảm bảo thứ tự trước sau rõ ràng: Định dạng -> Bảo mật)
                 System.Threading.Tasks.Task.Run(async () =>

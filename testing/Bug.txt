@@ -10,7 +10,7 @@ Nguyên nhân dự báo ban đầu:
     phải đóng app trước mới xóa được, nhưng vẫn chưa đóng app đc, xóa từ control panel phải kích hoạt file exe xóa
 
 ----------------------------------
-Trạng thái 2026-09-24 (xem .AGENT/handoff-ui-va-vong-doi.md):
+Trạng thái vòng đời ứng dụng:
 
 ĐÃ SỬA — vòng đời:
   - Named pipe AppInstanceChannel; HapiCopi.exe --quit tắt app đang chạy

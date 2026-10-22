@@ -23,16 +23,14 @@ PiiToast + History (local, có thể mã hóa)
 
 | Thư mục | Vai trò |
 |---------|---------|
-| `Core/` | Clipboard, PII, history, hook, WebViewManager, **AppInstanceChannel**, **StartupManager**, Update* |
-| `UI/` | Tray, toast, settings, update, history, Math/ABC editor, **UiTheme** |
-| `Formatting/` | Auto format + render sơ đồ |
-| `WebViewResources/` | HTML/JS offline (mermaid, math, abc…) |
-| `Assets/` | Icon |
+| `Core/` | Lõi xử lý chia theo module: `Clipboard/`, `Dlp/`, `Formatters/`, `Math/`, `Storage/`, `System/` |
+| `UI/` | Tray, toast, settings, history, MathEditorForm, **UiTheme** |
+| `Formatting/` | Auto format + render sơ đồ (Mermaid, TikZ, Kroki) |
+| `WebViewResources/` | HTML/JS offline (mermaid, math, history…) |
+| `Assets/` | Icon & hình ảnh |
 | `Demo/` | Tài liệu / slide pitch |
 
-## Không phải lõi
+## Hai trụ cột cốt lõi
 
-- Math Editor / ABC Editor / sơ đồ: tiện ích phụ.
-- Lõi sản phẩm (theo `Demo/HE_THONG_HAPICOPI.md`): **Clipboard DLP offline**.
-
-Việc đang dở (vòng đời đã xong, UI chưa xong): `.AGENT/handoff-ui-va-vong-doi.md`.
+1. **Local Clipboard DLP & Formatting**: Quét thông tin nhạy cảm offline, tự động định dạng Markdown/LaTeX sang Word OMML.
+2. **AI Math Handwriting Engine**: Bảng vẽ nhận diện công thức toán offline dựa trên mô hình ONNX siêu nhẹ và tự học nét cá nhân.

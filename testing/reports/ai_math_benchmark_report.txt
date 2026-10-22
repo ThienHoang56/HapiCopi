@@ -8,8 +8,8 @@
   - Kích thước weights trên đĩa: 1432.9 KB (Ngân sách: vài MB, thực tế: 1432.9 KB)
   -> PASS: Mô hình siêu nhẹ, đáp ứng hoàn toàn ràng buộc tài nguyên.
 [PHẦN 2 - ĐỘ TRỄ CPU & HIỆU NĂNG SUY LUẬN]
-  - Thời gian suy luận ONNX trung bình: 0.51 ms / ký tự
-  - Tốc độ xử lý (Throughput): 1977 ký tự / giây trên CPU
+  - Thời gian suy luận ONNX trung bình: 0.53 ms / ký tự
+  - Tốc độ xử lý (Throughput): 1900 ký tự / giây trên CPU
   -> PASS: Tốc độ tức thì (<15ms), đáp ứng trải nghiệm thời gian thực.
 [PHẦN 3 - TẦNG 1: NHẬN DIỆN SỐ]
   - Số lượng số kiểm thử: 10, Nhận diện có ứng viên: 10/10
@@ -33,12 +33,12 @@
   - Phạt dự đoán sai '\alpha': 3 prototypes bị đẩy lùi vector
   -> PASS: Cơ chế Contrastive Repulsion hoạt động chính xác.
 [PHẦN 8 - ĐỊNH LƯỢNG TÀI NGUYÊN (PROFILING)]
-  - RAM tiêu thụ thực tế (Working Set): 70.2 MB (Ngưỡng an toàn desktop: < 120 MB)
+  - RAM tiêu thụ thực tế (Working Set): 69.0 MB (Ngưỡng an toàn desktop: < 120 MB)
   -> PASS: Bộ nhớ cực thấp, hoàn toàn nằm trong mục tiêu 5-8% tài nguyên.
 ==========================================================
    KẾT QUẢ TỔNG THỂ BENCHMARK:
    - Vượt qua: 10 / 11 (90.9%)
-   - Độ trễ CPU: 0.51 ms / ký tự
-   - Bộ nhớ RAM: 70.2 MB
+   - Độ trễ CPU: 0.53 ms / ký tự
+   - Bộ nhớ RAM: 69.0 MB
    - Kích thước weights ONNX: 1432.9 KB
 ==========================================================

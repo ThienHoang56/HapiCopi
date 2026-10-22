@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Text;
 
+namespace HapiCopi;
+
 public static class PngChunkReader
 {
     public static string? ExtractTextChunk(byte[] bytes, string targetKeyword)
