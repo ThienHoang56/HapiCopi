@@ -9,7 +9,7 @@
   -> PASS: Mô hình siêu nhẹ, đáp ứng hoàn toàn ràng buộc tài nguyên.
 [PHẦN 2 - ĐỘ TRỄ CPU & HIỆU NĂNG SUY LUẬN]
   - Thời gian suy luận ONNX trung bình: 0.50 ms / ký tự
-  - Tốc độ xử lý (Throughput): 1998 ký tự / giây trên CPU
+  - Tốc độ xử lý (Throughput): 2005 ký tự / giây trên CPU
   -> PASS: Tốc độ tức thì (<15ms), đáp ứng trải nghiệm thời gian thực.
 [PHẦN 3 - TẦNG 1: NHẬN DIỆN SỐ]
   - Số lượng số kiểm thử: 10, Nhận diện có ứng viên: 10/10

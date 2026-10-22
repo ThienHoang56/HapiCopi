@@ -1,0 +1,33 @@
+==========================================================
+   HAPICOPI BENCHMARK: TÍNH NĂNG SMART PASTE / MAGIC WAND   
+==========================================================
+[PHẦN 1 - CĂN LỀ JUSTIFY & THỤT ĐẦU DÒNG ĐOẠN VĂN]
+  - Input : <p class="MsoNormal">Đây là nội dung đoạn văn mẫu được dán từ clipboard vào tài liệu Word.</p>
+  - Output: <p style="text-align: justify; text-indent: 28.35pt;" class="MsoNormal">Đây là nội dung đoạn văn mẫu được dán từ clipboard vào tài liệu Word.</p>
+  -> PASS: Đoạn văn đã tự động thừa hưởng căn đều 2 bên (Justify) và thụt lề 28.35pt (1cm).
+
+[PHẦN 2 - BẢO VỆ TIÊU ĐỀ (HEADINGS) KHÔNG DÍNH THỤT LỀ]
+  - Output: <h2 class="MsoHeading2" style="font-family: 'Times New Roman'; font-size: 14pt; text-indent: 0pt;">1.1 Tổng quan kiến trúc</h2><p style="text-align: justify; text-indent: 28.35pt;" class="MsoNormal">Nội dung chi tiết.</p>
+  -> PASS: Tiêu đề H2 được thiết lập text-indent: 0pt an toàn, trong khi đoạn văn bên dưới vẫn thụt lề chuẩn.
+
+[PHẦN 3 - ĐỒNG BỘ LIST BULLET / GẠCH NGANG TRONG WORD]
+  - Input : <ul><li>Mục phân tích thứ nhất</li><li>Mục phân tích thứ hai</li></ul>
+  - Output: <p class="MsoListParagraph" style="margin-left: 36pt; text-indent: -18.0pt; font-family: 'Calibri'; font-size: 11pt; line-height: 1.15; text-align: justify;"><span style="font-family: Symbol;">–</span><span style="font-size: 7.0pt;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>Mục phân tích thứ nhất</p><p class="MsoListParagraph" style="margin-left: 36pt; text-indent: -18.0pt; font-family: 'Calibri'; font-size: 11pt; line-height: 1.15; text-align: justify;"><span style="font-family: Symbol;">–</span><span style="font-size: 7.0pt;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>Mục phân tích thứ hai</p>
+  -> PASS: Đã biến đổi danh sách thành MsoListParagraph đồng bộ gạch ngang '–' và hanging indent chuẩn Word.
+
+[PHẦN 4 - BENCHMARK HIỆU NĂNG CPU & ĐỘ TRỄ]
+  - Số lượt kiểm thử: 1,000 lần
+  - Tổng thời gian: 9 ms
+  - Độ trễ trung bình: 9.73 µs (0.0097 ms)
+  - Throughput: 102,796 lượt / giây
+  -> PASS: Tốc độ xử lý siêu tốc (< 1 ms), hoàn toàn không gây trễ giao diện.
+
+[PHẦN 5 - ĐỊNH LƯỢNG BỘ NHỚ RAM]
+  - RAM tiêu thụ thực tế (Working Set): 37.2 MB (Ngưỡng an toàn: < 120 MB)
+  -> PASS: Bộ nhớ RAM an toàn tuyệt đối.
+==========================================================
+   KẾT QUẢ TỔNG THỂ BENCHMARK SMART PASTE (MAGIC WAND):
+   - Vượt qua: 5 / 5 (100.0%)
+   - Độ trễ thuật toán: 9.7 µs / lượt
+   - Bộ nhớ RAM: 37.2 MB
+==========================================================

@@ -35,6 +35,11 @@ namespace HapiCopi
                 return RunEndToEndMathBenchmark();
             }
 
+            if (args.Any(a => a.Equals("--test-magic-wand", StringComparison.OrdinalIgnoreCase)))
+            {
+                return RunMagicWandBenchmark();
+            }
+
 
 
             if (args.Any(a => a.Equals("--selfcheck-pdf", StringComparison.OrdinalIgnoreCase)))
@@ -956,6 +961,174 @@ namespace HapiCopi
             {
                 Print($"[Lá»–I BENCHMARK FATAL] {ex}");
                 SaveTestReport("e2e_math_benchmark_report.txt", sb.ToString());
+                return 1;
+            }
+        }
+
+        private static int RunMagicWandBenchmark()
+        {
+            var sb = new System.Text.StringBuilder();
+            void Print(string s)
+            {
+                Console.WriteLine(s);
+                sb.AppendLine(s);
+            }
+
+            int passedTests = 0;
+            int totalTests = 0;
+
+            Print("==========================================================");
+            Print("   HAPICOPI BENCHMARK: TÍNH NĂNG SMART PASTE / MAGIC WAND   ");
+            Print("==========================================================");
+
+            try
+            {
+                // PHẦN 1: CĂN LỀ JUSTIFY VÀ THỤT ĐẦU DÒNG (FIRST-LINE INDENT)
+                totalTests++;
+                Print("[PHẦN 1 - CĂN LỀ JUSTIFY & THỤT ĐẦU DÒNG ĐOẠN VĂN]");
+                var formatInfo = new WordFormatInfo
+                {
+                    FontName = "Times New Roman",
+                    FontSize = 13.0f,
+                    LineSpacing = 1.5f,
+                    Alignment = 3, // Justify
+                    FirstLineIndent = 28.35f, // 1.0 cm
+                    LeftIndent = 0f,
+                    IsInList = false
+                };
+
+                string inputPara = "<p class=\"MsoNormal\">Đây là nội dung đoạn văn mẫu được dán từ clipboard vào tài liệu Word.</p>";
+                string formattedPara = SmartPasteService.ApplySmartWordStyles(inputPara, formatInfo);
+                Print($"  - Input : {inputPara}");
+                Print($"  - Output: {formattedPara}");
+
+                bool hasJustify = formattedPara.Contains("text-align: justify;");
+                bool hasIndent = formattedPara.Contains("text-indent: 28.35pt;");
+
+                if (hasJustify && hasIndent)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Đoạn văn đã tự động thừa hưởng căn đều 2 bên (Justify) và thụt lề 28.35pt (1cm).");
+                }
+                else
+                {
+                    Print($"  -> FAIL: Thiếu justify={hasJustify} hoặc indent={hasIndent}");
+                }
+
+                // PHẦN 2: BẢO VỆ TIÊU ĐỀ KHÔNG BỊ THỤT LỀ SAI LỆCH
+                totalTests++;
+                Print("\n[PHẦN 2 - BẢO VỆ TIÊU ĐỀ (HEADINGS) KHÔNG DÍNH THỤT LỀ]");
+                string inputHeading = "<h2 class=\"MsoHeading2\" style=\"font-family: 'Times New Roman'; font-size: 14pt;\">1.1 Tổng quan kiến trúc</h2><p class=\"MsoNormal\">Nội dung chi tiết.</p>";
+                string formattedHeading = SmartPasteService.ApplySmartWordStyles(inputHeading, formatInfo);
+                Print($"  - Output: {formattedHeading}");
+
+                bool headingNoIndent = formattedHeading.Contains("<h2 class=\"MsoHeading2\" style=\"font-family: 'Times New Roman'; font-size: 14pt; text-indent: 0pt;\">");
+                bool paraHasIndent = formattedHeading.Contains("<p style=\"text-align: justify; text-indent: 28.35pt;\" class=\"MsoNormal\">");
+
+                if (headingNoIndent && paraHasIndent)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Tiêu đề H2 được thiết lập text-indent: 0pt an toàn, trong khi đoạn văn bên dưới vẫn thụt lề chuẩn.");
+                }
+                else
+                {
+                    Print($"  -> FAIL: Tiêu đề hoặc đoạn văn căn chỉnh chưa đúng (headingNoIndent={headingNoIndent}, paraHasIndent={paraHasIndent})");
+                }
+
+                // PHẦN 3: ĐỒNG BỘ DANH SÁCH BULLET & GẠCH ĐẦU DÒNG KHI ĐANG TRONG LIST
+                totalTests++;
+                Print("\n[PHẦN 3 - ĐỒNG BỘ LIST BULLET / GẠCH NGANG TRONG WORD]");
+                var listFormatInfo = new WordFormatInfo
+                {
+                    FontName = "Calibri",
+                    FontSize = 11.0f,
+                    LineSpacing = 1.15f,
+                    Alignment = 3,
+                    IsInList = true,
+                    ListBulletChar = "–", // Gạch ngang
+                    LeftIndent = 36.0f
+                };
+
+                string inputList = "<ul><li>Mục phân tích thứ nhất</li><li>Mục phân tích thứ hai</li></ul>";
+                string formattedList = SmartPasteService.ApplySmartWordStyles(inputList, listFormatInfo);
+                Print($"  - Input : {inputList}");
+                Print($"  - Output: {formattedList}");
+
+                bool isMsoList = formattedList.Contains("class=\"MsoListParagraph\"");
+                bool hasDash = formattedList.Contains("–");
+                bool hasHanging = formattedList.Contains("text-indent: -18.0pt;");
+                bool hasMargin = formattedList.Contains("margin-left: 36pt;");
+
+                if (isMsoList && hasDash && hasHanging && hasMargin)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Đã biến đổi danh sách thành MsoListParagraph đồng bộ gạch ngang '–' và hanging indent chuẩn Word.");
+                }
+                else
+                {
+                    Print($"  -> FAIL: Cấu trúc danh sách chưa đồng bộ (isMsoList={isMsoList}, hasDash={hasDash}, hasHanging={hasHanging})");
+                }
+
+                // PHẦN 4: BENCHMARK HIỆU NĂNG TỐC ĐỘ XỬ LÝ (LATENCY & THROUGHPUT)
+                totalTests++;
+                Print("\n[PHẦN 4 - BENCHMARK HIỆU NĂNG CPU & ĐỘ TRỄ]");
+                int benchmarkIterations = 1000;
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                for (int i = 0; i < benchmarkIterations; i++)
+                {
+                    _ = SmartPasteService.ApplySmartWordStyles(inputHeading, formatInfo);
+                }
+                sw.Stop();
+
+                double avgMs = sw.Elapsed.TotalMilliseconds / benchmarkIterations;
+                double throughput = 1000.0 / Math.Max(0.0001, avgMs);
+                Print($"  - Số lượt kiểm thử: {benchmarkIterations:N0} lần");
+                Print($"  - Tổng thời gian: {sw.ElapsedMilliseconds} ms");
+                Print($"  - Độ trễ trung bình: {avgMs * 1000.0:F2} µs ({avgMs:F4} ms)");
+                Print($"  - Throughput: {throughput:N0} lượt / giây");
+
+                if (avgMs < 1.0) // Nhỏ hơn 1ms
+                {
+                    passedTests++;
+                    Print("  -> PASS: Tốc độ xử lý siêu tốc (< 1 ms), hoàn toàn không gây trễ giao diện.");
+                }
+                else
+                {
+                    Print($"  -> FAIL: Độ trễ {avgMs:F2} ms vượt ngưỡng cho phép.");
+                }
+
+                // PHẦN 5: BỘ NHỚ RAM TIÊU THỤ
+                totalTests++;
+                Print("\n[PHẦN 5 - ĐỊNH LƯỢNG BỘ NHỚ RAM]");
+                var curProc = System.Diagnostics.Process.GetCurrentProcess();
+                curProc.Refresh();
+                double ramMb = curProc.WorkingSet64 / (1024.0 * 1024.0);
+                Print($"  - RAM tiêu thụ thực tế (Working Set): {ramMb:F1} MB (Ngưỡng an toàn: < 120 MB)");
+
+                if (ramMb < 120.0)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Bộ nhớ RAM an toàn tuyệt đối.");
+                }
+                else
+                {
+                    Print($"  -> CẢNH BÁO: RAM đạt {ramMb:F1} MB.");
+                }
+
+                Print("==========================================================");
+                Print($"   KẾT QUẢ TỔNG THỂ BENCHMARK SMART PASTE (MAGIC WAND):");
+                Print($"   - Vượt qua: {passedTests} / {totalTests} ({((double)passedTests / totalTests * 100.0):F1}%)");
+                Print($"   - Độ trễ thuật toán: {avgMs * 1000.0:F1} µs / lượt");
+                Print($"   - Bộ nhớ RAM: {ramMb:F1} MB");
+                Print("==========================================================");
+
+                SaveTestReport("magic_wand_benchmark_report.txt", sb.ToString());
+                return passedTests == totalTests ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                Print($"[LỖI BENCHMARK FATAL] {ex}");
+                SaveTestReport("magic_wand_benchmark_report.txt", sb.ToString());
                 return 1;
             }
         }

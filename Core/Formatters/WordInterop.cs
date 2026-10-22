@@ -12,6 +12,11 @@ namespace HapiCopi
         public int ParentHeadingLevel { get; set; } = 0;
         public string StyleName { get; set; } = "Normal";
         public float LineSpacing { get; set; } = 1.5f;
+        public float FirstLineIndent { get; set; } = 0f;
+        public float LeftIndent { get; set; } = 0f;
+        public int Alignment { get; set; } = 0; // 0=Left, 1=Center, 2=Right, 3=Justify
+        public bool IsInList { get; set; } = false;
+        public string ListBulletChar { get; set; } = "";
         public bool IsFromActiveWord { get; set; } = false;
         public bool IsWordTarget { get; set; } = false;
         public System.Collections.Generic.Dictionary<string, string> MermaidImageCache { get; set; } = new System.Collections.Generic.Dictionary<string, string>();
@@ -135,6 +140,34 @@ namespace HapiCopi
                             if (spacing > 0)
                             {
                                 info.LineSpacing = spacing / 12.0f; // 12pt xắp xỉ 1 dòng
+                            }
+                        }
+
+                        // Căn lề: 0=Left, 1=Center, 2=Right, 3=Justify
+                        try { info.Alignment = (int)paragraphFormat.Alignment; } catch { }
+
+                        // Thụt lề đầu dòng & thụt lề trái
+                        try { info.FirstLineIndent = (float)paragraphFormat.FirstLineIndent; } catch { }
+                        try { info.LeftIndent = (float)paragraphFormat.LeftIndent; } catch { }
+                    }
+                }
+                catch {}
+
+                // 3b. Đọc ListFormat nếu con trỏ đang nằm trong danh sách
+                try
+                {
+                    dynamic range = selection.Range;
+                    if (range != null && range.ListFormat != null)
+                    {
+                        dynamic listFormat = range.ListFormat;
+                        int listType = (int)listFormat.ListType;
+                        if (listType > 0) // wdListBullet, wdListSimpleNumbering, etc.
+                        {
+                            info.IsInList = true;
+                            string listString = listFormat.ListString;
+                            if (!string.IsNullOrEmpty(listString))
+                            {
+                                info.ListBulletChar = listString.Trim();
                             }
                         }
                     }

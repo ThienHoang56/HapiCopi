@@ -95,6 +95,7 @@ namespace HapiCopi
             // 4. Đăng ký Hook bàn phím bắt sự kiện dán chủ động & mở nhanh soạn toán
             _keyboardHook = new KeyboardHook();
             _keyboardHook.PastePressed += OnPastePressed;
+            _keyboardHook.SmartPastePressed += OnSmartPastePressed;
             _keyboardHook.MathHotkeyPressed += () => _syncContext.Post(_ => OnMathEditorClicked(this, EventArgs.Empty), null);
             _keyboardHook.PauseTogglePressed += () => _syncContext.Post(_ => OnPauseClicked(this, EventArgs.Empty), null);
             _keyboardHook.ExitAppPressed += () => _syncContext.Post(_ => OnExitClicked(this, EventArgs.Empty), null);
@@ -1311,6 +1312,16 @@ namespace HapiCopi
         // ============================
         // PASTE INTERCEPTION (Giữ nguyên logic định dạng)
         // ============================
+
+        private void OnSmartPastePressed()
+        {
+            if (_isPaused || IsSimulatingPaste) return;
+
+            _syncContext.Post(_ =>
+            {
+                _ = SmartPasteService.ExecuteSmartPasteAsync(_lastRawText, _lastRawHtml, _mermaidCache);
+            }, null);
+        }
 
         private async void OnPastePressed()
         {

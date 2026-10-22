@@ -35,6 +35,6 @@
    - Tổng số test cases: 18
    - Số test case thành công: 18 / 18
    - Độ chính xác Top-1 (Accuracy): 100.0%
-   - Độ trễ CPU trung bình / ký tự: 0.597 ms
+   - Độ trễ CPU trung bình / ký tự: 0.619 ms
    - Tiêu thụ thêm bộ nhớ (Installer / RAM): 0 MB
 ==========================================================

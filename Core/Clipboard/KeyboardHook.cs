@@ -56,6 +56,7 @@ namespace HapiCopi
         private DateTime _lastExitPressTime = DateTime.MinValue;
 
         public event Action? PastePressed;
+        public event Action? SmartPastePressed;
         public event Action? MathHotkeyPressed;
         public event Action? PauseTogglePressed;
         public event Action? ExitAppPressed;
@@ -123,10 +124,18 @@ namespace HapiCopi
                         _ctrlAltThirdKeyPressed = true;
                         _ctrlAltComboPending = false;
 
-                        // 1. Kiểm tra tổ hợp Ctrl + V
+                        // 1. Kiểm tra tổ hợp Ctrl + V hoặc Ctrl + Shift + V (Dán thông minh Magic Wand)
                         if (vkCode == VK_V && ctrlDown && !altDown)
                         {
-                            System.Threading.Tasks.Task.Run(() => PastePressed?.Invoke());
+                            bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+                            if (shiftDown)
+                            {
+                                System.Threading.Tasks.Task.Run(() => SmartPastePressed?.Invoke());
+                            }
+                            else
+                            {
+                                System.Threading.Tasks.Task.Run(() => PastePressed?.Invoke());
+                            }
                         }
                         // 2. Kiểm tra tổ hợp Shift + Insert
                         else if (vkCode == VK_INSERT)
