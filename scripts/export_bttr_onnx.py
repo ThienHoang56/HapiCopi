@@ -218,10 +218,11 @@ print(f'\n[KẾT QUẢ TEST 1 - MẪU CROHME 18_em_1.bmp]:')
 print(f'  LaTeX: {latex1}')
 print(f'  Encoder: {enc_t1:.1f}ms | Decoder ({n1} tokens): {dec_t1:.1f}ms | Tổng độ trễ: {tot_t1:.1f}ms')
 
-# Test 2: User formula from screenshot
-if os.path.exists('scripts/user_formula_binary.png'):
-    latex2, enc_t2, dec_t2, tot_t2, n2 = predict_formula_onnx('scripts/user_formula_binary.png')
-    print(f'\n[KẾT QUẢ TEST 2 - CÔNG THỨC VIẾT TAY CỦA BẠN (∫ 2 x dx)] :')
+# Test 2: User formula from testing fixtures
+test_fixture = 'testing/fixtures/user_integral.png'
+if os.path.exists(test_fixture):
+    latex2, enc_t2, dec_t2, tot_t2, n2 = predict_formula_onnx(test_fixture)
+    print(f'\n[KẾT QUẢ TEST 2 - CÔNG THỨC VIẾT TAY (∫ 2 x dx)] :')
     print(f'  LaTeX: {latex2}')
     print(f'  Encoder: {enc_t2:.1f}ms | Decoder ({n2} tokens): {dec_t2:.1f}ms | Tổng độ trễ: {tot_t2:.1f}ms')
 
