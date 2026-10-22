@@ -19,7 +19,6 @@ namespace HapiCopi
         public const string CommandSettings = "settings";
         public const string CommandUpdate = "update";
         public const string CommandMath = "math";
-        public const string CommandAbc = "abc";
         public const string CommandQuit = "quit";
         public const string CommandPause = "pause";
         public const string CommandPing = "ping";

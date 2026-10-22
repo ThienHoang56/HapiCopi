@@ -20,8 +20,6 @@ namespace HapiCopi
         private readonly CheckBox _svgToPngCheck;
         private readonly CheckBox _svgTransparentCheck;
         private readonly TextBox _customKeywordsBox;
-        private readonly Label _licenseStatusLabel;
-        private readonly TextBox _licenseKeyBox;
         private readonly CheckBox _enableHistoryCheck;
         private readonly CheckBox _saveToDiskCheck;
         private readonly CheckBox _startWithWindowsCheck;
@@ -198,90 +196,7 @@ namespace HapiCopi
             AddControl(UiTheme.Separator(this), 10);
 
             // ============================
-            // 4. BẢN QUYỀN HAPICOPI
-            // ============================
-            AddControl(UiTheme.SectionHeader("Bản quyền ứng dụng", UiTheme.Accent), 4);
-
-            _licenseStatusLabel = new Label
-            {
-                Font = UiTheme.BodyStrong,
-                ForeColor = UiTheme.Accent,
-                AutoSize = true,
-                Dock = DockStyle.Top,
-                Margin = new Padding(0, 0, 0, LogicalToDeviceUnits(4))
-            };
-            AddControl(_licenseStatusLabel, 4);
-
-            var upgradeRow = new TableLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                ColumnCount = 2,
-                RowCount = 1,
-                Margin = Padding.Empty
-            };
-            upgradeRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            upgradeRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-
-            var machineHint = new Label
-            {
-                Text = $"Mã máy: {LicenseService.MachineId}",
-                Font = UiTheme.Small,
-                ForeColor = UiTheme.TextMuted,
-                AutoSize = true,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleLeft
-            };
-            upgradeRow.Controls.Add(machineHint, 0, 0);
-            AddControl(upgradeRow, 6);
-
-            var licensePanel = new TableLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                ColumnCount = 2,
-                RowCount = 1,
-                Margin = Padding.Empty,
-                Padding = Padding.Empty
-            };
-            licensePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            licensePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-
-            _licenseKeyBox = new TextBox
-            {
-                Dock = DockStyle.Fill,
-                Font = UiTheme.Body,
-                PlaceholderText = "Nhập mã kích hoạt (nếu có)"
-            };
-            _toolTip.SetToolTip(_licenseKeyBox, "Nhập mã kích hoạt thử nghiệm");
-
-            var activateBtn = UiTheme.PrimaryButton("Kích hoạt");
-            activateBtn.Margin = new Padding(LogicalToDeviceUnits(6), 0, 0, 0);
-            _toolTip.SetToolTip(activateBtn, "Xác thực và kích hoạt bản quyền ngay lập tức");
-            activateBtn.Click += (s, e) =>
-            {
-                string key = _licenseKeyBox.Text.Trim();
-                var res = LicenseService.ActivateLicenseKey(key);
-                if (res.success)
-                {
-                    MessageBox.Show(res.message, "HapiCopi Pro", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    _licenseKeyBox.Text = "";
-                    UpdateLicenseStatusUI();
-                }
-                else
-                {
-                    MessageBox.Show(res.message, "Kích hoạt thất bại", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                }
-            };
-
-            licensePanel.Controls.Add(_licenseKeyBox, 0, 0);
-            licensePanel.Controls.Add(activateBtn, 1, 0);
-            AddControl(licensePanel, 10);
-
-            AddControl(UiTheme.Separator(this), 10);
-
-            // ============================
-            // 5. HỆ THỐNG & LỊCH SỬ
+            // 4. HỆ THỐNG & LỊCH SỬ
             // ============================
             AddControl(UiTheme.SectionHeader("Hệ thống & Lịch sử", UiTheme.Accent), 6);
             _startWithWindowsCheck = UiTheme.Option("Khởi động cùng Windows");
@@ -387,7 +302,6 @@ namespace HapiCopi
             _checkEmailBox.Enabled = piiEnabled;
 
             _customKeywordsBox.Text = (AppConfig.Get("PII_CUSTOM_KEYWORDS") ?? "").Replace("|", "\r\n");
-            UpdateLicenseStatusUI();
 
             _svgToPngCheck.Checked = SvgPasteService.IsEnabled;
             _svgTransparentCheck.Checked = (AppConfig.Get("SVG_PNG_BACKGROUND") ?? "transparent").ToLower() != "white";
@@ -501,23 +415,6 @@ namespace HapiCopi
             return card;
         }
 
-        private void UpdateLicenseStatusUI()
-        {
-            if (LicenseService.IsProLifetime)
-            {
-                _licenseStatusLabel.Text = "Trạng thái: Bản Pro Trọn Đời ✦ (Vô hạn Offline & Không quảng cáo)";
-                _licenseStatusLabel.ForeColor = Color.FromArgb(16, 185, 129); // emerald
-            }
-            else if (LicenseService.HasActiveCloud)
-            {
-                _licenseStatusLabel.Text = $"Trạng thái: Gói Cloud AI (Còn {LicenseService.CloudQuotaRemaining}/1.000 lượt, hạn đến {LicenseService.CloudExpiryDate:dd/MM/yyyy})";
-                _licenseStatusLabel.ForeColor = UiTheme.Accent;
-            }
-            else
-            {
-                _licenseStatusLabel.Text = $"Trạng thái: Bản Miễn phí (Còn {LicenseService.RemainingDailyFreeQuota}/50 lượt offline hôm nay)";
-                _licenseStatusLabel.ForeColor = UiTheme.TextMuted;
-            }
-        }
+
     }
 }

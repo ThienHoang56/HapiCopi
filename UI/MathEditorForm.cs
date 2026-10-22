@@ -21,7 +21,6 @@ namespace HapiCopi
         private (string formula, string mode, float fontSize, bool isWord, bool isDocs)? _pendingFormula;
         private Panel? _loadingPanel;
         private bool _isMiniMode = false;
-        private bool _isCurrentInkSessionConsumed = false;
 
         public MathEditorForm(Action<string, string> setClipboard)
         {
@@ -82,7 +81,6 @@ namespace HapiCopi
                     }
                     RequestReady();
                     SyncWordFontSize();
-                    PushLicenseAndSponsorStatus();
                     BeginInvoke(new Action(() =>
                     {
                         _web.Focus();
@@ -430,19 +428,6 @@ namespace HapiCopi
                 if (type == "ready")
                 {
                     HideLoadingScreen();
-                    PushLicenseAndSponsorStatus();
-                    return;
-                }
-
-                if (type == "openUpgrade")
-                {
-                    // Tạm ẩn tính năng mua Pro trong giai đoạn thử nghiệm Beta
-                    return;
-                }
-
-                if (type == "clearInkSession")
-                {
-                    _isCurrentInkSessionConsumed = false;
                     return;
                 }
 
@@ -480,16 +465,6 @@ namespace HapiCopi
                 {
                     string img = root.TryGetProperty("image", out var im) ? (im.GetString() ?? "") : "";
                     string engine = root.TryGetProperty("engine", out var eng) ? (eng.GetString() ?? "ai") : "ai";
-                    bool isCloud = engine.Equals("ai", StringComparison.OrdinalIgnoreCase);
-
-                    // Kiểm tra hạn mức sử dụng (50 lượt offline / ngày hoặc gói Cloud)
-                    if (!LicenseService.CanRecognize(isCloud, out string limitReason, out int currentRemaining, out int currentMax))
-                    {
-                        string safeReason = System.Text.Json.JsonSerializer.Serialize(limitReason);
-                        string limitScript = $"if (typeof onInkLimitReached === 'function') onInkLimitReached({(isCloud ? "true" : "false")}, {safeReason}, {currentRemaining}, {currentMax});";
-                        BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(limitScript)));
-                        return;
-                    }
 
                     List<List<PointF>>? strokeList = null;
                     if (root.TryGetProperty("strokes", out var strokesElem) && strokesElem.ValueKind == System.Text.Json.JsonValueKind.Array)
@@ -511,19 +486,10 @@ namespace HapiCopi
                     _ = Task.Run(async () =>
                     {
                         var result = await MathVisionService.RecognizeHandwrittenMathAsync(img, engine, strokeList);
-                        if (result.success && !_isCurrentInkSessionConsumed)
-                        {
-                            LicenseService.ConsumeRecognition(isCloud);
-                            _isCurrentInkSessionConsumed = true;
-                        }
-
-                        bool isPro = LicenseService.IsPro;
-                        int newRemaining = isCloud ? LicenseService.CloudQuotaRemaining : LicenseService.RemainingDailyFreeQuota;
-
                         string safeLatex = System.Text.Json.JsonSerializer.Serialize(result.latex);
                         string safeCandidates = System.Text.Json.JsonSerializer.Serialize(result.candidates ?? new List<string>());
                         string safeError = System.Text.Json.JsonSerializer.Serialize(result.error);
-                        string script = $"if (typeof onInkRecognized === 'function') onInkRecognized({(result.success ? "true" : "false")}, {safeLatex}, {safeCandidates}, {safeError}, {result.elapsedMs}, {newRemaining}, {(isPro ? "true" : "false")}, {(isCloud ? "true" : "false")});";
+                        string script = $"if (typeof onInkRecognized === 'function') onInkRecognized({(result.success ? "true" : "false")}, {safeLatex}, {safeCandidates}, {safeError}, {result.elapsedMs});";
                         try
                         {
                             BeginInvoke(new Action(() =>
@@ -571,19 +537,7 @@ namespace HapiCopi
                         int count = HandwritingProfileService.GetSampleCount();
                         int labelCount = HandwritingProfileService.GetSampleCountForLabel(label);
 
-                        // Đóng góp nét chữ: Thưởng ngay +5 lượt nhận diện AI cho bản Free và đẩy vào hàng đợi gom mẫu
-                        if (learned)
-                        {
-                            if (!LicenseService.IsPro)
-                            {
-                                LicenseService.AddFreeBonusQuota(5);
-                            }
-                            TelemetryService.EnqueueSample(label, wrongLabel, strokeList);
-                        }
-
-                        int currentRem = LicenseService.RemainingDailyFreeQuota;
-                        int currentMax = LicenseService.EffectiveDailyFreeQuota;
-                        string script = $"if (typeof onInkLearned === 'function') onInkLearned({(learned ? "true" : "false")}, {count}, {System.Text.Json.JsonSerializer.Serialize(label)}, {labelCount}, {currentRem}, {currentMax});";
+                        string script = $"if (typeof onInkLearned === 'function') onInkLearned({(learned ? "true" : "false")}, {count}, {System.Text.Json.JsonSerializer.Serialize(label)}, {labelCount});";
                         BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(script)));
                     }
                     return;
@@ -710,7 +664,6 @@ namespace HapiCopi
                         string clipboardText = source; // Không chèn comment watermark gây phiền hà người dùng
                         _setClipboard(clipboardText, cfHtml);
                         FormulaTracker.Register(png, source, widthPt: wPt, heightPt: hPt);
-                        _isCurrentInkSessionConsumed = false; // Reset session sau khi hoàn thành chèn công thức
                         Program.Log($"[MathEditor] Đã copy ảnh công thức vào clipboard (Size={heightPt}pt, Display={isDisplay}).");
 
                         if ((_isDocsMode || isDocsUpdate) && _docsSourceWindow != IntPtr.Zero)
@@ -746,22 +699,5 @@ namespace HapiCopi
             }
         }
 
-        private void PushLicenseAndSponsorStatus()
-        {
-            try
-            {
-                bool isPro = LicenseService.IsPro;
-                bool isProLifetime = LicenseService.IsProLifetime;
-                bool hasCloud = LicenseService.HasActiveCloud;
-                int remainingFree = LicenseService.RemainingDailyFreeQuota;
-                int remainingCloud = LicenseService.CloudQuotaRemaining;
-                var sponsor = SponsorService.GetActiveSponsor();
-
-                string sponsorJson = System.Text.Json.JsonSerializer.Serialize(sponsor);
-                string script = $"if (typeof onLicenseStatusUpdate === 'function') onLicenseStatusUpdate({(isPro ? "true" : "false")}, {(isProLifetime ? "true" : "false")}, {(hasCloud ? "true" : "false")}, {remainingFree}, {remainingCloud}, {sponsorJson});";
-                BeginInvoke(new Action(() => _web.CoreWebView2?.ExecuteScriptAsync(script)));
-            }
-            catch { }
-        }
     }
 }

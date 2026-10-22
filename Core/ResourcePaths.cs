@@ -27,7 +27,7 @@ namespace HapiCopi
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppDataFolderName);
 
         /// <summary>
-        /// Thư mục chứa index.html / matheditor / abceditor…
+        /// Thư mục chứa index.html / matheditor…
         /// Ưu tiên: cạnh exe (bộ cài) → AppData → thư mục source khi debug.
         /// </summary>
         public static string GetWebViewResourcesFolder()

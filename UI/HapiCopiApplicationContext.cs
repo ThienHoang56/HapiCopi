@@ -65,7 +65,6 @@ namespace HapiCopi
             _pauseMenuItem = new ToolStripMenuItem("Tạm dừng (Ctrl+Alt+P)", null, OnPauseClicked);
             var historyMenuItem = new ToolStripMenuItem("Lịch sử Clipboard...", null, OnHistoryClicked);
             var mathEditorMenuItem = new ToolStripMenuItem("Soạn công thức toán (Ctrl+Alt+M)...", null, OnMathEditorClicked);
-            var abcEditorMenuItem = new ToolStripMenuItem("🔒 Soạn nhạc (Chưa hoàn thiện)...", null, OnAbcEditorClicked);
             var settingsMenuItem = new ToolStripMenuItem("Cài đặt...", null, OnSettingsClicked);
             _updateMenuItem = new ToolStripMenuItem("Phiên bản & Cập nhật...", null, OnUpdateClicked);
             var exitMenuItem = new ToolStripMenuItem("Thoát (Ctrl+Alt+Q)", null, OnExitClicked);
@@ -73,7 +72,6 @@ namespace HapiCopi
             contextMenu.Items.Add(titleItem);
             contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add(mathEditorMenuItem);
-            contextMenu.Items.Add(abcEditorMenuItem);
             contextMenu.Items.Add(historyMenuItem);
             contextMenu.Items.Add(settingsMenuItem);
             contextMenu.Items.Add(_updateMenuItem);
@@ -170,11 +168,6 @@ namespace HapiCopi
             if (startupCommand == AppInstanceChannel.CommandMath)
             {
                 OnMathEditorClicked(this, EventArgs.Empty);
-            }
-
-            if (startupCommand == AppInstanceChannel.CommandAbc)
-            {
-                OnAbcEditorClicked(this, EventArgs.Empty);
             }
 
             StartUpdateCheck();
@@ -303,113 +296,7 @@ namespace HapiCopi
             }
         }
 
-        // ============================
-        // ABC MUSIC EDITOR (TẠM KHÓA THỬ NGHIỆM)
-        // ============================
 
-        private AbcEditorForm? _abcEditorForm;
-        private static bool _isMusicAdminUnlocked = false;
-
-        private static bool PromptMusicAdminPassword()
-        {
-            if (_isMusicAdminUnlocked) return true;
-
-            using var form = new Form();
-            UiTheme.ApplyDialog(form, "Khóa thử nghiệm — Soạn nhạc");
-            form.FormBorderStyle = FormBorderStyle.FixedDialog;
-            form.MaximizeBox = false;
-            form.MinimizeBox = false;
-            form.StartPosition = FormStartPosition.CenterScreen;
-            form.ClientSize = new Size(form.LogicalToDeviceUnits(400), form.LogicalToDeviceUnits(180));
-            form.TopMost = true;
-
-            var body = new Panel
-            {
-                Dock = DockStyle.Fill,
-                Padding = new Padding(form.LogicalToDeviceUnits(16), form.LogicalToDeviceUnits(14),
-                                      form.LogicalToDeviceUnits(16), form.LogicalToDeviceUnits(10)),
-                BackColor = UiTheme.Background
-            };
-
-            var lblDesc = new Label
-            {
-                Text = "Tính năng Soạn nhạc đang trong giai đoạn hoàn thiện.\nVui lòng nhập mật khẩu Quản trị viên để mở khóa:",
-                Font = UiTheme.Body,
-                ForeColor = UiTheme.TextPrimary,
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                Margin = new Padding(0, 0, 0, form.LogicalToDeviceUnits(8))
-            };
-
-            var txtPass = new TextBox
-            {
-                Dock = DockStyle.Top,
-                UseSystemPasswordChar = true,
-                Font = UiTheme.Body,
-                Margin = new Padding(0, form.LogicalToDeviceUnits(8), 0, form.LogicalToDeviceUnits(12))
-            };
-
-            var btnOk = UiTheme.PrimaryButton("Mở khóa");
-            btnOk.DialogResult = DialogResult.OK;
-
-            var btnCancel = UiTheme.SecondaryButton("Đóng");
-            btnCancel.DialogResult = DialogResult.Cancel;
-
-            var btnRow = UiTheme.ButtonRow(btnCancel, btnOk);
-            btnRow.Dock = DockStyle.Bottom;
-            btnRow.Padding = new Padding(0, form.LogicalToDeviceUnits(8), 0, 0);
-
-            body.Controls.Add(btnRow);
-            body.Controls.Add(txtPass);
-            body.Controls.Add(lblDesc);
-            form.Controls.Add(body);
-
-            form.AcceptButton = btnOk;
-            form.CancelButton = btnCancel;
-
-            form.Shown += (s, e) => txtPass.Focus();
-
-            if (form.ShowDialog() == DialogResult.OK)
-            {
-                if (txtPass.Text.Trim() == "050605")
-                {
-                    _isMusicAdminUnlocked = true;
-                    return true;
-                }
-
-                MessageBox.Show(
-                    "Mật khẩu quản trị viên không chính xác.\nTính năng tạm thời bị khóa cho đến bản cập nhật tiếp theo.",
-                    "Truy cập bị từ chối",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-            }
-
-            return false;
-        }
-
-        private void OnAbcEditorClicked(object? sender, EventArgs e)
-        {
-            try
-            {
-                if (!PromptMusicAdminPassword())
-                {
-                    return;
-                }
-
-                _abcEditorForm ??= new AbcEditorForm((text, html, img) => SetClipboardOnStaThread(text, html, img));
-                if (_abcEditorForm.IsDisposed)
-                {
-                    _abcEditorForm = new AbcEditorForm((text, html, img) => SetClipboardOnStaThread(text, html, img));
-                }
-
-                EditorWindow.Present(_abcEditorForm);
-                _abcEditorForm.RequestReady();
-            }
-            catch (Exception ex)
-            {
-                Program.Log($"[AbcEditor LỖI] Không mở được cửa sổ: {ex.Message}");
-            }
-        }
 
         // ============================
         // SETTINGS
@@ -1970,9 +1857,7 @@ namespace HapiCopi
                     _syncContext.Post(_ => OnMathEditorClicked(this, EventArgs.Empty), null);
                     return true;
 
-                case AppInstanceChannel.CommandAbc:
-                    _syncContext.Post(_ => OnAbcEditorClicked(this, EventArgs.Empty), null);
-                    return true;
+
 
                 case AppInstanceChannel.CommandPause:
                     _syncContext.Post(_ => OnPauseClicked(this, EventArgs.Empty), null);

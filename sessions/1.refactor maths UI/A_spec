@@ -49,3 +49,456 @@ Viền rất nhạt, nên không bị rối.
 Mỗi vùng có một nhiệm vụ rõ: chọn ở trái, soạn ở giữa, chỉnh ở phải.
 Nút có chữ nhãn đi kèm, không bắt người dùng đoán icon.
 Khoảng trống nhiều quanh công thức, nên công thức nổi bật nhất.
+
+
+
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Math Editor</title>
+
+<!-- KaTeX: thư viện vẽ công thức từ LaTeX -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  /* ---------- Màu và cỡ chữ dùng chung ---------- */
+  :root {
+    --bg: #F6F7F9;
+    --panel: #FFFFFF;
+    --line: #E3E6EC;
+    --text: #1B2230;
+    --muted: #5B6578;
+    --accent: #0E7C86;
+    --accent-soft: #E3F3F4;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+
+  button { font-family: inherit; cursor: pointer; }
+
+  /* ---------- Thanh trên cùng ---------- */
+  .topbar {
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  .logo {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .title { font-weight: 600; font-size: 14px; }
+  .spacer { flex: 1; }
+
+  .btn {
+    height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .btn:hover { background: var(--bg); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { opacity: 0.9; }
+
+  /* ---------- Thân: 3 cột ---------- */
+  .main { flex: 1; display: flex; min-height: 0; }
+
+  .left, .right {
+    background: var(--panel);
+    padding: 16px;
+    overflow-y: auto;
+  }
+  .left  { width: 300px; border-right: 1px solid var(--line); }
+  .right { width: 280px; border-left: 1px solid var(--line); }
+
+  .center {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 24px;
+    min-width: 0;
+  }
+
+  .label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    margin: 0 0 8px;
+  }
+
+  /* ---------- Tab nhóm ký hiệu ---------- */
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 14px; }
+  .tab {
+    height: 32px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .tab:hover { background: var(--bg); }
+  .tab.active { background: var(--accent-soft); color: #0B5F67; }
+
+  /* ---------- Lưới nút ký hiệu ---------- */
+  .grid { display: grid; gap: 8px; }
+  .grid.big   { grid-template-columns: repeat(3, 1fr); }
+  .grid.small { grid-template-columns: repeat(5, 1fr); }
+
+  .sym {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+  }
+  .sym:hover { background: var(--accent-soft); border-color: var(--accent); }
+  .grid.big .sym   { height: 64px; font-size: 20px; }
+  .grid.small .sym { height: 40px; font-size: 18px; }
+  .sym small { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* ---------- Vùng soạn và xem trước ---------- */
+  textarea {
+    width: 100%;
+    height: 110px;
+    padding: 12px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    resize: none;
+    font: 14px/1.6 ui-monospace, Menlo, Consolas, monospace;
+    color: var(--text);
+    background: var(--panel);
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+
+  .preview {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: auto;
+    font-size: 32px;
+  }
+  .error { color: #B42318; font-size: 14px; }
+
+  /* ---------- Panel phải ---------- */
+  .field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+  select {
+    height: 36px;
+    padding: 0 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+    font: inherit;
+  }
+
+  /* ---------- Chế độ cửa sổ nhỏ: ẩn 2 panel hai bên ---------- */
+  body.mini .left,
+  body.mini .right { display: none; }
+  body.mini .main { justify-content: center; }
+  body.mini .center { max-width: 480px; padding: 16px; }
+  body.mini textarea { height: 64px; }
+  body.mini .preview { font-size: 24px; padding: 12px; }
+</style>
+</head>
+
+<body>
+
+<!-- Thanh trên -->
+<div class="topbar">
+  <div class="logo">∑</div>
+  <div class="title">Math Editor</div>
+  <div class="spacer"></div>
+  <button class="btn" id="miniBtn">Cửa sổ nhỏ</button>
+  <button class="btn" id="copyMathmlBtn">Sao chép MathML</button>
+  <button class="btn primary" id="copyLatexBtn">Sao chép LaTeX</button>
+</div>
+
+<div class="main">
+
+  <!-- Cột trái: mẫu công thức và ký hiệu -->
+  <div class="left">
+    <div class="tabs" id="tabs"></div>
+    <div class="grid" id="symbolGrid"></div>
+  </div>
+
+  <!-- Cột giữa: ô gõ và xem trước -->
+  <div class="center">
+    <div>
+      <p class="label">GÕ LATEX</p>
+      <textarea id="latex" spellcheck="false"></textarea>
+    </div>
+    <div class="preview" id="preview"></div>
+  </div>
+
+  <!-- Cột phải: thuộc tính -->
+  <div class="right">
+    <p class="label">THUỘC TÍNH</p>
+    <div class="field">
+      <span>Cỡ chữ</span>
+      <select id="fontSize">
+        <option value="20">20 pt</option>
+        <option value="28">28 pt</option>
+        <option value="32" selected>32 pt</option>
+        <option value="44">44 pt</option>
+        <option value="60">60 pt</option>
+      </select>
+    </div>
+    <div class="field">
+      <span>Kiểu hiển thị</span>
+      <select id="displayMode">
+        <option value="block" selected>Cả dòng</option>
+        <option value="inline">Trong dòng</option>
+      </select>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  /* =========================================================
+     1. DỮ LIỆU: các nhóm nút. Mỗi nút có:
+        show = chữ hiện trên nút
+        code = mã LaTeX sẽ chèn vào ô gõ
+        name = tên nhỏ bên dưới (chỉ nhóm "Công thức" có)
+     ========================================================= */
+  const groups = {
+    'Công thức': {
+      size: 'big',
+      items: [
+        { show: 'a/b', code: '\\frac{a}{b}',        name: 'Phân số' },
+        { show: '√x',  code: '\\sqrt{x}',           name: 'Căn bậc' },
+        { show: 'Σ',   code: '\\sum_{i=1}^{n} x_i', name: 'Tổng' },
+        { show: '∫',   code: '\\int_{a}^{b} f(x)\\,dx', name: 'Tích phân' },
+        { show: 'xⁿ',  code: 'x^{n}',               name: 'Số mũ' },
+        { show: 'lim', code: '\\lim_{x \\to 0}',    name: 'Giới hạn' },
+      ],
+    },
+    'Ký hiệu': {
+      size: 'small',
+      items: [
+        { show: '±', code: '\\pm' },     { show: '×', code: '\\times' },
+        { show: '÷', code: '\\div' },    { show: '≠', code: '\\neq' },
+        { show: '≤', code: '\\leq' },    { show: '≥', code: '\\geq' },
+        { show: '≈', code: '\\approx' }, { show: '∞', code: '\\infty' },
+        { show: '∂', code: '\\partial' },{ show: '∇', code: '\\nabla' },
+        { show: '→', code: '\\to' },     { show: '⇒', code: '\\Rightarrow' },
+      ],
+    },
+    'Hy Lạp': {
+      size: 'small',
+      items: [
+        { show: 'α', code: '\\alpha' },  { show: 'β', code: '\\beta' },
+        { show: 'γ', code: '\\gamma' },  { show: 'δ', code: '\\delta' },
+        { show: 'θ', code: '\\theta' },  { show: 'λ', code: '\\lambda' },
+        { show: 'μ', code: '\\mu' },     { show: 'π', code: '\\pi' },
+        { show: 'σ', code: '\\sigma' },  { show: 'φ', code: '\\phi' },
+        { show: 'ω', code: '\\omega' },  { show: 'Δ', code: '\\Delta' },
+        { show: 'Σ', code: '\\Sigma' },  { show: 'Ω', code: '\\Omega' },
+      ],
+    },
+    'Tập hợp': {
+      size: 'small',
+      items: [
+        { show: '∈', code: '\\in' },      { show: '∉', code: '\\notin' },
+        { show: '⊂', code: '\\subset' },  { show: '⊆', code: '\\subseteq' },
+        { show: '∪', code: '\\cup' },      { show: '∩', code: '\\cap' },
+        { show: '∅', code: '\\emptyset' },{ show: '∀', code: '\\forall' },
+        { show: '∃', code: '\\exists' },
+      ],
+    },
+    'Ma trận': {
+      size: 'big',
+      items: [
+        { show: '( )', code: '\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}', name: 'Ngoặc tròn' },
+        { show: '[ ]', code: '\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}', name: 'Ngoặc vuông' },
+        { show: '| |', code: '\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}', name: 'Định thức' },
+      ],
+    },
+  };
+
+  /* Công thức mẫu lúc mới mở */
+  const startFormula =
+    'H = \\frac{12}{n(n+1)} \\left[ \\frac{(\\sum R_1)^2}{n_1} \\right]';
+
+  /* =========================================================
+     2. LẤY CÁC PHẦN TỬ TRÊN TRANG
+     ========================================================= */
+  const latexBox    = document.getElementById('latex');
+  const previewBox  = document.getElementById('preview');
+  const tabsBox     = document.getElementById('tabs');
+  const symbolGrid  = document.getElementById('symbolGrid');
+  const fontSizeSel = document.getElementById('fontSize');
+  const displaySel  = document.getElementById('displayMode');
+
+  let activeGroup = 'Công thức';
+
+  /* =========================================================
+     3. VẼ CÔNG THỨC (xem trước)
+     ========================================================= */
+  function renderPreview() {
+    const code = latexBox.value.trim();
+
+    if (code === '') {
+      previewBox.innerHTML = '<span class="error" style="color:#5B6578">Gõ công thức để xem trước</span>';
+      return;
+    }
+
+    try {
+      katex.render(code, previewBox, {
+        displayMode: displaySel.value === 'block',
+        throwOnError: true,
+      });
+    } catch (err) {
+      // Công thức sai cú pháp: báo lỗi thay vì làm vỡ trang
+      previewBox.innerHTML = '<span class="error">Lỗi: ' + err.message + '</span>';
+    }
+  }
+
+  /* =========================================================
+     4. CHÈN MÃ VÀO Ô GÕ TẠI CON TRỎ
+     ========================================================= */
+  function insertAtCursor(text) {
+    const start = latexBox.selectionStart;
+    const end   = latexBox.selectionEnd;
+    const before = latexBox.value.slice(0, start);
+    const after  = latexBox.value.slice(end);
+
+    latexBox.value = before + text + after;
+
+    // Đặt con trỏ ngay sau phần vừa chèn
+    const newPos = start + text.length;
+    latexBox.focus();
+    latexBox.setSelectionRange(newPos, newPos);
+
+    renderPreview();
+  }
+
+  /* =========================================================
+     5. VẼ TAB VÀ LƯỚI NÚT BÊN TRÁI
+     ========================================================= */
+  function renderTabs() {
+    tabsBox.innerHTML = '';
+
+    Object.keys(groups).forEach(function (groupName) {
+      const tab = document.createElement('button');
+      tab.className = 'tab' + (groupName === activeGroup ? ' active' : '');
+      tab.textContent = groupName;
+      tab.onclick = function () {
+        activeGroup = groupName;
+        renderTabs();
+        renderSymbols();
+      };
+      tabsBox.appendChild(tab);
+    });
+  }
+
+  function renderSymbols() {
+    const group = groups[activeGroup];
+    symbolGrid.className = 'grid ' + group.size;
+    symbolGrid.innerHTML = '';
+
+    group.items.forEach(function (item) {
+      const btn = document.createElement('button');
+      btn.className = 'sym';
+      btn.innerHTML = item.show + (item.name ? '<small>' + item.name + '</small>' : '');
+      btn.onclick = function () { insertAtCursor(item.code); };
+      symbolGrid.appendChild(btn);
+    });
+  }
+
+  /* =========================================================
+     6. CÁC NÚT KHÁC
+     ========================================================= */
+  function copyText(text, button, doneLabel) {
+    navigator.clipboard.writeText(text).then(function () {
+      const oldLabel = button.textContent;
+      button.textContent = doneLabel;
+      setTimeout(function () { button.textContent = oldLabel; }, 1200);
+    });
+  }
+
+  document.getElementById('copyLatexBtn').onclick = function () {
+    copyText(latexBox.value, this, 'Đã sao chép');
+  };
+
+  document.getElementById('copyMathmlBtn').onclick = function () {
+    // KaTeX đổi LaTeX thành MathML (định dạng Word đọc được)
+    const html = katex.renderToString(latexBox.value, { output: 'mathml', throwOnError: false });
+    const mathml = html.match(/<math[\s\S]*<\/math>/)[0];
+    copyText(mathml, this, 'Đã sao chép');
+  };
+
+  document.getElementById('miniBtn').onclick = function () {
+    document.body.classList.toggle('mini');
+    this.textContent = document.body.classList.contains('mini') ? 'Cửa sổ đầy đủ' : 'Cửa sổ nhỏ';
+  };
+
+  fontSizeSel.onchange = function () {
+    previewBox.style.fontSize = fontSizeSel.value + 'px';
+  };
+
+  displaySel.onchange = renderPreview;
+
+  // Phím tắt: Ctrl+Enter = sao chép LaTeX
+  latexBox.addEventListener('keydown', function (e) {
+    if (e.ctrlKey && e.key === 'Enter') {
+      document.getElementById('copyLatexBtn').click();
+    }
+  });
+
+  // Gõ tới đâu, xem trước tới đó
+  latexBox.addEventListener('input', renderPreview);
+
+  /* =========================================================
+     7. KHỞI ĐỘNG
+     ========================================================= */
+  latexBox.value = startFormula;
+  previewBox.style.fontSize = fontSizeSel.value + 'px';
+  renderTabs();
+  renderSymbols();
+  renderPreview();
+</script>
+
+</body>
+</html>
+
+code ví dụ 
