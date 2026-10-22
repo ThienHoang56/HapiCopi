@@ -4,24 +4,10 @@ using System.Windows.Forms;
 namespace HapiCopi
 {
     /// <summary>
-    /// Mở soạn toán/nhạc: nạp WebView sẵn ngoài màn hình lúc app khởi động,
-    /// lần bấm menu chỉ đưa cửa sổ vào giữa — không chờ Chromium lần nữa.
+    /// Điều khiển hiển thị cửa sổ soạn thảo: đưa cửa sổ vào giữa màn hình làm việc và kích hoạt focus.
     /// </summary>
     internal static class EditorWindow
     {
-        public static void PrepareOffscreen(Form form)
-        {
-            IntPtr prev = ActiveWindowHelper.GetForegroundWindow();
-            form.ShowInTaskbar = false;
-            form.Opacity = 0;
-            form.StartPosition = FormStartPosition.Manual;
-            form.Location = new Point(-20000, -20000);
-            form.Show();
-            if (prev != IntPtr.Zero && prev != form.Handle)
-            {
-                ActiveWindowHelper.SetForegroundWindow(prev);
-            }
-        }
 
         public static void Present(Form form)
         {

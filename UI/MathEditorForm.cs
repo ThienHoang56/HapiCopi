@@ -184,7 +184,10 @@ namespace HapiCopi
 
             _web.Visible = true;
             _web.BringToFront();
-            _web.Focus();
+            if (Visible)
+            {
+                _web.Focus();
+            }
 
             if (_loadingPanel != null)
             {

@@ -167,27 +167,6 @@ namespace HapiCopi
 
             StartUpdateCheck();
             MemoryOptimizer.StartPeriodicOptimization();
-
-            // Khởi tạo làm ấm MathEditor ngầm sau 1.8 giây nghỉ của app để khi người dùng mở ra là tức thì 0ms, không nháy đen
-            Task.Delay(1800).ContinueWith(_ =>
-            {
-                _syncContext?.Post(__ =>
-                {
-                    try
-                    {
-                        if (_mathEditorForm == null || _mathEditorForm.IsDisposed)
-                        {
-                            _mathEditorForm = new MathEditorForm((text, html) => SetClipboardOnStaThread(text, html));
-                            EditorWindow.PrepareOffscreen(_mathEditorForm);
-                            _mathEditorForm.RequestReady();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Program.Log($"[Startup] Làm ấm MathEditor ngầm: {ex.Message}");
-                    }
-                }, null);
-            });
         }
 
         // ============================
