@@ -32,7 +32,6 @@ namespace HapiCopi
         }
         public string ProcessedHtml { get; set; } = "";
         public string Status { get; set; } = "Bỏ qua";
-        public PiiScanResult? PiiResult { get; set; }
         public Dictionary<string, string> ClipboardFormats { get; set; } = new Dictionary<string, string>();
 
         public string PreviewText
@@ -90,10 +89,7 @@ namespace HapiCopi
         private static readonly SolidBrush _metaBrush = new(UiTheme.TextMuted);
         private static readonly SolidBrush _textPrimaryBrush = new(UiTheme.TextPrimary);
         private static readonly SolidBrush _accentHoverBrush = new(UiTheme.AccentHover);
-        private static readonly SolidBrush _piiBgBrush = new(Color.FromArgb(220, 252, 231));
-        private static readonly SolidBrush _piiTextBrush = new(Color.FromArgb(22, 101, 52));
         private static readonly Pen _borderPen = new(UiTheme.Border, 1);
-        private static readonly Font _badgeFont = new("Segoe UI", 7.5f, FontStyle.Bold);
         private static readonly StringFormat _previewFormat = new()
         {
             Trimming = StringTrimming.EllipsisWord,
@@ -497,11 +493,12 @@ namespace HapiCopi
             if (_historyList.SelectedItem is not ClipboardHistoryItem item) return;
 
             string textToCopy = !string.IsNullOrEmpty(item.ProcessedText) ? item.ProcessedText : item.OriginalText;
-            if (string.IsNullOrEmpty(textToCopy)) return;
+            string htmlToCopy = !string.IsNullOrEmpty(item.ProcessedHtml) ? item.ProcessedHtml : item.OriginalHtml;
+            if (string.IsNullOrEmpty(textToCopy) && string.IsNullOrEmpty(htmlToCopy)) return;
 
             try
             {
-                Clipboard.SetText(textToCopy);
+                ClipboardHelper.SetOfficeClipboard(textToCopy, htmlToCopy);
                 Close();
             }
             catch (Exception ex)
@@ -559,22 +556,10 @@ namespace HapiCopi
             int top = e.Bounds.Top + LogicalToDeviceUnits(5);
             int right = e.Bounds.Right - LogicalToDeviceUnits(10);
 
-            // Dòng 1: AppName + Timestamp + PII Badge
+            // Dòng 1: AppName + Timestamp
             string timeStr = item.Timestamp.ToString("HH:mm:ss");
             string metaText = $"{item.AppName}  ·  {timeStr}";
             g.DrawString(metaText, UiTheme.Small, _metaBrush, left, top);
-
-            if (item.PiiResult?.HasPii == true)
-            {
-                int bWidth = LogicalToDeviceUnits(62);
-                int bHeight = LogicalToDeviceUnits(16);
-                int bLeft = right - bWidth;
-                int bTop = top;
-                var bRect = new Rectangle(bLeft, bTop, bWidth, bHeight);
-
-                g.FillRectangle(_piiBgBrush, bRect);
-                g.DrawString("Đã che PII", _badgeFont, _piiTextBrush, bLeft + LogicalToDeviceUnits(4), bTop + LogicalToDeviceUnits(1));
-            }
 
             // Dòng 2: Nội dung trích đoạn (PreviewText)
             top += LogicalToDeviceUnits(17);

@@ -105,8 +105,6 @@ namespace HapiCopi
                 {
                     Directory.CreateDirectory(ConfigDirectory);
 
-                    // Bảo vệ nhạy cảm trước khi ghi đĩa (PII Protection)
-                    bool maskHistory = (AppConfig.Get("PII_MASK_HISTORY") ?? "true").ToLower() != "false";
                     var historyToSave = new List<ClipboardHistoryItem>();
 
                     // Tạo bản sao an toàn để tránh xung đột luồng khi duyệt danh sách
@@ -116,30 +114,19 @@ namespace HapiCopi
                         {
                             var clone = new ClipboardHistoryItem
                             {
+                                Id = item.Id,
                                 Timestamp = item.Timestamp,
                                 AppName = item.AppName,
                                 OriginalText = item.OriginalText,
                                 OriginalHtml = item.OriginalHtml,
                                 ProcessedText = item.ProcessedText,
                                 ProcessedHtml = item.ProcessedHtml,
-                                Status = item.Status,
-                                PiiResult = item.PiiResult
+                                Status = item.Status
                             };
-                            
-                            // Copy ID của item để giữ nguyên định danh
-                            clone.Id = item.Id;
 
                             foreach (var kv in item.ClipboardFormats)
                             {
                                 clone.ClipboardFormats[kv.Key] = kv.Value;
-                            }
-
-                            // Nếu bật che lịch sử và mục lịch sử chứa PII nhạy cảm
-                            if (maskHistory && item.PiiResult != null && item.PiiResult.HasPii)
-                            {
-                                // Xóa vĩnh viễn dữ liệu gốc nhạy cảm, chỉ lưu trữ bản đã được che sạch
-                                clone.OriginalText = item.ProcessedText;
-                                clone.OriginalHtml = "";
                             }
 
                             historyToSave.Add(clone);

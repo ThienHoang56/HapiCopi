@@ -13,7 +13,7 @@ Tuyệt đối tuân thủ phân vùng thư mục, **cấm xả file test, file 
 |---------|------------------|---------------------|
 | [`.agents/rules/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/.agents/rules) | Các quy chuẩn hoạt động tự động của Antigravity AI IDE | Đọc trước mọi thay đổi (`incident-and-working-rules`, `ai_math_engine_rules`). |
 | [`.AGENT/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/.AGENT) | Tài liệu bàn giao, bài học sự cố và kiến trúc bộ nhớ Agent | Luôn đồng bộ với `.agents/rules/` và kiểm tra trước khi commit/push. |
-| [`Core/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/Core) | Bộ máy xử lý lõi backend C# (.NET 10.0 x64 WinForms) | Tổ chức module hóa: `Clipboard/` (hook, thao tác), `Dlp/` (quét PII), `Formatters/` (Word OMML, SVG), `Math/` (suy luận ONNX, tự học nét), `Storage/` (config, history), `System/` (vòng đời, update). |
+| [`Core/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/Core) | Bộ máy xử lý lõi backend C# (.NET 10.0 x64 WinForms) | Tổ chức module hóa: `Clipboard/` (hook, thao tác), `Formatters/` (Word OMML, SVG), `Math/` (suy luận ONNX, tự học nét), `Storage/` (config, history), `System/` (vòng đời, update). |
 | [`UI/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/UI) | Giao diện điều khiển WinForms & WebView2 Host | Đảm bảo High-DPI (PerMonitorV2), giữ RAM thấp, không đơ UI. |
 | [`WebViewResources/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/WebViewResources) | Canvas HTML5/CSS/JS chạy trong WebView2 | Math Canvas vẽ nét thời gian thực, Clipboard History, Markdown Renderer. |
 | [`models/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/models) | Trọng số mạng nơ-ron cục bộ đã đóng gói (`math_rec.onnx`, BTTR encoder/decoder) | Tự động copy ra build output, không cần Python khi chạy. |
@@ -25,10 +25,10 @@ Tuyệt đối tuân thủ phân vùng thư mục, **cấm xả file test, file 
 
 ## 2. Hai Trụ cột Kỹ thuật của HapiCopi (Core Engineering Pillars)
 
-### 2.1. Trụ cột 1: Local Clipboard DLP & Formatting Engine
+### 2.1. Trụ cột 1: Local Clipboard Auto-Formatting Engine
 - **Kiến trúc:** 100% Desktop Offline, chạy ngầm dưới System Tray, tuyệt đối không có máy chủ hay truyền dữ liệu ra Internet.
-- **Bảo mật:** Quét PII / mã số thẻ / mật khẩu thời gian thực, lưu trữ cục bộ bảo vệ qua Windows DPAPI. Mặc định ở chế độ tắt, người dùng chủ động bật trong Cài đặt khi có nhu cầu.
 - **Tự động định dạng:** Chuyển đổi công thức Markdown/LaTeX sang định dạng Word/Office gốc với độ trễ tức thì (< 5 ms).
+- **Lưu trữ an toàn:** Lưu lịch sử clipboard cục bộ được bảo vệ qua Windows DPAPI, không nghẽn luồng UI.
 
 ### 2.2. Trụ cột 2: AI Math Handwriting Engine (Single-User Domain)
 - **Đánh đổi chiến lược (Strategic Trade-off):**

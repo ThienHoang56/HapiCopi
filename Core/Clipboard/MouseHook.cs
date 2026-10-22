@@ -58,7 +58,6 @@ namespace HapiCopi
         private IntPtr _hookId = IntPtr.Zero;
 
         public event Action<WordFormulaInfo>? WordFormulaDoubleClicked;
-        public event Action<IntPtr, ActiveAppInfo>? WebFormulaDoubleClicked;
 
         private static long _lastClickTick = 0;
         private static int _lastClickX = -9999;
@@ -136,14 +135,6 @@ namespace HapiCopi
                                 {
                                     WordFormulaDoubleClicked?.Invoke(formulaInfo);
                                 }
-                            }
-                            else if (activeApp.IsGoogleDocs ||
-                                     activeApp.ProcessName.Equals("chrome", StringComparison.OrdinalIgnoreCase) ||
-                                     activeApp.ProcessName.Equals("msedge", StringComparison.OrdinalIgnoreCase) ||
-                                     activeApp.ProcessName.Equals("brave", StringComparison.OrdinalIgnoreCase) ||
-                                     activeApp.ProcessName.Equals("firefox", StringComparison.OrdinalIgnoreCase))
-                            {
-                                WebFormulaDoubleClicked?.Invoke(fgWnd, activeApp);
                             }
                         }
                         catch (Exception ex)

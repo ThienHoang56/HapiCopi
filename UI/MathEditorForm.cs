@@ -21,6 +21,7 @@ namespace HapiCopi
         private (string formula, string mode, float fontSize, bool isWord, bool isDocs)? _pendingFormula;
         private Panel? _loadingPanel;
         private bool _isMiniMode = false;
+        private readonly Action<int, string> _profileUpdatedHandler;
 
         public MathEditorForm(Action<string, string> setClipboard)
         {
@@ -51,7 +52,7 @@ namespace HapiCopi
             Controls.Add(_loadingPanel);
             _loadingPanel.BringToFront();
 
-            HandwritingProfileService.OnProfileUpdated += (count, label) =>
+            _profileUpdatedHandler = (count, label) =>
             {
                 try
                 {
@@ -69,6 +70,7 @@ namespace HapiCopi
                 }
                 catch { }
             };
+            HandwritingProfileService.OnProfileUpdated += _profileUpdatedHandler;
 
             FormClosing += OnFormClosing;
             VisibleChanged += (_, _) =>
@@ -86,6 +88,13 @@ namespace HapiCopi
                         _web.Focus();
                         _web.CoreWebView2?.ExecuteScriptAsync("if (typeof mathField !== 'undefined' && mathField) { mathField.focus(); }");
                     }));
+                }
+                else
+                {
+                    if (_web.CoreWebView2 != null)
+                    {
+                        try { _web.CoreWebView2.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low; } catch { }
+                    }
                 }
             };
         }
@@ -406,6 +415,15 @@ namespace HapiCopi
                 e.Cancel = true;
                 Hide();
             }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                HandwritingProfileService.OnProfileUpdated -= _profileUpdatedHandler;
+            }
+            base.Dispose(disposing);
         }
 
         private void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)

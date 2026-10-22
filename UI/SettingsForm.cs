@@ -9,17 +9,8 @@ namespace HapiCopi
     /// </summary>
     public class SettingsForm : Form
     {
-        private readonly CheckBox _piiScanCheck;
-        private readonly CheckBox _piiToastCheck;
-        private readonly CheckBox _piiMaskHistoryCheck;
-        private readonly CheckBox _checkKeysBox;
-        private readonly CheckBox _checkCardsBox;
-        private readonly CheckBox _checkCccdBox;
-        private readonly CheckBox _checkPhoneBox;
-        private readonly CheckBox _checkEmailBox;
         private readonly CheckBox _svgToPngCheck;
         private readonly CheckBox _svgTransparentCheck;
-        private readonly TextBox _customKeywordsBox;
         private readonly CheckBox _enableHistoryCheck;
         private readonly CheckBox _saveToDiskCheck;
         private readonly CheckBox _startWithWindowsCheck;
@@ -45,8 +36,8 @@ namespace HapiCopi
             StartPosition = FormStartPosition.CenterScreen;
 
             // Kích thước chuẩn Mini Popup vừa vặn, không bị to bự chảng
-            MinimumSize = new Size(LogicalToDeviceUnits(480), LogicalToDeviceUnits(560));
-            ClientSize = new Size(LogicalToDeviceUnits(500), LogicalToDeviceUnits(680));
+            MinimumSize = new Size(LogicalToDeviceUnits(480), LogicalToDeviceUnits(450));
+            ClientSize = new Size(LogicalToDeviceUnits(500), LogicalToDeviceUnits(520));
             KeyPreview = true;
 
             // Header Bar
@@ -96,69 +87,7 @@ namespace HapiCopi
             }
 
             // ============================
-            // 1. BẢO MẬT DỮ LIỆU (DLP)
-            // ============================
-            AddControl(UiTheme.SectionHeader("Bảo mật dữ liệu (DLP)", UiTheme.Accent), 6);
-            _piiScanCheck = UiTheme.Option("Quét dữ liệu nhạy cảm");
-            _toolTip.SetToolTip(_piiScanCheck, "Tự động phát hiện thông tin nhạy cảm khi sao chép");
-            AddControl(_piiScanCheck, 4);
-
-            _piiToastCheck = UiTheme.Option("Hiện thông báo cảnh báo");
-            _piiToastCheck.Margin = new Padding(LogicalToDeviceUnits(16), 0, 0, LogicalToDeviceUnits(4));
-            _toolTip.SetToolTip(_piiToastCheck, "Hiển thị thông báo góc màn hình khi phát hiện dữ liệu nhạy cảm");
-            AddControl(_piiToastCheck, 4);
-
-            _piiMaskHistoryCheck = UiTheme.Option("Ẩn dữ liệu nhạy cảm trong lịch sử");
-            _piiMaskHistoryCheck.Margin = new Padding(LogicalToDeviceUnits(16), 0, 0, LogicalToDeviceUnits(8));
-            _toolTip.SetToolTip(_piiMaskHistoryCheck, "Tự động làm mờ các thông tin nhạy cảm lưu trong lịch sử clipboard");
-            AddControl(_piiMaskHistoryCheck, 8);
-
-            var piiTypesHeader = UiTheme.Hint("Loại dữ liệu bảo vệ:", UiTheme.Accent);
-            piiTypesHeader.Font = UiTheme.BodyStrong;
-            piiTypesHeader.Margin = new Padding(LogicalToDeviceUnits(16), 0, 0, LogicalToDeviceUnits(4));
-            AddControl(piiTypesHeader, 4);
-
-            _checkKeysBox = UiTheme.Option("API Key, Token & Mật khẩu");
-            _checkKeysBox.Margin = new Padding(LogicalToDeviceUnits(24), 0, 0, LogicalToDeviceUnits(3));
-            _toolTip.SetToolTip(_checkKeysBox, "Phát hiện OpenAI, Google, AWS, GitHub key, Token và mật khẩu");
-            AddControl(_checkKeysBox, 3);
-
-            _checkCardsBox = UiTheme.Option("Thẻ ngân hàng & Thẻ tín dụng");
-            _checkCardsBox.Margin = new Padding(LogicalToDeviceUnits(24), 0, 0, LogicalToDeviceUnits(3));
-            _toolTip.SetToolTip(_checkCardsBox, "Phát hiện số thẻ Visa, MasterCard và thẻ ATM ngân hàng");
-            AddControl(_checkCardsBox, 3);
-
-            _checkCccdBox = UiTheme.Option("Căn cước công dân & CMND");
-            _checkCccdBox.Margin = new Padding(LogicalToDeviceUnits(24), 0, 0, LogicalToDeviceUnits(3));
-            _toolTip.SetToolTip(_checkCccdBox, "Phát hiện CCCD 12 số và CMND 9 số");
-            AddControl(_checkCccdBox, 3);
-
-            _checkPhoneBox = UiTheme.Option("Số điện thoại di động");
-            _checkPhoneBox.Margin = new Padding(LogicalToDeviceUnits(24), 0, 0, LogicalToDeviceUnits(3));
-            _toolTip.SetToolTip(_checkPhoneBox, "Phát hiện số điện thoại di động Việt Nam");
-            AddControl(_checkPhoneBox, 3);
-
-            _checkEmailBox = UiTheme.Option("Địa chỉ Email");
-            _checkEmailBox.Margin = new Padding(LogicalToDeviceUnits(24), 0, 0, LogicalToDeviceUnits(10));
-            _toolTip.SetToolTip(_checkEmailBox, "Phát hiện địa chỉ email cá nhân và công việc");
-            AddControl(_checkEmailBox, 10);
-
-            _piiScanCheck.CheckedChanged += (s, e) =>
-            {
-                bool enabled = _piiScanCheck.Checked;
-                _piiToastCheck.Enabled = enabled;
-                _piiMaskHistoryCheck.Enabled = enabled;
-                _checkKeysBox.Enabled = enabled;
-                _checkCardsBox.Enabled = enabled;
-                _checkCccdBox.Enabled = enabled;
-                _checkPhoneBox.Enabled = enabled;
-                _checkEmailBox.Enabled = enabled;
-            };
-
-            AddControl(UiTheme.Separator(this), 10);
-
-            // ============================
-            // 2. CHUYỂN SVG SANG PNG
+            // 1. CHUYỂN SVG SANG PNG
             // ============================
             AddControl(UiTheme.SectionHeader("Chuyển đổi hình ảnh", UiTheme.Accent), 6);
             _svgToPngCheck = UiTheme.Option("Tự động chuyển SVG sang PNG");
@@ -178,25 +107,7 @@ namespace HapiCopi
             AddControl(UiTheme.Separator(this), 10);
 
             // ============================
-            // 3. TỪ KHÓA NHẠY CẢM RIÊNG
-            // ============================
-            AddControl(UiTheme.SectionHeader("Từ khóa nhạy cảm riêng", UiTheme.Accent), 4);
-            _customKeywordsBox = new TextBox
-            {
-                Multiline = true,
-                ScrollBars = ScrollBars.Vertical,
-                Dock = DockStyle.Fill,
-                Font = UiTheme.Small,
-                Height = LogicalToDeviceUnits(44),
-                PlaceholderText = "Tên dự án nội bộ, mã bí mật... (mỗi từ một dòng)"
-            };
-            _toolTip.SetToolTip(_customKeywordsBox, "Thêm các từ khóa riêng cần cảnh báo khi sao chép");
-            AddControl(_customKeywordsBox, 10);
-
-            AddControl(UiTheme.Separator(this), 10);
-
-            // ============================
-            // 4. HỆ THỐNG & LỊCH SỬ
+            // 2. HỆ THỐNG & LỊCH SỬ
             // ============================
             AddControl(UiTheme.SectionHeader("Hệ thống & Lịch sử", UiTheme.Accent), 6);
             _startWithWindowsCheck = UiTheme.Option("Khởi động cùng Windows");
@@ -220,13 +131,13 @@ namespace HapiCopi
             AddControl(UiTheme.Separator(this), 10);
 
             // ============================
-            // 6. PHÍM TẮT HỆ THỐNG
+            // 3. PHÍM TẮT HỆ THỐNG
             // ============================
             AddControl(UiTheme.SectionHeader("Phím tắt hệ thống", UiTheme.Accent), 6);
 
             AddControl(CreateHotkeyCard(
                 "Tạm dừng / Tiếp tục",
-                "Tạm ngừng hoặc tiếp tục quét bảo mật clipboard",
+                "Tạm ngừng hoặc tiếp tục tự động định dạng clipboard",
                 "Ctrl + Alt + P"), 4);
 
             AddControl(CreateHotkeyCard(
@@ -237,7 +148,7 @@ namespace HapiCopi
             AddControl(CreateHotkeyCard(
                 "Soạn công thức Toán",
                 "Mở bảng vẽ công thức toán và nhận diện LaTeX",
-                "Ctrl + Alt + M"), 6);
+                "Ctrl + Alt"), 6);
 
             content.Controls.Add(col);
 
@@ -282,27 +193,6 @@ namespace HapiCopi
 
         private void LoadCurrentValues()
         {
-            _piiScanCheck.Checked = (AppConfig.Get("PII_SCAN_ENABLED") ?? "false").ToLower() == "true";
-            _piiToastCheck.Checked = (AppConfig.Get("PII_TOAST_ENABLED") ?? "true").ToLower() != "false";
-            _piiMaskHistoryCheck.Checked = (AppConfig.Get("PII_MASK_HISTORY") ?? "true").ToLower() != "false";
-
-            _checkKeysBox.Checked = (AppConfig.Get("PII_CHECK_KEYS") ?? "true").ToLower() != "false";
-            _checkCardsBox.Checked = (AppConfig.Get("PII_CHECK_CARDS") ?? "true").ToLower() != "false";
-            _checkCccdBox.Checked = (AppConfig.Get("PII_CHECK_CCCD") ?? "true").ToLower() != "false";
-            _checkPhoneBox.Checked = (AppConfig.Get("PII_CHECK_PHONE") ?? "true").ToLower() != "false";
-            _checkEmailBox.Checked = (AppConfig.Get("PII_CHECK_EMAIL") ?? "true").ToLower() != "false";
-
-            bool piiEnabled = _piiScanCheck.Checked;
-            _piiToastCheck.Enabled = piiEnabled;
-            _piiMaskHistoryCheck.Enabled = piiEnabled;
-            _checkKeysBox.Enabled = piiEnabled;
-            _checkCardsBox.Enabled = piiEnabled;
-            _checkCccdBox.Enabled = piiEnabled;
-            _checkPhoneBox.Enabled = piiEnabled;
-            _checkEmailBox.Enabled = piiEnabled;
-
-            _customKeywordsBox.Text = (AppConfig.Get("PII_CUSTOM_KEYWORDS") ?? "").Replace("|", "\r\n");
-
             _svgToPngCheck.Checked = SvgPasteService.IsEnabled;
             _svgTransparentCheck.Checked = (AppConfig.Get("SVG_PNG_BACKGROUND") ?? "transparent").ToLower() != "white";
             _svgTransparentCheck.Enabled = _svgToPngCheck.Checked;
@@ -318,16 +208,6 @@ namespace HapiCopi
         {
             try
             {
-                AppConfig.Set("PII_SCAN_ENABLED", _piiScanCheck.Checked ? "true" : "false");
-                AppConfig.Set("PII_TOAST_ENABLED", _piiToastCheck.Checked ? "true" : "false");
-                AppConfig.Set("PII_MASK_HISTORY", _piiMaskHistoryCheck.Checked ? "true" : "false");
-
-                AppConfig.Set("PII_CHECK_KEYS", _checkKeysBox.Checked ? "true" : "false");
-                AppConfig.Set("PII_CHECK_CARDS", _checkCardsBox.Checked ? "true" : "false");
-                AppConfig.Set("PII_CHECK_CCCD", _checkCccdBox.Checked ? "true" : "false");
-                AppConfig.Set("PII_CHECK_PHONE", _checkPhoneBox.Checked ? "true" : "false");
-                AppConfig.Set("PII_CHECK_EMAIL", _checkEmailBox.Checked ? "true" : "false");
-
                 AppConfig.Set("SVG_TO_PNG_ENABLED", _svgToPngCheck.Checked ? "true" : "false");
                 AppConfig.Set("SVG_PNG_BACKGROUND", _svgTransparentCheck.Checked ? "transparent" : "white");
 
@@ -337,15 +217,6 @@ namespace HapiCopi
 
                 // Di trú dữ liệu lịch sử nếu cần
                 HistoryManager.MigrateHistoryData(_historyList);
-
-                // Lưu custom keywords
-                string keywords = _customKeywordsBox.Text
-                    .Replace("\r\n", "|")
-                    .Replace("\n", "|")
-                    .Replace("\r", "|");
-                while (keywords.Contains("||")) keywords = keywords.Replace("||", "|");
-                keywords = keywords.Trim('|');
-                AppConfig.Set("PII_CUSTOM_KEYWORDS", keywords);
 
                 if (_startWithWindowsCheck.Checked != StartupManager.IsEnabled &&
                     !StartupManager.TrySet(_startWithWindowsCheck.Checked, out string startupError))
@@ -414,7 +285,5 @@ namespace HapiCopi
 
             return card;
         }
-
-
     }
 }
