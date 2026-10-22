@@ -1069,6 +1069,27 @@ namespace HapiCopi
                     Print($"  -> FAIL: Cấu trúc danh sách chưa đồng bộ (isMsoList={isMsoList}, hasDash={hasDash}, hasHanging={hasHanging})");
                 }
 
+                // PHẦN 3b: TỰ ĐỘNG CĂN CHỈNH VĂN BẢN THƯỜNG (PLAIN TEXT TO SMART PARAGRAPHS)
+                totalTests++;
+                Print("\n[PHẦN 3b - TỰ ĐỘNG CĂN CHỈNH VĂN BẢN THƯỜNG (PLAIN TEXT)]");
+                string plainInput = "Đoạn văn sao chép từ website tin tức hoặc ChatGPT dạng plain text.\r\n- Gạch đầu dòng phân tích 1\r\n- Gạch đầu dòng phân tích 2";
+                string plainFormatted = SmartPasteService.ConvertPlainTextToSmartParagraphs(plainInput, formatInfo);
+                Print($"  - Input : {plainInput.Replace("\r\n", " | ")}");
+                Print($"  - Output: {plainFormatted}");
+
+                bool plainHasPara = plainFormatted.Contains("<p class=\"MsoNormal\"") && plainFormatted.Contains("text-indent: 28.35pt;");
+                bool plainHasList = plainFormatted.Contains("<p class=\"MsoListParagraph\"") && plainFormatted.Contains("text-indent: -18.0pt;");
+
+                if (plainHasPara && plainHasList)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Văn bản thô đã được chuyển thành các đoạn văn MsoNormal thụt lề 1cm và MsoListParagraph gạch đầu dòng.");
+                }
+                else
+                {
+                    Print($"  -> FAIL: plainHasPara={plainHasPara}, plainHasList={plainHasList}");
+                }
+
                 // PHẦN 4: BENCHMARK HIỆU NĂNG TỐC ĐỘ XỬ LÝ (LATENCY & THROUGHPUT)
                 totalTests++;
                 Print("\n[PHẦN 4 - BENCHMARK HIỆU NĂNG CPU & ĐỘ TRỄ]");

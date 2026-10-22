@@ -38,6 +38,207 @@ namespace HapiCopi
             return FindWindow("OpusApp", null) != IntPtr.Zero;
         }
 
+        public static Task<WordFormatInfo> ScanDocumentRulesAsync(int timeoutMs = 3000)
+        {
+            var tcs = new System.Threading.Tasks.TaskCompletionSource<WordFormatInfo>();
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    var rules = ScanDocumentRules();
+                    tcs.TrySetResult(rules);
+                }
+                catch (Exception ex)
+                {
+                    Program.Log($"[WordInterop] Lỗi quét tài liệu ngầm: {ex.Message}");
+                    tcs.TrySetResult(new WordFormatInfo { IsFromActiveWord = false });
+                }
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.IsBackground = true;
+            thread.Start();
+
+            return System.Threading.Tasks.Task.Run(async () =>
+            {
+                var completed = await System.Threading.Tasks.Task.WhenAny(tcs.Task, System.Threading.Tasks.Task.Delay(timeoutMs));
+                if (completed == tcs.Task)
+                {
+                    return await tcs.Task;
+                }
+                Program.Log($"[WordInterop] Quét tài liệu quá thời hạn {timeoutMs}ms, dùng fallback.");
+                return new WordFormatInfo { IsFromActiveWord = false };
+            });
+        }
+
+        public static WordFormatInfo ScanDocumentRules()
+        {
+            var info = new WordFormatInfo();
+            if (!IsWordRunning()) return info;
+
+            object wordAppObj = null;
+            try
+            {
+                Guid clsid = WordClsid;
+                GetActiveObject(ref clsid, IntPtr.Zero, out wordAppObj);
+            }
+            catch
+            {
+                return info;
+            }
+
+            if (wordAppObj == null) return info;
+
+            try
+            {
+                dynamic wordApp = wordAppObj;
+                if (wordApp.Documents == null || wordApp.Documents.Count == 0) return info;
+
+                dynamic doc = null;
+                try { doc = wordApp.ActiveDocument; } catch { }
+                if (doc == null && wordApp.Documents.Count > 0)
+                {
+                    try { doc = wordApp.Documents[1]; } catch { }
+                }
+                if (doc == null) return info;
+
+                info.IsFromActiveWord = true;
+
+                // 1. Đọc Style "Normal" của tài liệu
+                try
+                {
+                    dynamic normalStyle = doc.Styles["Normal"];
+                    if (normalStyle != null)
+                    {
+                        try { info.FontName = normalStyle.Font?.Name; } catch { }
+                        try { info.FontSize = (float)(normalStyle.Font?.Size ?? 0f); } catch { }
+                        try
+                        {
+                            dynamic pf = normalStyle.ParagraphFormat;
+                            if (pf != null)
+                            {
+                                info.Alignment = (int)pf.Alignment;
+                                info.FirstLineIndent = (float)pf.FirstLineIndent;
+                                info.LeftIndent = (float)pf.LeftIndent;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+
+                // 2. Lấy mẫu đại diện các đoạn văn thực tế trong tài liệu (Representative Sampling)
+                try
+                {
+                    dynamic paragraphs = doc.Paragraphs;
+                    int count = (int)(paragraphs?.Count ?? 0);
+                    int sampled = 0;
+
+                    for (int i = 1; i <= Math.Min(count, 30) && sampled < 8; i++)
+                    {
+                        try
+                        {
+                            dynamic p = paragraphs[i];
+                            string text = p?.Range?.Text;
+                            if (string.IsNullOrWhiteSpace(text) || text.Trim().Length < 5) continue;
+
+                            dynamic pf = p.Format;
+                            if (pf != null)
+                            {
+                                float firstLine = (float)pf.FirstLineIndent;
+                                int align = (int)pf.Alignment;
+                                float left = (float)pf.LeftIndent;
+
+                                if (firstLine > 0 && info.FirstLineIndent <= 0)
+                                {
+                                    info.FirstLineIndent = firstLine;
+                                }
+                                if (align == 3) // Justify
+                                {
+                                    info.Alignment = 3;
+                                }
+                                else if (info.Alignment == 0 && align != 0)
+                                {
+                                    info.Alignment = align;
+                                }
+                                if (left > 0 && info.LeftIndent <= 0)
+                                {
+                                    info.LeftIndent = left;
+                                }
+
+                                string fName = p.Range?.Font?.Name;
+                                if (!string.IsNullOrEmpty(fName) && (string.IsNullOrEmpty(info.FontName) || info.FontName == "Normal"))
+                                {
+                                    info.FontName = fName;
+                                }
+                                float fSize = (float)(p.Range?.Font?.Size ?? 0f);
+                                if (fSize > 0 && info.FontSize <= 0)
+                                {
+                                    info.FontSize = fSize;
+                                }
+                            }
+                            sampled++;
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+
+                // 3. Đọc danh sách / bullet nếu có trong tài liệu
+                try
+                {
+                    dynamic lists = doc.Lists;
+                    if (lists != null && lists.Count > 0)
+                    {
+                        info.IsInList = true;
+                        dynamic firstList = lists[1];
+                        if (firstList != null && firstList.ListParagraphs != null && firstList.ListParagraphs.Count > 0)
+                        {
+                            dynamic lp = firstList.ListParagraphs[1];
+                            string listStr = lp?.Range?.ListFormat?.ListString;
+                            if (!string.IsNullOrEmpty(listStr))
+                            {
+                                info.ListBulletChar = listStr.Trim();
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                // 4. Kiểm tra Selection nếu có
+                try
+                {
+                    dynamic activeWin = wordApp.ActiveWindow;
+                    dynamic sel = activeWin?.Selection;
+                    if (sel != null)
+                    {
+                        dynamic range = sel.Range;
+                        if (range != null && range.ListFormat != null && (int)range.ListFormat.ListType > 0)
+                        {
+                            info.IsInList = true;
+                            string s = range.ListFormat.ListString;
+                            if (!string.IsNullOrEmpty(s)) info.ListBulletChar = s.Trim();
+                        }
+                    }
+                }
+                catch { }
+
+                // Thiết lập fallback chuẩn văn bản tiếng Việt nếu thiếu trường
+                if (string.IsNullOrEmpty(info.FontName)) info.FontName = "Times New Roman";
+                if (info.FontSize <= 0) info.FontSize = 13.0f;
+                if (info.FirstLineIndent <= 0) info.FirstLineIndent = 28.35f; // 1.0cm chuẩn TCVN
+                if (info.Alignment == 0) info.Alignment = 3; // Mặc định Justify
+                if (info.LineSpacing <= 0) info.LineSpacing = 1.5f;
+
+                Program.Log($"[WordInterop] Quét tài liệu thành công: Font='{info.FontName}', Size={info.FontSize}pt, Indent={info.FirstLineIndent:0.#}pt, Align={info.Alignment}, Bullet='{info.ListBulletChar}'");
+            }
+            catch (Exception ex)
+            {
+                Program.Log($"[WordInterop] Lỗi khi quét tài liệu: {ex.Message}");
+            }
+
+            return info;
+        }
+
         public static WordFormatInfo GetCurrentFormatWithTimeout(int timeoutMs = 80)
         {
             if (!IsWordRunning())

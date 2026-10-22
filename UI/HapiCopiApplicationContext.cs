@@ -14,6 +14,7 @@ namespace HapiCopi
         private readonly KeyboardHook _keyboardHook;
         private readonly MouseHook? _mouseHook;
         private readonly ToolStripMenuItem _pauseMenuItem;
+        private readonly ToolStripMenuItem _magicWandMenuItem;
         private readonly ToolStripMenuItem _updateMenuItem;
         private UpdateForm? _updateForm;
         private bool _isPaused = false;
@@ -59,6 +60,10 @@ namespace HapiCopi
             titleItem.Font = new Font(titleItem.Font, FontStyle.Bold);
 
             _pauseMenuItem = new ToolStripMenuItem("Tạm dừng (Ctrl+Alt+P)", null, OnPauseClicked);
+            _magicWandMenuItem = new ToolStripMenuItem("Đũa phép Word (Ctrl+F9)", null, OnMagicWandMenuClicked);
+            _magicWandMenuItem.CheckOnClick = false;
+            SmartPasteService.StateChanged += active => _syncContext.Post(_ => _magicWandMenuItem.Checked = active, null);
+
             var historyMenuItem = new ToolStripMenuItem("Lịch sử Clipboard...", null, OnHistoryClicked);
             var mathEditorMenuItem = new ToolStripMenuItem("Soạn công thức toán (Ctrl+Alt+M)...", null, OnMathEditorClicked);
             var settingsMenuItem = new ToolStripMenuItem("Cài đặt...", null, OnSettingsClicked);
@@ -67,6 +72,7 @@ namespace HapiCopi
 
             contextMenu.Items.Add(titleItem);
             contextMenu.Items.Add(new ToolStripSeparator());
+            contextMenu.Items.Add(_magicWandMenuItem);
             contextMenu.Items.Add(mathEditorMenuItem);
             contextMenu.Items.Add(historyMenuItem);
             contextMenu.Items.Add(settingsMenuItem);
@@ -85,7 +91,7 @@ namespace HapiCopi
 
             // Hiển thị thông báo chào mừng lần đầu khởi động
             _notifyIcon.ShowBalloonTip(4000, "HapiCopi đã kích hoạt!",
-                "Ứng dụng đang bảo vệ clipboard của bạn.\nTự động định dạng Markdown + Cảnh báo lộ lọt thông tin.",
+                "Ứng dụng đang bảo vệ clipboard của bạn.\nCtrl+F9: Bật/Tắt Đũa phép đồng bộ căn lề Word.",
                 ToolTipIcon.Info);
 
             // 3. Đăng ký Listener bắt sự kiện Clipboard
@@ -95,7 +101,7 @@ namespace HapiCopi
             // 4. Đăng ký Hook bàn phím bắt sự kiện dán chủ động & mở nhanh soạn toán
             _keyboardHook = new KeyboardHook();
             _keyboardHook.PastePressed += OnPastePressed;
-            _keyboardHook.SmartPastePressed += OnSmartPastePressed;
+            _keyboardHook.MagicWandTogglePressed += () => _syncContext.Post(_ => OnMagicWandToggle(), null);
             _keyboardHook.MathHotkeyPressed += () => _syncContext.Post(_ => OnMathEditorClicked(this, EventArgs.Empty), null);
             _keyboardHook.PauseTogglePressed += () => _syncContext.Post(_ => OnPauseClicked(this, EventArgs.Empty), null);
             _keyboardHook.ExitAppPressed += () => _syncContext.Post(_ => OnExitClicked(this, EventArgs.Empty), null);
@@ -1313,19 +1319,42 @@ namespace HapiCopi
         // PASTE INTERCEPTION (Giữ nguyên logic định dạng)
         // ============================
 
-        private void OnSmartPastePressed()
+        private void OnMagicWandToggle()
         {
-            if (_isPaused || IsSimulatingPaste) return;
+            if (_isPaused) return;
 
-            _syncContext.Post(_ =>
+            _ = SmartPasteService.ToggleMagicWandAsync((title, message) =>
             {
-                _ = SmartPasteService.ExecuteSmartPasteAsync(_lastRawText, _lastRawHtml, _mermaidCache);
-            }, null);
+                _syncContext.Post(_ =>
+                {
+                    _notifyIcon.ShowBalloonTip(3000, title, message, ToolTipIcon.Info);
+                }, null);
+            });
+        }
+
+        private void OnMagicWandMenuClicked(object? sender, EventArgs e)
+        {
+            OnMagicWandToggle();
         }
 
         private async void OnPastePressed()
         {
-            if (_isPaused || IsSimulatingPaste || !_lastWasProcessed) return;
+            if (_isPaused || IsSimulatingPaste) return;
+
+            // Nếu không phải nội dung Markdown/AI nhưng Magic Wand ĐANG BẬT và đích là Word:
+            // Tự động định dạng đoạn văn bản thường theo quy tắc Word đã nạp
+            if (!_lastWasProcessed)
+            {
+                if (SmartPasteService.IsMagicWandActive && SmartPasteService.ActiveDocumentRules != null)
+                {
+                    ActiveAppInfo targetApp = ActiveWindowHelper.GetActiveAppInfo();
+                    if (targetApp.IsAnyWord && !string.IsNullOrWhiteSpace(_lastRawText))
+                    {
+                        await SmartPasteService.FormatClipboardWithActiveRulesAsync(_lastRawText, _lastRawHtml, _mermaidCache);
+                    }
+                }
+                return;
+            }
 
             try
             {
@@ -1399,7 +1428,12 @@ namespace HapiCopi
                 else if (appInfo.IsAnyWord)
                 {
                     WordFormatInfo formatInfo;
-                    if (appInfo.IsMicrosoftWord)
+                    if (SmartPasteService.IsMagicWandActive && SmartPasteService.ActiveDocumentRules != null)
+                    {
+                        Program.Log("[MagicWand] Áp dụng quy tắc Word đã nạp sẵn (Zero Latency)...");
+                        formatInfo = SmartPasteService.ActiveDocumentRules;
+                    }
+                    else if (appInfo.IsMicrosoftWord)
                     {
                         Program.Log("Xào nấu Clipboard real-time cho MS Word...");
                         formatInfo = WordInterop.GetCurrentFormatWithTimeout(80);
@@ -1418,11 +1452,21 @@ namespace HapiCopi
                     {
                         string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(_lastRawHtml);
                         string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, formatInfo);
+                        if (SmartPasteService.IsMagicWandActive && SmartPasteService.ActiveDocumentRules != null)
+                        {
+                            cleanFragment = SmartPasteService.ApplySmartWordStyles(cleanFragment, formatInfo);
+                        }
                         officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(cleanFragment);
                     }
                     else
                     {
                         officeHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(_lastRawText, formatInfo);
+                        if (SmartPasteService.IsMagicWandActive && SmartPasteService.ActiveDocumentRules != null)
+                        {
+                            string fragment = MarkdownToWordConverter.ExtractHtmlFragment(officeHtml);
+                            string smartFragment = SmartPasteService.ApplySmartWordStyles(fragment, formatInfo);
+                            officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(smartFragment);
+                        }
                     }
 
                     string cleanPlainText = await MarkdownToWordConverter.ProcessLatexInPlainTextAsync(_lastRawText);

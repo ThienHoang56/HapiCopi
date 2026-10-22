@@ -15,19 +15,24 @@
   - Output: <p class="MsoListParagraph" style="margin-left: 36pt; text-indent: -18.0pt; font-family: 'Calibri'; font-size: 11pt; line-height: 1.15; text-align: justify;"><span style="font-family: Symbol;">–</span><span style="font-size: 7.0pt;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>Mục phân tích thứ nhất</p><p class="MsoListParagraph" style="margin-left: 36pt; text-indent: -18.0pt; font-family: 'Calibri'; font-size: 11pt; line-height: 1.15; text-align: justify;"><span style="font-family: Symbol;">–</span><span style="font-size: 7.0pt;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>Mục phân tích thứ hai</p>
   -> PASS: Đã biến đổi danh sách thành MsoListParagraph đồng bộ gạch ngang '–' và hanging indent chuẩn Word.
 
+[PHẦN 3b - TỰ ĐỘNG CĂN CHỈNH VĂN BẢN THƯỜNG (PLAIN TEXT)]
+  - Input : Đoạn văn sao chép từ website tin tức hoặc ChatGPT dạng plain text. | - Gạch đầu dòng phân tích 1 | - Gạch đầu dòng phân tích 2
+  - Output: <p class="MsoNormal" style="font-family: 'Times New Roman'; font-size: 13pt; line-height: 1.5; text-align: justify; text-indent: 28.35pt;">Đoạn văn sao ch&#233;p từ website tin tức hoặc ChatGPT dạng plain text.</p><p class="MsoListParagraph" style="margin-left: 36.0pt; text-indent: -18.0pt; font-family: 'Times New Roman'; font-size: 13pt; line-height: 1.5; text-align: justify;"><span style="font-family: Symbol;">-</span><span style="font-size: 7.0pt;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>Gạch đầu d&#242;ng ph&#226;n t&#237;ch 1</p><p class="MsoListParagraph" style="margin-left: 36.0pt; text-indent: -18.0pt; font-family: 'Times New Roman'; font-size: 13pt; line-height: 1.5; text-align: justify;"><span style="font-family: Symbol;">-</span><span style="font-size: 7.0pt;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>Gạch đầu d&#242;ng ph&#226;n t&#237;ch 2</p>
+  -> PASS: Văn bản thô đã được chuyển thành các đoạn văn MsoNormal thụt lề 1cm và MsoListParagraph gạch đầu dòng.
+
 [PHẦN 4 - BENCHMARK HIỆU NĂNG CPU & ĐỘ TRỄ]
   - Số lượt kiểm thử: 1,000 lần
   - Tổng thời gian: 9 ms
-  - Độ trễ trung bình: 9.73 µs (0.0097 ms)
-  - Throughput: 102,796 lượt / giây
+  - Độ trễ trung bình: 9.92 µs (0.0099 ms)
+  - Throughput: 100,782 lượt / giây
   -> PASS: Tốc độ xử lý siêu tốc (< 1 ms), hoàn toàn không gây trễ giao diện.
 
 [PHẦN 5 - ĐỊNH LƯỢNG BỘ NHỚ RAM]
-  - RAM tiêu thụ thực tế (Working Set): 37.2 MB (Ngưỡng an toàn: < 120 MB)
+  - RAM tiêu thụ thực tế (Working Set): 38.2 MB (Ngưỡng an toàn: < 120 MB)
   -> PASS: Bộ nhớ RAM an toàn tuyệt đối.
 ==========================================================
    KẾT QUẢ TỔNG THỂ BENCHMARK SMART PASTE (MAGIC WAND):
-   - Vượt qua: 5 / 5 (100.0%)
-   - Độ trễ thuật toán: 9.7 µs / lượt
-   - Bộ nhớ RAM: 37.2 MB
+   - Vượt qua: 6 / 6 (100.0%)
+   - Độ trễ thuật toán: 9.9 µs / lượt
+   - Bộ nhớ RAM: 38.2 MB
 ==========================================================

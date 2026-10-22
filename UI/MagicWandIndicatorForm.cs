@@ -16,6 +16,7 @@ namespace HapiCopi
         private readonly System.Windows.Forms.Timer _animTimer;
         private float _animPhase = 0f;
         private bool _isSuccess = false;
+        private bool _isDeactivating = false;
         private float _successScale = 0f;
         private float _fadeOpacity = 1f;
         private int _tickCount = 0;
@@ -95,6 +96,30 @@ namespace HapiCopi
                 if (_instance != null && !_instance.IsDisposed && _instance.Visible)
                 {
                     _instance._isSuccess = true;
+                    _instance._isDeactivating = false;
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Đánh dấu tắt chế độ Magic Wand, chuyển sang hoạt ảnh mờ dần nhanh.
+        /// </summary>
+        public static void NotifyDeactivated()
+        {
+            try
+            {
+                if (_instance != null && !_instance.IsDisposed && _instance.Visible)
+                {
+                    _instance._isDeactivating = true;
+                }
+                else
+                {
+                    ShowNearCursor(Cursor.Position);
+                    if (_instance != null)
+                    {
+                        _instance._isDeactivating = true;
+                    }
                 }
             }
             catch { }
@@ -104,6 +129,7 @@ namespace HapiCopi
         {
             _animPhase = 0f;
             _isSuccess = false;
+            _isDeactivating = false;
             _successScale = 0f;
             _fadeOpacity = 1f;
             _tickCount = 0;
@@ -115,7 +141,18 @@ namespace HapiCopi
             _tickCount++;
             _animPhase += 0.12f;
 
-            if (_isSuccess)
+            if (_isDeactivating)
+            {
+                _fadeOpacity -= 0.14f;
+                if (_fadeOpacity <= 0f)
+                {
+                    _animTimer.Stop();
+                    Hide();
+                    return;
+                }
+                Opacity = Math.Max(0.0, _fadeOpacity);
+            }
+            else if (_isSuccess)
             {
                 _successScale = Math.Min(1.2f, _successScale + 0.18f);
                 if (_tickCount > 18) // Sau khoảng 280ms
@@ -130,7 +167,7 @@ namespace HapiCopi
                     Opacity = Math.Max(0.0, _fadeOpacity);
                 }
             }
-            else if (_tickCount > 60) // Quá 1 giây thì tự ẩn
+            else if (_tickCount > 120) // Sau 2 giây nếu đang scan quá lâu thì tự ẩn
             {
                 _animTimer.Stop();
                 Hide();
@@ -156,11 +193,27 @@ namespace HapiCopi
             float bgScale = _isSuccess ? (1.0f + (_successScale - 1.0f) * 0.4f) : (1.0f + (float)Math.Sin(_animPhase * 2) * 0.05f);
             float radius = 16f * bgScale;
 
+            Color c1, c2;
+            if (_isDeactivating)
+            {
+                c1 = Color.FromArgb(100, 116, 139); // Slate grey
+                c2 = Color.FromArgb(71, 85, 105);
+            }
+            else if (_isSuccess)
+            {
+                c1 = Color.FromArgb(16, 185, 129); // Emerald green
+                c2 = Color.FromArgb(52, 211, 153);
+            }
+            else
+            {
+                c1 = Color.FromArgb(14, 124, 134); // Teal brand
+                c2 = Color.FromArgb(20, 184, 166);
+            }
+
             using (var brush = new LinearGradientBrush(
                 new PointF(cx - radius, cy - radius),
                 new PointF(cx + radius, cy + radius),
-                _isSuccess ? Color.FromArgb(16, 185, 129) : Color.FromArgb(14, 124, 134), // Emerald green hoặc Teal brand
-                _isSuccess ? Color.FromArgb(52, 211, 153) : Color.FromArgb(20, 184, 166)))
+                c1, c2))
             {
                 g.FillEllipse(brush, cx - radius, cy - radius, radius * 2, radius * 2);
             }
@@ -171,7 +224,17 @@ namespace HapiCopi
                 g.DrawEllipse(borderPen, cx - radius, cy - radius, radius * 2, radius * 2);
             }
 
-            if (_isSuccess)
+            if (_isDeactivating)
+            {
+                // 1b. Vẽ dấu gạch ngang trắng nhẹ nhàng biểu thị tắt chế độ
+                using var minusPen = new Pen(Color.White, 2.2f)
+                {
+                    StartCap = LineCap.Round,
+                    EndCap = LineCap.Round
+                };
+                g.DrawLine(minusPen, cx - 5f, cy, cx + 5f, cy);
+            }
+            else if (_isSuccess)
             {
                 // 2. Vẽ dấu tick trắng tròn xinh xắn khi thành công
                 using var tickPen = new Pen(Color.White, 2.4f)

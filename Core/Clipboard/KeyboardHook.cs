@@ -25,6 +25,7 @@ namespace HapiCopi
         private const int VK_P = 0x50; // Phím P (Tạm dừng / Bật lại như Unikey)
         private const int VK_Q = 0x51; // Phím Q (Thoát hoàn toàn app)
         private const int VK_PAUSE = 0x13; // Phím Pause/Break
+        private const int VK_F9 = 0x78; // Phím F9 (Bật / Tắt Magic Wand scan tài liệu)
 
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
@@ -56,7 +57,7 @@ namespace HapiCopi
         private DateTime _lastExitPressTime = DateTime.MinValue;
 
         public event Action? PastePressed;
-        public event Action? SmartPastePressed;
+        public event Action? MagicWandTogglePressed;
         public event Action? MathHotkeyPressed;
         public event Action? PauseTogglePressed;
         public event Action? ExitAppPressed;
@@ -124,18 +125,15 @@ namespace HapiCopi
                         _ctrlAltThirdKeyPressed = true;
                         _ctrlAltComboPending = false;
 
-                        // 1. Kiểm tra tổ hợp Ctrl + V hoặc Ctrl + Shift + V (Dán thông minh Magic Wand)
+                        // 1. Kiểm tra tổ hợp Ctrl + V
                         if (vkCode == VK_V && ctrlDown && !altDown)
                         {
-                            bool shiftDown = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-                            if (shiftDown)
-                            {
-                                System.Threading.Tasks.Task.Run(() => SmartPastePressed?.Invoke());
-                            }
-                            else
-                            {
-                                System.Threading.Tasks.Task.Run(() => PastePressed?.Invoke());
-                            }
+                            System.Threading.Tasks.Task.Run(() => PastePressed?.Invoke());
+                        }
+                        // 1b. Kiểm tra tổ hợp Ctrl + F9 (Bật / Tắt Magic Wand scan tài liệu)
+                        else if (vkCode == VK_F9 && ctrlDown && !altDown)
+                        {
+                            System.Threading.Tasks.Task.Run(() => MagicWandTogglePressed?.Invoke());
                         }
                         // 2. Kiểm tra tổ hợp Shift + Insert
                         else if (vkCode == VK_INSERT)
