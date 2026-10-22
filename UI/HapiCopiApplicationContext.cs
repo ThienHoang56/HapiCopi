@@ -548,7 +548,7 @@ namespace HapiCopi
             }
             else
             {
-                _notifyIcon.Text = "HapiCopi - Clipboard DLP & Auto-Format";
+                _notifyIcon.Text = "HapiCopi - Auto-Format & AI Math";
                 _notifyIcon.ShowBalloonTip(1500, "HapiCopi — Tiếp tục",
                     "Đã tiếp tục hoạt động.",
                     ToolTipIcon.Info);

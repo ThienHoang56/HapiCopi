@@ -860,9 +860,8 @@
                             </div>
 
                             <div class="ink-tb-right">
-                                <select id="inkEngineSelect" class="select-input-sm" title="Bộ suy luận nhận diện">
-                                    <option value="local">Cục bộ (Offline)</option>
-                                    <option value="ai">Đám mây (Cloud)</option>
+                                <select id="inkEngineSelect" class="select-input-sm" title="Bộ suy luận nhận diện ngoại tuyến">
+                                    <option value="local">Cục bộ (AI Offline)</option>
                                 </select>
                                 <label class="ink-check-item" title="Tự động nhận diện sau khi nhấc bút 0.7s">
                                     <input type="checkbox" id="inkAutoCheck" checked> Tự động
@@ -2154,7 +2153,7 @@
 
             isInkRecognizing = true;
             if (inkDotStatus) inkDotStatus.className = 'dot-indicator analyzing';
-            if (inkStatusText) inkStatusText.textContent = engine === 'ai' ? 'Đang gửi AI Đám mây...' : 'Đang nhận diện...';
+            if (inkStatusText) inkStatusText.textContent = 'Đang nhận diện...';
             if (inkLatencyBadge) inkLatencyBadge.textContent = '';
 
             var simplifiedStrokes = inkStrokes.map(function(stroke) {

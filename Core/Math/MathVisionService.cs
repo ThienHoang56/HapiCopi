@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -13,68 +12,24 @@ namespace HapiCopi
 {
     /// <summary>
     /// Dịch vụ nhận diện công thức toán viết tay (Handwriting Math Recognition).
-    /// Hỗ trợ cả 2 chế độ:
-    /// 1. Gói Mua (AI Vision Pro - Gemini 2.5 Flash): Nhận diện siêu thông minh mọi công thức phức tạp, tích phân, ma trận, chữ xấu.
-    /// 2. Gói Thường (Cục bộ Offline): Nhận diện offline học máy cá nhân hóa (Personalized Adaptation) & ONNX Runtime.
+    /// Nhận diện ngoại tuyến 100% bằng Deep Learning ONNX (Vision Transformer / BTTR) và hồ sơ nét cá nhân hóa.
     /// </summary>
     public static class MathVisionService
     {
-        private static readonly HttpClient _httpClient = new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(10)
-        };
 
         /// <summary>
-        /// Nhận diện nét vẽ sang mã LaTeX.
+        /// Nhận diện nét vẽ sang mã LaTeX ngoại tuyến (100% Offline AI - End-to-End ONNX + Personalized Profile).
         /// </summary>
         public static async Task<(bool success, string latex, List<string> candidates, string error, long elapsedMs)> RecognizeHandwrittenMathAsync(
             string base64Png, 
-            string engine = "ai",
+            string engine = "local",
             List<List<PointF>>? strokes = null)
         {
             var sw = Stopwatch.StartNew();
 
             try
             {
-                if (engine.Equals("local", StringComparison.OrdinalIgnoreCase))
-                {
-                    // Chế độ cục bộ / Học máy cá nhân hóa
-                    return RecognizeOffline(base64Png, strokes, sw);
-                }
-                else
-                {
-                    // Chế độ AI Vision Pro
-                    if (string.IsNullOrWhiteSpace(base64Png))
-                    {
-                        return (false, "", new List<string>(), "Ảnh nét vẽ trống.", sw.ElapsedMilliseconds);
-                    }
-
-                    string pureBase64 = base64Png;
-                    int commaIdx = pureBase64.IndexOf(',');
-                    if (commaIdx >= 0)
-                    {
-                        pureBase64 = pureBase64.Substring(commaIdx + 1);
-                    }
-
-                    var aiResult = await RecognizeWithGeminiAsync(pureBase64, sw);
-                    if (aiResult.success && !string.IsNullOrEmpty(aiResult.latex) && strokes != null && strokes.Count > 0)
-                    {
-                        // Kích hoạt Knowledge Distillation & Augmentation chạy ngầm
-                        _ = Task.Run(() =>
-                        {
-                            try
-                            {
-                                int distilled = HandwritingProfileService.DistillAndAugmentSample(aiResult.latex, strokes, isFromCloud: true);
-                                Program.Log($"[MathVision Distill] Đã tự động chắt lọc và sinh biến thể {distilled} mẫu từ AI Vision -> Local Profile.");
-                            }
-                            catch (Exception ex)
-                            {
-                                Program.Log($"[MathVision Distill Lỗi] {ex.Message}");
-                            }
-                        });
-                    }
-                    return aiResult;
-                }
+                return await Task.Run(() => RecognizeOffline(base64Png, strokes, sw));
             }
             catch (Exception ex)
             {
@@ -82,110 +37,6 @@ namespace HapiCopi
                 Program.Log($"[MathVision LỖI] {ex.Message}");
                 return (false, "", new List<string>(), $"Lỗi xử lý: {ex.Message}", sw.ElapsedMilliseconds);
             }
-        }
-
-        private static async Task<(bool success, string latex, List<string> candidates, string error, long elapsedMs)> RecognizeWithGeminiAsync(string pureBase64, Stopwatch sw)
-        {
-            string? apiKey = AppConfig.Get("GEMINI_API_KEY");
-            if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                sw.Stop();
-                return (false, "", new List<string>(), "Chưa kích hoạt gói Cloud AI. Vui lòng kích hoạt gói Cloud trong Cài đặt hoặc dùng chế độ Cục bộ (Offline) miễn phí.", sw.ElapsedMilliseconds);
-            }
-
-            // Danh sách model ưu tiên
-            string[] candidateModels = { "gemini-2.5-flash" };
-
-            string systemPrompt = 
-                "You are an expert mathematical handwriting OCR engine. " +
-                "Convert the handwritten mathematical equation or expression in this image into standard, valid LaTeX code. " +
-                "Output ONLY the pure LaTeX string without markdown code fences (no ```latex), without dollar signs ($), " +
-                "and without any explanations, conversational text, or prefixes. " +
-                "If multiple formulas or systems are present, format using \\begin{cases}...\\end{cases} or \\begin{aligned}...\\end{aligned}. " +
-                "If the image has no math or is empty, output \\empty.";
-
-            var requestBody = new
-            {
-                contents = new[]
-                {
-                    new
-                    {
-                        parts = new object[]
-                        {
-                            new { text = systemPrompt },
-                            new
-                            {
-                                inlineData = new
-                                {
-                                    mimeType = "image/png",
-                                    data = pureBase64
-                                }
-                            }
-                        }
-                    }
-                },
-                generationConfig = new
-                {
-                    temperature = 0.0,
-                    maxOutputTokens = 64,
-                    thinkingConfig = new
-                    {
-                        thinkingBudget = 0
-                    }
-                }
-            };
-
-            string jsonPayload = JsonSerializer.Serialize(requestBody);
-
-            Exception? lastEx = null;
-            foreach (var model in candidateModels)
-            {
-                try
-                {
-                    string endpoint = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
-                    using var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
-                    using var response = await _httpClient.PostAsync(endpoint, content);
-
-                    string respString = await response.Content.ReadAsStringAsync();
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        Program.Log($"[MathVision] Model {model} trả về HTTP {response.StatusCode}: {respString}");
-                        if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-                        {
-                            sw.Stop();
-                            return (false, "", new List<string>(), "Key Google Gemini miễn phí đã hết lượt gọi trong ngày (HTTP 429: Quota Exceeded). Hãy dùng chế độ Cục bộ hoặc cập nhật API key mới.", sw.ElapsedMilliseconds);
-                        }
-                        continue;
-                    }
-
-                    using var doc = JsonDocument.Parse(respString);
-                    if (doc.RootElement.TryGetProperty("candidates", out var candidates) &&
-                        candidates.GetArrayLength() > 0)
-                    {
-                        var firstCandidate = candidates[0];
-                        if (firstCandidate.TryGetProperty("content", out var contentElem) &&
-                            contentElem.TryGetProperty("parts", out var parts) &&
-                            parts.GetArrayLength() > 0)
-                        {
-                            string rawText = parts[0].GetProperty("text").GetString() ?? "";
-                            string cleanLatex = CleanLatexOutput(rawText);
-
-                            sw.Stop();
-                            Program.Log($"[MathVision] Nhận diện thành công ({model}) trong {sw.ElapsedMilliseconds}ms: {cleanLatex}");
-                            return (true, cleanLatex, new List<string>(), "", sw.ElapsedMilliseconds);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    lastEx = ex;
-                    Program.Log($"[MathVision] Thử model {model} thất bại: {ex.Message}");
-                }
-            }
-
-            sw.Stop();
-            string errMsg = lastEx != null ? lastEx.Message : "Không nhận được phản hồi hợp lệ từ máy chủ AI.";
-            return (false, "", new List<string>(), errMsg, sw.ElapsedMilliseconds);
         }
 
         private static (bool success, string latex, List<string> candidates, string error, long elapsedMs) RecognizeOffline(
@@ -217,7 +68,7 @@ namespace HapiCopi
                 }
 
                 sw.Stop();
-                return (false, "", new List<string>(), "ChÆ°a cÃ³ nÃ©t váº½ Ä‘á»ƒ nháº­n diá»‡n cá»¥c bá»™.", sw.ElapsedMilliseconds);
+                return (false, "", new List<string>(), "Chưa có nét vẽ để nhận diện cục bộ.", sw.ElapsedMilliseconds);
             }
 
             try
@@ -247,7 +98,7 @@ namespace HapiCopi
                     return (true, result, candidates, "", sw.ElapsedMilliseconds);
                 }
 
-                return (false, "", new List<string>(), "Không phân tích được nét vẽ cục bộ. Bạn có thể nhấn 'Lưu mẫu nét' để dạy app hoặc chuyển sang Đám mây.", sw.ElapsedMilliseconds);
+                return (false, "", new List<string>(), "Không phân tích được nét vẽ cục bộ. Bạn có thể nhấn 'Lưu mẫu nét' để dạy app nhận diện tốt hơn.", sw.ElapsedMilliseconds);
             }
             catch (Exception ex)
             {
@@ -648,46 +499,7 @@ namespace HapiCopi
             }
         }
 
-        private static string CleanLatexOutput(string raw)
-        {
-            if (string.IsNullOrWhiteSpace(raw)) return "";
 
-            string text = raw.Trim();
-
-            // Gỡ bỏ markdown code fences ```latex ... ```
-            if (text.StartsWith("```"))
-            {
-                int firstNewline = text.IndexOf('\n');
-                if (firstNewline > 0)
-                {
-                    text = text.Substring(firstNewline + 1);
-                }
-                int lastFence = text.LastIndexOf("```");
-                if (lastFence >= 0)
-                {
-                    text = text.Substring(0, lastFence);
-                }
-                text = text.Trim();
-            }
-
-            // Gỡ bỏ dấu $ hoặc $$ bao quanh
-            if (text.StartsWith("$$") && text.EndsWith("$$") && text.Length > 4)
-            {
-                text = text.Substring(2, text.Length - 4).Trim();
-            }
-            else if (text.StartsWith("$") && text.EndsWith("$") && text.Length > 2)
-            {
-                text = text.Substring(1, text.Length - 2).Trim();
-            }
-
-            // Gỡ bỏ các thẻ giải thích thừa nếu có
-            if (text.StartsWith("LaTeX:", StringComparison.OrdinalIgnoreCase))
-            {
-                text = text.Substring(6).Trim();
-            }
-
-            return text;
-        }
     }
 
     /// <summary>
