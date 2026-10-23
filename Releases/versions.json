@@ -4,10 +4,10 @@
     {
       "Version": "1.4.0",
       "Released": "2026-10-23",
-      "Notes": "StyleSync 1.4.0: đồng bộ cấu trúc thật từ file .docx (heading, thứ tự mục 4.5 → 4.4, bullet/numbering, spacing). Chế độ đích Google Docs chỉ đồng bộ cấu trúc và để Docs tự giữ font/size; chế độ Word giữ đồng bộ typography. Có toggle đánh số lại và trạng thái xử lý trên tray.",
+      "Notes": "StyleSync 1.4.0: đồng bộ cấu trúc thật từ file .docx (heading, thứ tự mục 4.5 → 4.4, bullet/numbering, spacing). Word giữ đồng bộ typography từ file mẫu; Google Docs dùng Ctrl+Alt+S khi đang ở Docs để Docs tự giữ style gốc. Có toggle đánh số lại trong StyleSync.",
       "File": "https://github.com/ThienHoang56/HapiCopi/releases/download/v1.4.0/HapiCopi-Setup-1.4.0.exe",
-      "Size": 101060691,
-      "Sha256": "2EDFCD0116ABBBE3DB211EA0A37F909510616D33673E415E7BD1E995E39F0139"
+      "Size": 101057813,
+      "Sha256": "4D37FBBA67C6C3463448B79A57E8B49F59BCCFD43A9677FECEB03D68CEA07C3C"
     },
     {
       "Version": "1.3.0",
