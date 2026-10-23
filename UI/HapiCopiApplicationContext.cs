@@ -14,11 +14,20 @@ namespace HapiCopi
         private readonly KeyboardHook _keyboardHook;
         private readonly MouseHook? _mouseHook;
         private readonly ToolStripMenuItem _pauseMenuItem;
-        private readonly ToolStripMenuItem _magicWandMenuItem;
+        private readonly ToolStripMenuItem _manualLoadDocxMenuItem;
+        private readonly ToolStripMenuItem _autoDocsSyncMenuItem;
+        private readonly ToolStripMenuItem _activeProfileStatusMenuItem;
+        private readonly ToolStripMenuItem _targetModeMenuItem;
+        private readonly ToolStripMenuItem _targetAutoItem;
+        private readonly ToolStripMenuItem _targetWordItem;
+        private readonly ToolStripMenuItem _targetDocsItem;
+        private readonly ToolStripMenuItem _styleSyncDashboardMenuItem;
         private readonly ToolStripMenuItem _updateMenuItem;
         private UpdateForm? _updateForm;
+        private StyleSyncForm? _styleSyncForm;
         private bool _isPaused = false;
         private bool _hasShownWelcome = false;
+        private bool _hasShownDocsModeTip = false;
         private bool _isSimulatingClipboard = false;
         private readonly Dictionary<string, string> _mermaidCache = new Dictionary<string, string>();
         private readonly System.Threading.SynchronizationContext _syncContext;
@@ -60,9 +69,29 @@ namespace HapiCopi
             titleItem.Font = new Font(titleItem.Font, FontStyle.Bold);
 
             _pauseMenuItem = new ToolStripMenuItem("Tạm dừng (Ctrl+Alt+P)", null, OnPauseClicked);
-            _magicWandMenuItem = new ToolStripMenuItem("Đũa phép Word (Ctrl+F9)", null, OnMagicWandMenuClicked);
-            _magicWandMenuItem.CheckOnClick = false;
-            SmartPasteService.StateChanged += active => _syncContext.Post(_ => _magicWandMenuItem.Checked = active, null);
+
+            // NHÓM STYLE SYNC (ĐỒNG BỘ ĐỊNH DẠNG TÀI LIỆU)
+            _manualLoadDocxMenuItem = new ToolStripMenuItem("📁 Nạp tài liệu mẫu (.docx) [Manual]...", null, OnManualLoadDocxClicked);
+            _autoDocsSyncMenuItem = new ToolStripMenuItem("🌐 Tự động quét từ Google Docs [Auto]...", null, OnAutoDocsSyncClicked);
+            _activeProfileStatusMenuItem = new ToolStripMenuItem("📋 Hồ sơ: Chưa nạp tài liệu", null, OnActiveProfileMenuClicked);
+
+            _targetModeMenuItem = new ToolStripMenuItem("🎯 Chế độ đích");
+            _targetAutoItem = new ToolStripMenuItem("Tự động (theo phím tắt Docs)");
+            _targetWordItem = new ToolStripMenuItem("Microsoft Word (.docx)");
+            _targetDocsItem = new ToolStripMenuItem("Google Docs (giữ style gốc)");
+            _targetAutoItem.Click += (s, e) => ApplyTargetMode("auto");
+            _targetWordItem.Click += (s, e) => ApplyTargetMode("word");
+            _targetDocsItem.Click += (s, e) => ApplyTargetMode("docs");
+            _targetModeMenuItem.DropDownItems.Add(_targetAutoItem);
+            _targetModeMenuItem.DropDownItems.Add(_targetWordItem);
+            _targetModeMenuItem.DropDownItems.Add(_targetDocsItem);
+
+            _styleSyncDashboardMenuItem = new ToolStripMenuItem("⚙️ Bảng điều khiển StyleSync...", null, OnStyleSyncDashboardClicked);
+
+            UpdateStyleSyncMenuDisplay();
+            StyleSyncService.ActiveProfileChanged += _ => _syncContext.Post(_ => UpdateStyleSyncMenuDisplay(), null);
+            StyleSyncService.StateChanged += _ => _syncContext.Post(_ => UpdateStyleSyncMenuDisplay(), null);
+            StyleSyncService.TargetModeChanged += () => _syncContext.Post(_ => UpdateStyleSyncMenuDisplay(), null);
 
             var historyMenuItem = new ToolStripMenuItem("Lịch sử Clipboard...", null, OnHistoryClicked);
             var mathEditorMenuItem = new ToolStripMenuItem("Soạn công thức toán (Ctrl+Alt+M)...", null, OnMathEditorClicked);
@@ -72,7 +101,12 @@ namespace HapiCopi
 
             contextMenu.Items.Add(titleItem);
             contextMenu.Items.Add(new ToolStripSeparator());
-            contextMenu.Items.Add(_magicWandMenuItem);
+            contextMenu.Items.Add(_manualLoadDocxMenuItem);
+            contextMenu.Items.Add(_autoDocsSyncMenuItem);
+            contextMenu.Items.Add(_activeProfileStatusMenuItem);
+            contextMenu.Items.Add(_targetModeMenuItem);
+            contextMenu.Items.Add(_styleSyncDashboardMenuItem);
+            contextMenu.Items.Add(new ToolStripSeparator());
             contextMenu.Items.Add(mathEditorMenuItem);
             contextMenu.Items.Add(historyMenuItem);
             contextMenu.Items.Add(settingsMenuItem);
@@ -89,10 +123,25 @@ namespace HapiCopi
                 Visible = true
             };
 
+            // Cập nhật lại tooltip sau khi NotifyIcon đã sẵn sàng (bao gồm chế độ đích).
+            UpdateStyleSyncMenuDisplay();
+
             // Hiển thị thông báo chào mừng lần đầu khởi động
             _notifyIcon.ShowBalloonTip(4000, "HapiCopi đã kích hoạt!",
-                "Ứng dụng đang bảo vệ clipboard của bạn.\nCtrl+F9: Bật/Tắt Đũa phép đồng bộ căn lề Word.",
+                "Ứng dụng đang bảo vệ clipboard của bạn.\nCtrl+Alt+S: Bật/Tắt StyleSync đồng bộ định dạng tài liệu.",
                 ToolTipIcon.Info);
+
+            // Gợi ý một lần: Docs tự giữ font/size, chỉ cần chọn đúng đích.
+            if (StyleSyncService.ActiveProfile != null
+                && StyleSyncService.TargetMode == "auto"
+                && (AppConfig.Get("STYLESYNC_TARGET_TIP_SHOWN") ?? "false") != "true")
+            {
+                AppConfig.Set("STYLESYNC_TARGET_TIP_SHOWN", "true");
+                _notifyIcon.ShowBalloonTip(6000, "StyleSync — chọn đích dán",
+                    "Nếu đang dán vào Google Docs, chọn '🎯 Đích: Google Docs' ở menu chuột phải.\n" +
+                    "Docs sẽ tự giữ font/size của tài liệu; HapiCopi chỉ đồng bộ heading, bullet/numbering và số mục.",
+                    ToolTipIcon.Info);
+            }
 
             // 3. Đăng ký Listener bắt sự kiện Clipboard
             _listener = new ClipboardListener();
@@ -1011,7 +1060,17 @@ namespace HapiCopi
                 bool containsDiagram = (!string.IsNullOrEmpty(originalText) && KrokiRenderer.ContainsAnyDiagram(originalText)) ||
                                        KrokiRenderer.ContainsAnyDiagramHtml(originalHtml);
 
-                bool shouldFormat = isMarkdownOrAi || isUnstructured || isPdfText || containsDiagram || isOfficeOrDocsCopy;
+                // Chế độ đích: Docs chỉ đồng bộ cấu trúc (Docs tự giữ font/size),
+                // Word dùng typography đo từ file .docx.
+                bool targetGoogleDocs = StyleSyncService.TargetMode == "docs"
+                    || (StyleSyncService.TargetMode == "auto"
+                        && (SmartPasteService.IsGoogleDocsActive || sourceApp.IsGoogleDocs));
+
+                bool isStyleSyncActive = ((StyleSyncService.IsEnabled && StyleSyncService.ActiveProfile != null && StyleSyncService.ActiveProfile.IsValid) ||
+                                          (SmartPasteService.IsMagicWandActive && (SmartPasteService.ActiveStructureTree != null || SmartPasteService.IsGoogleDocsActive)) ||
+                                          (targetGoogleDocs && (hasHtml || isMarkdownOrAi))) &&
+                                         (!string.IsNullOrWhiteSpace(originalText) || !string.IsNullOrWhiteSpace(originalHtml));
+                bool shouldFormat = isMarkdownOrAi || isUnstructured || isPdfText || containsDiagram || isOfficeOrDocsCopy || isStyleSyncActive;
 
                 // Phát hiện xem có copy ảnh công thức đã xuất (Google Docs/Web/Office)
                 if (!isStartup && !string.IsNullOrEmpty(originalHtml) && originalHtml.Contains("[HapiCopi:Math]"))
@@ -1154,7 +1213,81 @@ namespace HapiCopi
                             bool shouldUseHtmlCleanPath = hasHtml && !isPdfText &&
                                 (isOfficeOrDocsCopy || !isUnstructured || htmlHasRichStructure);
 
-                            if (shouldUseHtmlCleanPath)
+                            if (targetGoogleDocs)
+                            {
+                                int offset = SmartPasteService.IsGoogleDocsActive
+                                    ? SmartPasteService.GoogleDocsHeadingOffset
+                                    : 0;
+
+                                // Docs tự áp Named Styles của tài liệu. Ta chỉ:
+                                // - nâng "4.5. Title" thành <h2> theo đúng độ sâu
+                                // - đánh số lại 4.5 -> 4.4 theo sườn .docx (nếu có profile)
+                                // - giữ <ul>/<ol>, bold/italic/link/table semantic
+                                // TUYỆT ĐỐI không gắn font-family/font-size/margin.
+                                // Docs mode chỉ dùng hồ sơ cho CẤU TRÚC (heading/số mục),
+                                // không dùng typography. Vì vậy vẫn dùng hồ sơ dù toggle
+                                // "Kích hoạt" (typography Word) đang tắt.
+                                var docsProfile = StyleSyncService.ActiveProfile;
+                                formattedHtml = await GoogleDocsSemanticAdapter.BuildSemanticDocsClipboardAsync(
+                                    formattedText ?? originalText ?? "",
+                                    originalHtml ?? "",
+                                    docsProfile,
+                                    offset);
+
+                                status = docsProfile != null
+                                    ? $"Google Docs (cấu trúc: {docsProfile.DocumentTitle})"
+                                    : "Google Docs (ngữ nghĩa)";
+                                Program.Log($"[StyleSync] Target=GoogleDocs, Profile='{docsProfile?.DocumentTitle ?? "none"}', Offset=+{offset}. Chỉ đồng bộ cấu trúc, không gắn font/size.");
+                            }
+                            else if (StyleSyncService.IsEnabled && StyleSyncService.ActiveProfile != null && StyleSyncService.ActiveProfile.IsValid)
+                            {
+                                var tree = StyleSyncService.ActiveProfile;
+                                if (shouldUseHtmlCleanPath)
+                                {
+                                    // Chế độ StyleSync: KHÔNG cộng dồn cấp Heading theo con trỏ.
+                                    // Cấp đích do độ sâu số đề mục + sườn tài liệu quyết định,
+                                    // tránh việc "4.5" bị đẩy thành H4 chỉ vì con trỏ đang nằm dưới H2.
+                                    int savedParentLevel = formatInfo.ParentHeadingLevel;
+                                    formatInfo.ParentHeadingLevel = 0;
+                                    try
+                                    {
+                                        string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(originalHtml);
+                                        string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, formatInfo);
+                                        string transformedFragment = SmartPasteService.TransformHtmlWithTree(cleanFragment, tree);
+                                        formattedHtml = MarkdownToWordConverter.PackageAsClipboardHtml(transformedFragment);
+                                    }
+                                    finally
+                                    {
+                                        formatInfo.ParentHeadingLevel = savedParentLevel;
+                                    }
+                                }
+                                else
+                                {
+                                    string transformedFragment = SmartPasteService.TransformMarkdownAstToOfficeHtml(formattedText ?? "", tree);
+                                    formattedHtml = MarkdownToWordConverter.PackageAsClipboardHtml(transformedFragment);
+                                }
+                                status = tree.RenumberOutline
+                                    ? $"StyleSync ({tree.DocumentTitle} + số đề mục)"
+                                    : $"StyleSync ({tree.DocumentTitle})";
+                            }
+                            else if (SmartPasteService.IsMagicWandActive && SmartPasteService.ActiveStructureTree != null)
+                            {
+                                var tree = SmartPasteService.ActiveStructureTree;
+                                if (shouldUseHtmlCleanPath)
+                                {
+                                    string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(originalHtml);
+                                    string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, formatInfo);
+                                    string transformedFragment = SmartPasteService.TransformHtmlWithTree(cleanFragment, tree);
+                                    formattedHtml = MarkdownToWordConverter.PackageAsClipboardHtml(transformedFragment);
+                                }
+                                else
+                                {
+                                    string transformedFragment = SmartPasteService.TransformMarkdownAstToOfficeHtml(formattedText ?? "", tree);
+                                    formattedHtml = MarkdownToWordConverter.PackageAsClipboardHtml(transformedFragment);
+                                }
+                                status = $"StyleSync ({tree.DocumentTitle})";
+                            }
+                            else if (shouldUseHtmlCleanPath)
                             {
                                 string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(originalHtml);
                                 string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, formatInfo);
@@ -1177,6 +1310,25 @@ namespace HapiCopi
                         }
 
                         _syncContext.Post(_ => AddToHistory(historyItem), null);
+
+                        // Tín hiệu "app còn sống": cập nhật tooltip + nhắc một lần về chế độ Docs.
+                        _syncContext.Post(_ =>
+                        {
+                            try
+                            {
+                                string shortTarget = targetGoogleDocs ? "Docs" : "Word";
+                                _notifyIcon.Text = $"HapiCopi | {shortTarget} | {DateTime.Now:HH:mm}";
+                            }
+                            catch { }
+
+                            if (targetGoogleDocs && !_hasShownDocsModeTip && !isStartup)
+                            {
+                                _hasShownDocsModeTip = true;
+                                _notifyIcon.ShowBalloonTip(2500, "Google Docs — đã đồng bộ cấu trúc",
+                                    "Docs tự giữ font/size của tài liệu. HapiCopi chỉ đồng bộ heading, bullet/numbering và số mục.",
+                                    ToolTipIcon.Info);
+                            }
+                        }, null);
 
                         if (shouldFormat && !isStartup && !_hasShownWelcome)
                         {
@@ -1319,160 +1471,184 @@ namespace HapiCopi
         // PASTE INTERCEPTION (Giữ nguyên logic định dạng)
         // ============================
 
+        private void UpdateStyleSyncMenuDisplay()
+        {
+            if (StyleSyncService.ActiveProfile != null && StyleSyncService.IsEnabled)
+            {
+                var p = StyleSyncService.ActiveProfile;
+                _activeProfileStatusMenuItem.Text = $"📋 Hồ sơ: {p.DocumentTitle} ({p.BodyStyle.FontSize:0.#}pt)";
+                _activeProfileStatusMenuItem.Checked = true;
+            }
+            else if (StyleSyncService.ActiveProfile != null && !StyleSyncService.IsEnabled)
+            {
+                _activeProfileStatusMenuItem.Text = $"📋 Hồ sơ: {StyleSyncService.ActiveProfile.DocumentTitle} (Tạm tắt)";
+                _activeProfileStatusMenuItem.Checked = false;
+            }
+            else
+            {
+                _activeProfileStatusMenuItem.Text = "📋 Hồ sơ: Chưa nạp tài liệu";
+                _activeProfileStatusMenuItem.Checked = false;
+            }
+
+            string targetLabel = StyleSyncService.TargetMode switch
+            {
+                "docs" => "Google Docs (giữ style gốc)",
+                "word" => "Microsoft Word (.docx)",
+                _ => "Tự động"
+            };
+            _targetModeMenuItem.Text = $"🎯 Chế độ đích: {targetLabel}";
+            _targetAutoItem.Checked = StyleSyncService.TargetMode == "auto";
+            _targetWordItem.Checked = StyleSyncService.TargetMode == "word";
+            _targetDocsItem.Checked = StyleSyncService.TargetMode == "docs";
+
+            string shortTarget = StyleSyncService.TargetMode switch
+            {
+                "docs" => "Docs",
+                "word" => "Word",
+                _ => "Auto"
+            };
+            try
+            {
+                _notifyIcon.Text = $"HapiCopi v{UpdateManager.CurrentVersionText} | Đích: {shortTarget}";
+            }
+            catch { }
+        }
+
+        private void ApplyTargetMode(string mode)
+        {
+            StyleSyncService.SetTargetMode(mode);
+            UpdateStyleSyncMenuDisplay();
+
+            string label = mode switch
+            {
+                "docs" => "Google Docs (giữ style gốc — chỉ đồng bộ cấu trúc)",
+                "word" => "Microsoft Word (.docx)",
+                _ => "Tự động"
+            };
+
+            if (mode == "docs")
+            {
+                if (StyleSyncService.ActiveProfile == null)
+                {
+                    label += "\nChưa nạp hồ sơ .docx — Docs sẽ giữ style gốc, chưa đánh số mục.";
+                }
+                else if (StyleSyncService.ActiveProfile.Outline.Count == 0)
+                {
+                    label += "\nHồ sơ cũ chưa có sườn đề mục — hãy nạp lại file .docx để đánh số 4.5 → 4.4.";
+                }
+            }
+
+            _notifyIcon.ShowBalloonTip(3500, "StyleSync — Chế độ đích", label, ToolTipIcon.Info);
+        }
+
+        private void OnManualLoadDocxClicked(object? sender, EventArgs e)
+        {
+            using var ofd = new OpenFileDialog
+            {
+                Title = "Chọn tài liệu Word mẫu (.docx)",
+                Filter = "Tài liệu Word (*.docx)|*.docx|Tất cả tệp (*.*)|*.*",
+                CheckFileExists = true
+            };
+
+            if (ofd.ShowDialog() == DialogResult.OK)
+            {
+                try
+                {
+                    var tree = StyleSyncService.LoadManualProfile(ofd.FileName);
+                    UpdateStyleSyncMenuDisplay();
+                    _notifyIcon.ShowBalloonTip(3500, "Nạp tài liệu thành công!",
+                        $"Hồ sơ: {tree.DocumentTitle}\nFont: {tree.BodyStyle.FontName} {tree.BodyStyle.FontSize:0.#}pt | Giãn dòng: {tree.BodyStyle.LineSpacing:0.##}",
+                        ToolTipIcon.Info);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Lỗi nạp tài liệu: {ex.Message}", "Lỗi StyleSync", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private async void OnAutoDocsSyncClicked(object? sender, EventArgs e)
+        {
+            _notifyIcon.ShowBalloonTip(2000, "StyleSync Auto", "Đang quét và tải tài liệu Google Docs từ trình duyệt...", ToolTipIcon.Info);
+            try
+            {
+                var tree = await StyleSyncService.AutoSyncGoogleDocsAsync();
+                UpdateStyleSyncMenuDisplay();
+                _notifyIcon.ShowBalloonTip(3500, "Đồng bộ Google Docs thành công!",
+                    $"Hồ sơ: {tree.DocumentTitle}\nFont: {tree.BodyStyle.FontName} {tree.BodyStyle.FontSize:0.#}pt | Căn lề: {tree.BodyStyle.Alignment}",
+                    ToolTipIcon.Info);
+            }
+            catch (Exception ex)
+            {
+                _notifyIcon.ShowBalloonTip(4000, "Lỗi quét Google Docs", ex.Message + "\nClick Bảng điều khiển StyleSync để nhập link thủ công.", ToolTipIcon.Warning);
+                OnStyleSyncDashboardClicked(sender, e);
+            }
+        }
+
+        private void OnActiveProfileMenuClicked(object? sender, EventArgs e)
+        {
+            if (StyleSyncService.ActiveProfile != null)
+            {
+                StyleSyncService.ToggleEnabled();
+                UpdateStyleSyncMenuDisplay();
+                string status = StyleSyncService.IsEnabled ? "Đã bật" : "Đã tạm tắt";
+                _notifyIcon.ShowBalloonTip(2000, "StyleSync", $"{status} đồng bộ định dạng theo: {StyleSyncService.ActiveProfile.DocumentTitle}", ToolTipIcon.Info);
+            }
+            else
+            {
+                OnStyleSyncDashboardClicked(sender, e);
+            }
+        }
+
+        private void OnStyleSyncDashboardClicked(object? sender, EventArgs e)
+        {
+            if (_styleSyncForm == null || _styleSyncForm.IsDisposed)
+            {
+                _styleSyncForm = new StyleSyncForm();
+            }
+            _styleSyncForm.Show();
+            _styleSyncForm.BringToFront();
+            _styleSyncForm.Activate();
+        }
+
         private void OnMagicWandToggle()
         {
             if (_isPaused) return;
 
-            _ = SmartPasteService.ToggleMagicWandAsync((title, message) =>
+            ActiveAppInfo activeApp = ActiveWindowHelper.GetActiveAppInfo();
+            if (activeApp.IsGoogleDocs)
             {
-                _syncContext.Post(_ =>
+                _ = SmartPasteService.ToggleMagicWandAsync((title, msg) =>
                 {
-                    _notifyIcon.ShowBalloonTip(3000, title, message, ToolTipIcon.Info);
-                }, null);
-            });
-        }
-
-        private void OnMagicWandMenuClicked(object? sender, EventArgs e)
-        {
-            OnMagicWandToggle();
-        }
-
-        private async void OnPastePressed()
-        {
-            if (_isPaused || IsSimulatingPaste) return;
-
-            // Nếu không phải nội dung Markdown/AI nhưng Magic Wand ĐANG BẬT và đích là Word:
-            // Tự động định dạng đoạn văn bản thường theo quy tắc Word đã nạp
-            if (!_lastWasProcessed)
-            {
-                if (SmartPasteService.IsMagicWandActive && SmartPasteService.ActiveDocumentRules != null)
-                {
-                    ActiveAppInfo targetApp = ActiveWindowHelper.GetActiveAppInfo();
-                    if (targetApp.IsAnyWord && !string.IsNullOrWhiteSpace(_lastRawText))
-                    {
-                        await SmartPasteService.FormatClipboardWithActiveRulesAsync(_lastRawText, _lastRawHtml, _mermaidCache);
-                    }
-                }
+                    _notifyIcon.ShowBalloonTip(2500, title, msg, ToolTipIcon.Info);
+                });
                 return;
             }
 
+            if (StyleSyncService.ActiveProfile != null)
+            {
+                StyleSyncService.ToggleEnabled();
+                UpdateStyleSyncMenuDisplay();
+                string status = StyleSyncService.IsEnabled ? "Đã bật" : "Đã tạm tắt";
+                _notifyIcon.ShowBalloonTip(2500, "StyleSync", $"{status} đồng bộ định dạng theo: {StyleSyncService.ActiveProfile.DocumentTitle}", ToolTipIcon.Info);
+            }
+            else
+            {
+                _syncContext.Post(_ => OnStyleSyncDashboardClicked(this, EventArgs.Empty), null);
+            }
+        }
+
+        private void OnPastePressed()
+        {
+            if (_isPaused || IsSimulatingPaste) return;
+
             try
             {
-                // 1. Quét ứng dụng active tại tiền cảnh
+                // Dữ liệu đã được định dạng và sẵn sàng 100% trên Clipboard ngay tại thời điểm Copy (Zero-Latency).
+                // Tuyệt đối không can thiệp ghi đè Clipboard trong lúc sự kiện Ctrl+V đang được ứng dụng đích xử lý
+                // để tránh xung đột khóa Clipboard (Clipboard Lock Contention) làm liệt thao tác Dán.
                 ActiveAppInfo appInfo = ActiveWindowHelper.GetActiveAppInfo();
-                Program.Log($"Phát hiện dán vào ứng dụng: Process={appInfo.ProcessName}, Class={appInfo.ClassName}, Title={appInfo.WindowTitle}");
-
-                if (appInfo.IsGoogleDocs)
-                {
-                    // Tối ưu hóa cho Google Docs: Xóa sạch font-family và font-size
-                    Program.Log("Xào nấu Clipboard cho Google Docs (Tự thừa kế style con trỏ)...");
-                    var docsFormat = new WordFormatInfo { IsFromActiveWord = false, MermaidImageCache = _mermaidCache };
-
-                    string docsHtml = "";
-                    bool hasMermaid = (_lastRawText != null && KrokiRenderer.ContainsAnyDiagram(_lastRawText)) || KrokiRenderer.ContainsAnyDiagramHtml(_lastRawHtml);
-                    if (!string.IsNullOrEmpty(_lastRawHtml) && !hasMermaid)
-                    {
-                        string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(_lastRawHtml);
-                        string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, docsFormat);
-                        docsHtml = MarkdownToWordConverter.PackageAsClipboardHtml(cleanFragment);
-                    }
-                    else
-                    {
-                        docsHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(_lastRawText, docsFormat);
-                    }
-
-                    string cleanPlainText = await MarkdownToWordConverter.ProcessLatexInPlainTextAsync(_lastRawText);
-                    FormulaTracker.ScanAndRegisterHtml(docsHtml);
-                    ClipboardHelper.SetOfficeClipboard(cleanPlainText, docsHtml);
-                }
-                else if (appInfo.IsLaTeXEditor)
-                {
-                    // Tối ưu hóa cho LaTeX: Nếu chứa bảng biểu thì convert thành LaTeX code, ngược lại khôi phục LaTeX gốc
-                    Program.Log("Xào nấu Clipboard cho LaTeX Editor...");
-
-                    string tempHtml = "";
-                    if (!string.IsNullOrEmpty(_lastRawHtml))
-                    {
-                        string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(_lastRawHtml);
-                        tempHtml = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, new WordFormatInfo { IsFromActiveWord = false, MermaidImageCache = _mermaidCache });
-                    }
-                    else
-                    {
-                        if (WebViewManager.IsInitialized)
-                        {
-                            tempHtml = await WebViewManager.ConvertMarkdownToHtmlAsync(_lastRawText, false);
-                        }
-                        else
-                        {
-                            tempHtml = Markdig.Markdown.ToHtml(_lastRawText);
-                        }
-                    }
-
-                    if (tempHtml.Contains("<table"))
-                    {
-                        string latexTable = MarkdownToWordConverter.ConvertHtmlTableToLatex(tempHtml);
-                        ClipboardHelper.SetOfficeClipboard(latexTable, "");
-                        Program.Log("Đã convert bảng sang mã LaTeX.");
-                    }
-                    else
-                    {
-                        ClipboardHelper.SetOfficeClipboard(_lastRawText, "");
-                        Program.Log("Đã khôi phục LaTeX gốc.");
-                    }
-                }
-                else if (appInfo.IsVSCode || appInfo.IsNotepadOrEditor)
-                {
-                    Program.Log("Khôi phục clipboard gốc cho VS Code / Notepad...");
-                    ClipboardHelper.SetOfficeClipboard(_lastRawText, "");
-                }
-                else if (appInfo.IsAnyWord)
-                {
-                    WordFormatInfo formatInfo;
-                    if (SmartPasteService.IsMagicWandActive && SmartPasteService.ActiveDocumentRules != null)
-                    {
-                        Program.Log("[MagicWand] Áp dụng quy tắc Word đã nạp sẵn (Zero Latency)...");
-                        formatInfo = SmartPasteService.ActiveDocumentRules;
-                    }
-                    else if (appInfo.IsMicrosoftWord)
-                    {
-                        Program.Log("Xào nấu Clipboard real-time cho MS Word...");
-                        formatInfo = WordInterop.GetCurrentFormatWithTimeout(80);
-                    }
-                    else
-                    {
-                        Program.Log("Xào nấu Clipboard cho Word Online...");
-                        formatInfo = new WordFormatInfo { IsFromActiveWord = false };
-                    }
-                    formatInfo.IsWordTarget = true;
-                    formatInfo.MermaidImageCache = _mermaidCache;
-
-                    string officeHtml = "";
-                    bool hasMermaid = (_lastRawText != null && KrokiRenderer.ContainsAnyDiagram(_lastRawText)) || KrokiRenderer.ContainsAnyDiagramHtml(_lastRawHtml);
-                    if (!string.IsNullOrEmpty(_lastRawHtml) && !hasMermaid)
-                    {
-                        string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(_lastRawHtml);
-                        string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, formatInfo);
-                        if (SmartPasteService.IsMagicWandActive && SmartPasteService.ActiveDocumentRules != null)
-                        {
-                            cleanFragment = SmartPasteService.ApplySmartWordStyles(cleanFragment, formatInfo);
-                        }
-                        officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(cleanFragment);
-                    }
-                    else
-                    {
-                        officeHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(_lastRawText, formatInfo);
-                        if (SmartPasteService.IsMagicWandActive && SmartPasteService.ActiveDocumentRules != null)
-                        {
-                            string fragment = MarkdownToWordConverter.ExtractHtmlFragment(officeHtml);
-                            string smartFragment = SmartPasteService.ApplySmartWordStyles(fragment, formatInfo);
-                            officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(smartFragment);
-                        }
-                    }
-
-                    string cleanPlainText = await MarkdownToWordConverter.ProcessLatexInPlainTextAsync(_lastRawText);
-                    FormulaTracker.ScanAndRegisterHtml(officeHtml);
-                    ClipboardHelper.SetOfficeClipboard(cleanPlainText, officeHtml);
-                }
+                Program.Log($"[Paste] Dán vào ứng dụng: Process={appInfo.ProcessName}, Title={appInfo.WindowTitle} (Zero Latency).");
             }
             catch (Exception ex)
             {
@@ -1649,6 +1825,7 @@ namespace HapiCopi
             try { _mouseHook?.Dispose(); } catch { }
             try { if (_mathEditorForm != null && !_mathEditorForm.IsDisposed) { _mathEditorForm.Dispose(); } } catch { }
             try { if (_updateForm != null && !_updateForm.IsDisposed) { _updateForm.Dispose(); } } catch { }
+            try { if (_styleSyncForm != null && !_styleSyncForm.IsDisposed) { _styleSyncForm.Dispose(); } } catch { }
             try { WebViewManager.Shutdown(); } catch { }
 
             Program.Log("[Shutdown] Đã thoát sạch.");

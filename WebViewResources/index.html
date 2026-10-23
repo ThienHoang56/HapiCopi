@@ -1108,6 +1108,28 @@
             }
         }
 
+
+
+        // Làm sạch cấu trúc danh sách, dỡ bỏ <p> thừa bên trong <li> để tránh thụt lề kép
+        function cleanListsAndUnwrapParagraphs(doc) {
+            // 1. Dỡ bỏ các thẻ <p> hoặc <div> bọc bên trong <li>
+            doc.body.querySelectorAll('li > p, li > div').forEach(function(container) {
+                var parent = container.parentNode;
+                if (!parent) return;
+                while (container.firstChild) {
+                    parent.insertBefore(container.firstChild, container);
+                }
+                parent.removeChild(container);
+            });
+
+            // 2. Chuẩn hóa các danh sách <ul> và <ol>
+            doc.body.querySelectorAll('ul, ol').forEach(function(list) {
+                list.removeAttribute('class');
+                list.style.marginTop = '3pt';
+                list.style.marginBottom = '3pt';
+            });
+        }
+
         // 4. Hàm làm sạch HTML rác bằng DOM Parser của trình duyệt và tịnh tiến Heading
         async function doCleanHtmlAsync(html, fontName, fontSize, lineSpacing, parentHeadingLevel, isWordTarget, mermaidCacheJson) {
             if (!html) return "";
@@ -1134,6 +1156,7 @@
 
                 unwrapOfficeChrome(doc);
                 promoteOfficeHeadings(doc);
+                cleanListsAndUnwrapParagraphs(doc);
 
                 // Thay thế tất cả các container KaTeX/MathJax bằng MathML hoặc PNG tương ứng để hiển thị mượt mà trên Word/Docs
                 await convertMathContainersAsync(doc, isWordTarget, fontSize);
@@ -1301,44 +1324,20 @@
                         if (el.classList.contains('latex-matrix')) {
                             cleanStyles.push('display: inline-table; border-collapse: collapse; margin: 0 4px; vertical-align: middle; border: none;');
                         } else {
-                            // Đếm số cột để quyết định chiều rộng bảng thông minh
-                            let firstRow = el.querySelector('tr');
-                            let colCount = 0;
-                            if (firstRow) {
-                                colCount = firstRow.querySelectorAll('td, th').length;
-                            }
-                            if (colCount > 8) {
-                                // Bảng rộng (Kaggle DataFrame, bảng dữ liệu lớn): để width tự nhiên, tránh ép chữ xếp dọc
-                                cleanStyles.push('border-collapse: collapse; width: auto; border: 1px solid #cccccc; margin: 6pt 0;');
-                            } else {
-                                // Bảng hẹp (3-6 cột): trải rộng 100% cho đẹp
-                                cleanStyles.push('border-collapse: collapse; width: 100%; border: 1px solid #cccccc; margin: 6pt 0;');
-                            }
+                            // Bảng chuẩn Word: border-collapse collapse, thích ứng theo lề trang
+                            cleanStyles.push('border-collapse: collapse; width: 100%; border: 1px solid #cccccc; margin: 6pt 0;');
                         }
                     } else if (name === 'th') {
                         if (el.closest('table.latex-matrix')) {
                             cleanStyles.push('padding: 2px 6px; text-align: center; border: none;');
                         } else {
-                            // Thêm white-space: nowrap cho bảng rộng để tránh chữ xếp dọc
-                            let parentTable = el.closest('table');
-                            let isWideTable = false;
-                            if (parentTable) {
-                                let fr = parentTable.querySelector('tr');
-                                if (fr && fr.querySelectorAll('td, th').length > 8) isWideTable = true;
-                            }
-                            cleanStyles.push('border: 1px solid #cccccc; padding: 6px; background-color: #f2f2f2; text-align: left;' + (isWideTable ? ' white-space: nowrap;' : ''));
+                            cleanStyles.push('border: 1px solid #cccccc; padding: 6px; background-color: #f2f2f2; text-align: left;');
                         }
                     } else if (name === 'td') {
                         if (el.closest('table.latex-matrix')) {
                             cleanStyles.push('padding: 2px 6px; text-align: center; border: none;');
                         } else {
-                            let parentTable = el.closest('table');
-                            let isWideTable = false;
-                            if (parentTable) {
-                                let fr = parentTable.querySelector('tr');
-                                if (fr && fr.querySelectorAll('td, th').length > 8) isWideTable = true;
-                            }
-                            cleanStyles.push('border: 1px solid #cccccc; padding: 6px; text-align: left;' + (isWideTable ? ' white-space: nowrap;' : ''));
+                            cleanStyles.push('border: 1px solid #cccccc; padding: 6px; text-align: left;');
                         }
                     } else if (name === 'pre') {
                         cleanStyles = ["font-family: 'Consolas', 'Courier New', monospace;", "font-size: 10pt;", "background-color: #f8f9fa;", "border: 1px solid #e9ecef;", "padding: 8pt;", "margin: 6pt 0;", "white-space: pre;", "line-height: 1.2;", "color: #212529;"];
@@ -1399,14 +1398,13 @@
                             headingStyle.push("font-family: '" + fontName + "';");
                         }
                         if (fontSize) {
-                            let hSize = fontSize;
-                            if (targetLevel === 1) hSize = fontSize + 3;
-                            else if (targetLevel === 2) hSize = fontSize + 1;
-                            else if (targetLevel === 3) hSize = fontSize;
-                            else hSize = Math.max(10, fontSize - 1);
-
+                            let hRatio = targetLevel === 1 ? 1.25 :
+                                         targetLevel === 2 ? 1.15 :
+                                         targetLevel === 3 ? 1.05 : 1.0;
+                            let hSize = Math.round(fontSize * hRatio * 2) / 2;
                             headingStyle.push("font-size: " + hSize + "pt;");
                         }
+                        headingStyle.push("text-indent: 0pt;");
                         newHeading.setAttribute('style', headingStyle.join(' '));
 
                         if (el.parentNode) {

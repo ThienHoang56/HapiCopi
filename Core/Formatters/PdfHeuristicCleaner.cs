@@ -52,9 +52,37 @@ namespace HapiCopi
             if (ClipboardHelper.IsVscodeEditorCopy()) return false;
             if (ClipboardSource.IsOfficeOrDocsHtml(html)) return false;
 
-            if (source != null && IsPdfReader(source, text)) return true;
+            // 1. Nếu có thông tin ứng dụng nguồn
+            if (source != null)
+            {
+                if (IsPdfReader(source, text)) return true;
+
+                // Nếu là trình duyệt web thông thường (không mở tab .pdf) hoặc Docs/Word: chắc chắn KHÔNG phải PDF
+                bool isBrowser = (source.ProcessName ?? "").Equals("chrome", StringComparison.OrdinalIgnoreCase)
+                    || (source.ProcessName ?? "").Equals("msedge", StringComparison.OrdinalIgnoreCase)
+                    || (source.ProcessName ?? "").Equals("firefox", StringComparison.OrdinalIgnoreCase)
+                    || (source.ProcessName ?? "").Equals("brave", StringComparison.OrdinalIgnoreCase);
+
+                if (isBrowser || source.IsGoogleDocs || source.IsAnyWord)
+                {
+                    return false;
+                }
+            }
+
+            // 2. Nếu HTML có dấu hiệu từ trang web bình thường
             if (LooksLikeNormalWebPage(html)) return false;
-            if (HasNumberedSections(text)) return true;
+
+            // 3. Nếu HTML chứa cấu trúc thẻ phong phú (p, div, h1..h6, ul, ol, li, table) -> nội dung web/AI, không phải PDF
+            if (!string.IsNullOrEmpty(html) && (html.IndexOf("<p", StringComparison.OrdinalIgnoreCase) >= 0
+                || html.IndexOf("<div", StringComparison.OrdinalIgnoreCase) >= 0
+                || html.IndexOf("<h", StringComparison.OrdinalIgnoreCase) >= 0
+                || html.IndexOf("<ul", StringComparison.OrdinalIgnoreCase) >= 0
+                || html.IndexOf("<ol", StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                return false;
+            }
+
+            // 4. Chỉ coi là PDF khi văn bản có hình thái bẻ dòng cứng đặc trưng (HasPdfWrapShape)
             return HasPdfWrapShape(text);
         }
 

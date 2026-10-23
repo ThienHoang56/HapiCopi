@@ -1,135 +1,255 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Drawing;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Markdig;
+using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
 
 namespace HapiCopi
 {
     /// <summary>
-    /// Dịch vụ Đũa phép Magic Wand (Rule Profile Mode).
-    /// Quét toàn bộ "bộ gen định dạng" của tài liệu Word trên luồng ngầm bất đồng bộ (chuyển tab vẫn chạy tốt),
-    /// nạp quy tắc vào bộ nhớ đệm (Rule Profile). Khi chế độ BẬT, mọi lần dán Ctrl+V bình thường đều tự động
-    /// tuân theo quy tắc lề, thụt dòng, justify, bullet của tài liệu đó với độ trễ < 0.01 ms.
-    /// Khi TẮT, HapiCopi trở về hoạt động bình thường.
+    /// Dịch vụ Đũa phép Word (Tree-based Rule Profile Mode).
+    /// Trích xuất Cây cấu trúc tài liệu Word (Document Structure Tree) gồm:
+    /// - Cây Tiêu đề (Headings H1-H6)
+    /// - Nhánh Thân bài (Normal Paragraphs)
+    /// - Nhánh Danh sách Đa cấp (Lists Level 1-5)
+    /// - Ngữ cảnh Điểm dán (Active Insertion Context)
+    ///
+    /// Khi chế độ BẬT, dữ liệu copy được tự động hòa tan theo Cây cấu trúc ngay tại thời điểm Copy,
+    /// sẵn sàng trên Clipboard để dán vào Word tức thì (Zero-latency) mà không làm vỡ cấu trúc tài liệu.
     /// </summary>
     public static class SmartPasteService
     {
         public static bool IsMagicWandActive { get; private set; } = false;
-        public static WordFormatInfo? ActiveDocumentRules { get; private set; } = null;
-        public static string? ActiveDocumentTitle { get; private set; } = null;
+        public static bool IsGoogleDocsActive { get; private set; } = false;
+        public static int GoogleDocsHeadingOffset { get; set; } = 0;
+        public static DocumentStructureTree? ActiveStructureTree { get; private set; } = null;
+        public static string? ActiveDocumentTitle => IsGoogleDocsActive ? "Google Docs" : ActiveStructureTree?.DocumentTitle;
+
+        // Giữ tương thích ngược cho các nơi kiểm tra ActiveDocumentRules
+        public static WordFormatInfo? ActiveDocumentRules => ActiveStructureTree != null
+            ? new WordFormatInfo
+            {
+                FontName = ActiveStructureTree.BodyStyle.FontName,
+                FontSize = ActiveStructureTree.BodyStyle.FontSize,
+                Alignment = ActiveStructureTree.BodyStyle.Alignment,
+                FirstLineIndent = ActiveStructureTree.BodyStyle.FirstLineIndent,
+                LineSpacing = ActiveStructureTree.BodyStyle.LineSpacing,
+                IsInList = ActiveStructureTree.Context.IsWithinList,
+                ListBulletChar = ActiveStructureTree.Lists.TryGetValue(1, out var l) ? l.BulletOrPrefix : "-"
+            }
+            : null;
+
         public static event Action<bool>? StateChanged;
 
-        [DllImport("user32.dll")]
-        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
-        private const byte VK_SHIFT = 0x10;
-        private const uint KEYEVENTF_KEYUP = 0x0002;
-
-        public static void ReleaseShiftKey()
+        /// <summary>
+        /// Đồng bộ trạng thái từ StyleSyncService sang SmartPasteService.
+        /// </summary>
+        public static void SyncFromStyleSync(DocumentStructureTree? tree, bool active)
         {
-            try
-            {
-                keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0);
-            }
-            catch { }
+            ActiveStructureTree = tree;
+            IsMagicWandActive = active && tree != null;
+            IsGoogleDocsActive = false;
+            StateChanged?.Invoke(IsMagicWandActive);
         }
 
         /// <summary>
-        /// Bật hoặc Tắt chế độ Đũa phép (Ctrl + F9).
-        /// Chạy ngầm bất đồng bộ: Dù người dùng chuyển tab ngay sau khi nhấn phím,
-        /// tác vụ trích xuất quy tắc Word vẫn tiếp tục hoàn thành và báo hiệu thị giác êm ái.
+        /// Bật hoặc Tắt chế độ Đũa phép (Ctrl + Alt + W).
+        /// Hỗ trợ cả Microsoft Word và Google Docs (tự động phân nhánh theo cửa sổ active).
         /// </summary>
         public static async Task ToggleMagicWandAsync(Action<string, string>? notifyAction = null)
         {
-            if (IsMagicWandActive)
-            {
-                // 1. TẮT CHẾ ĐỘ
-                IsMagicWandActive = false;
-                ActiveDocumentRules = null;
-                ActiveDocumentTitle = null;
-                StateChanged?.Invoke(false);
+            Point cursorPos = Cursor.Position;
+            ActiveAppInfo activeApp = ActiveWindowHelper.GetActiveAppInfo();
 
-                MagicWandIndicatorForm.NotifyDeactivated();
-                notifyAction?.Invoke("Đã tắt Đũa phép Word (Ctrl+F9)", "Trở về chế độ dán HapiCopi thông thường.");
-                Program.Log("[MagicWand] Người dùng đã tắt chế độ Magic Wand.");
+            // 1. Phân nhánh nếu đang ở Google Docs
+            if (activeApp.IsGoogleDocs)
+            {
+                if (!IsMagicWandActive || !IsGoogleDocsActive)
+                {
+                    IsMagicWandActive = true;
+                    IsGoogleDocsActive = true;
+                    GoogleDocsHeadingOffset = 0;
+                    StateChanged?.Invoke(true);
+
+                    MagicWandIndicatorForm.ShowNearCursor(cursorPos);
+                    MagicWandIndicatorForm.NotifySuccess();
+
+                    notifyAction?.Invoke("Đã bật StyleSync Google Docs!",
+                        "• Tự động đồng hóa theo Named Styles của Google Docs\n" +
+                        "• Tịnh tiến cấp độ: Giữ nguyên (H1 -> H1)\n" +
+                        "(Bấm tiếp phím tắt để đổi mức tịnh tiến: +1, +2, +3)");
+                    Program.Log("[StyleSync] Đã bật chế độ Google Docs Semantic Mode (Offset=0).");
+                }
+                else
+                {
+                    // Đang bật ở Docs: Chuyển luân phiên mức tịnh tiến đề mục: 0 -> 1 -> 2 -> 3 -> Tắt
+                    GoogleDocsHeadingOffset = (GoogleDocsHeadingOffset + 1) % 4;
+
+                    if (GoogleDocsHeadingOffset == 0)
+                    {
+                        IsMagicWandActive = false;
+                        IsGoogleDocsActive = false;
+                        StateChanged?.Invoke(false);
+
+                        MagicWandIndicatorForm.NotifyDeactivated();
+                        notifyAction?.Invoke("Đã tắt StyleSync Google Docs", "Trở về chế độ dán thông thường.");
+                        Program.Log("[StyleSync] Người dùng đã tắt StyleSync Google Docs.");
+                    }
+                    else
+                    {
+                        MagicWandIndicatorForm.ShowNearCursor(cursorPos);
+                        MagicWandIndicatorForm.NotifySuccess();
+
+                        notifyAction?.Invoke("Đổi mức Tịnh tiến Đề mục Docs!",
+                            $"• Cấp độ mới: Mức +{GoogleDocsHeadingOffset}\n" +
+                            $"• Ví dụ: H1 -> H{1 + GoogleDocsHeadingOffset}, H2 -> H{2 + GoogleDocsHeadingOffset}\n" +
+                            $"(Nội dung AI sẽ tự động biến thành mục con/cháu).");
+                        Program.Log($"[StyleSync] Đổi mức tịnh tiến đề mục Google Docs thành +{GoogleDocsHeadingOffset}.");
+                    }
+                }
                 return;
             }
 
-            // 2. BẬT CHẾ ĐỘ: Hiển thị ngay micro-indicator tại chuột ở trạng thái hấp thụ/quét quy tắc
-            Point cursorPos = Cursor.Position;
+            // 2. Phân nhánh cho Word Desktop
+            if (IsMagicWandActive)
+            {
+                // TẮT CHẾ ĐỘ
+                IsMagicWandActive = false;
+                IsGoogleDocsActive = false;
+                ActiveStructureTree = null;
+                StateChanged?.Invoke(false);
+
+                MagicWandIndicatorForm.NotifyDeactivated();
+                notifyAction?.Invoke("Đã tắt StyleSync (Ctrl+Alt+S)", "Trở về chế độ dán HapiCopi thông thường.");
+                Program.Log("[StyleSync] Người dùng đã tắt chế độ StyleSync.");
+                return;
+            }
+
+            // BẬT CHẾ ĐỘ CHO WORD
             MagicWandIndicatorForm.ShowNearCursor(cursorPos);
-            Program.Log($"[MagicWand] Bắt đầu quét tài liệu bất đồng bộ tại ({cursorPos.X}, {cursorPos.Y})...");
+            Program.Log($"[MagicWand] Bắt đầu trích xuất Cây cấu trúc tài liệu ngầm tại ({cursorPos.X}, {cursorPos.Y})...");
 
-            var appInfo = ActiveWindowHelper.GetActiveAppInfo();
-            ActiveDocumentTitle = appInfo.WindowTitle;
+            var tree = await WordInterop.ScanDocumentStructureTreeAsync(3000);
 
-            // Luồng ngầm STA trích xuất quy tắc từ Word (Chuyển tab người dùng sang Chrome/ChatGPT vẫn chạy tốt)
-            var rules = await WordInterop.ScanDocumentRulesAsync(3000);
-
-            ActiveDocumentRules = rules;
+            ActiveStructureTree = tree;
             IsMagicWandActive = true;
+            IsGoogleDocsActive = false;
             StateChanged?.Invoke(true);
 
-            // Báo hiệu thành công cho widget chuột (nở thành tick xanh mềm mại rồi ẩn)
             MagicWandIndicatorForm.NotifySuccess();
 
-            string alignName = rules.Alignment == 3 ? "Justify (Đều 2 bên)" : (rules.Alignment == 1 ? "Center" : "Left");
-            string indentText = rules.FirstLineIndent > 0 ? $"{rules.FirstLineIndent:0.#}pt ({rules.FirstLineIndent / 28.35f:0.##}cm)" : "0pt";
+            string alignName = tree.BodyStyle.Alignment switch
+            {
+                1 => "Center (Căn giữa)",
+                2 => "Right (Căn phải)",
+                3 => "Justify (Đều 2 bên)",
+                _ => "Left (Căn trái)"
+            };
+            string indentText = tree.BodyStyle.FirstLineIndent > 0 ? $"{tree.BodyStyle.FirstLineIndent:0.#}pt ({tree.BodyStyle.FirstLineIndent / 28.35f:0.##}cm)" : "0pt (Không thụt)";
+            string bulletText = tree.Lists.TryGetValue(1, out var l1) ? l1.BulletOrPrefix : "-";
+            string parentHeading = !string.IsNullOrEmpty(tree.Context.ParentHeadingTitle) ? $"\n• Mục hiện tại: {tree.Context.ParentHeadingTitle}" : "";
 
-            notifyAction?.Invoke("Đã nạp quy tắc Word!",
-                $"• Font: {rules.FontName ?? "Times New Roman"} ({rules.FontSize:0.#}pt)\n" +
-                $"• Thụt đầu dòng: {indentText}\n" +
-                $"• Căn lề: {alignName}\n" +
-                "Mọi lần nhấn Ctrl+V sẽ tự động đồng bộ theo tài liệu.");
+            notifyAction?.Invoke("Đã nạp Cây cấu trúc Word!",
+                $"• Thân bài: {tree.BodyStyle.FontName} ({tree.BodyStyle.FontSize:0.#}pt) - {alignName}\n" +
+                $"• Thụt lề: {indentText}\n" +
+                $"• Danh sách: '{bulletText}'" +
+                parentHeading + "\n" +
+                "Mọi lần copy sẽ tự động đồng bộ theo Cây cấu trúc tài liệu.");
 
-            Program.Log($"[MagicWand] Đã nạp thành công quy tắc Word: Font={rules.FontName}, Size={rules.FontSize}, Indent={rules.FirstLineIndent}, Align={rules.Alignment}");
+            Program.Log($"[MagicWand] Nạp Cây thành công: Font={tree.BodyStyle.FontName}, Size={tree.BodyStyle.FontSize}, Indent={tree.BodyStyle.FirstLineIndent}, Align={tree.BodyStyle.Alignment}");
         }
 
         /// <summary>
-        /// Xử lý định dạng nội dung Clipboard theo quy tắc tài liệu đã nạp sẵn.
-        /// Chạy siêu tốc (< 0.01ms), không gọi COM Interop khi dán.
+        /// Xử lý định dạng nội dung Clipboard theo Cây cấu trúc tài liệu đã nạp.
+        /// Chạy ngay khi Copy (Zero-Latency khi Dán).
         /// </summary>
         public static async Task<bool> FormatClipboardWithActiveRulesAsync(
             string textToProcess,
             string htmlToProcess,
             Dictionary<string, string>? diagramCache)
         {
-            if (!IsMagicWandActive || ActiveDocumentRules == null) return false;
+            if (!IsMagicWandActive) return false;
 
-            var formatInfo = ActiveDocumentRules;
-            formatInfo.IsWordTarget = true;
-            if (diagramCache != null) formatInfo.MermaidImageCache = diagramCache;
+            // Xử lý riêng nếu đang ở Google Docs
+            if (IsGoogleDocsActive)
+            {
+                string docsHtml = await GoogleDocsSemanticAdapter.ConvertMarkdownToGoogleDocsClipboardAsync(textToProcess ?? "", GoogleDocsHeadingOffset);
+                string plainText = await MarkdownToWordConverter.ProcessLatexInPlainTextAsync(textToProcess ?? "");
+                FormulaTracker.ScanAndRegisterHtml(docsHtml);
+                ClipboardHelper.SetOfficeClipboard(plainText, docsHtml);
+                Program.Log($"[SmartPaste] Đã đóng gói Clipboard ngữ nghĩa cho Google Docs (Offset=+{GoogleDocsHeadingOffset}).");
+                return true;
+            }
 
+            if (ActiveStructureTree == null) return false;
+
+            var tree = ActiveStructureTree;
             string officeHtml;
+
             bool hasMermaid = (!string.IsNullOrEmpty(textToProcess) && KrokiRenderer.ContainsAnyDiagram(textToProcess)) ||
                               KrokiRenderer.ContainsAnyDiagramHtml(htmlToProcess);
 
+            // 1. Nếu có HTML phong phú từ web (trừ Mermaid)
             if (!string.IsNullOrEmpty(htmlToProcess) && !hasMermaid)
             {
                 string htmlFragment = MarkdownToWordConverter.ExtractHtmlFragment(htmlToProcess);
-                string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, formatInfo);
-                string smartFragment = ApplySmartWordStyles(cleanFragment, formatInfo);
-                officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(smartFragment);
+                var legacyInfo = new WordFormatInfo
+                {
+                    FontName = tree.BodyStyle.FontName,
+                    FontSize = tree.BodyStyle.FontSize,
+                    LineSpacing = tree.BodyStyle.LineSpacing,
+                    Alignment = tree.BodyStyle.Alignment,
+                    FirstLineIndent = tree.BodyStyle.FirstLineIndent,
+                    IsWordTarget = true,
+                    MermaidImageCache = diagramCache ?? new Dictionary<string, string>()
+                };
+                string cleanFragment = await MarkdownToWordConverter.CleanWebHtmlToOfficeAsync(htmlFragment, legacyInfo);
+                string transformedFragment = TransformHtmlWithTree(cleanFragment, tree);
+                officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(transformedFragment);
             }
+            // 2. Nếu là văn bản Markdown hoặc Plain text
             else if (!string.IsNullOrWhiteSpace(textToProcess))
             {
-                // Kiểm tra nếu là văn bản thường không có thẻ Markdown
-                if (!textToProcess.Contains("#") && !textToProcess.Contains("```") && !textToProcess.Contains("$") && !textToProcess.Contains("*") && !textToProcess.Contains("- "))
+                var legacyInfo = new WordFormatInfo
                 {
-                    string smartFragment = ConvertPlainTextToSmartParagraphs(textToProcess, formatInfo);
-                    officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(smartFragment);
+                    FontName = tree.BodyStyle.FontName,
+                    FontSize = tree.BodyStyle.FontSize,
+                    LineSpacing = tree.BodyStyle.LineSpacing,
+                    Alignment = tree.BodyStyle.Alignment,
+                    FirstLineIndent = tree.BodyStyle.FirstLineIndent,
+                    ParentHeadingLevel = tree.Context.ParentHeadingLevel,
+                    IsWordTarget = true,
+                    MermaidImageCache = diagramCache ?? new Dictionary<string, string>()
+                };
+
+                // Nếu văn bản có chứa Math ($ or $$) hoặc Mermaid hoặc Markdown bảng:
+                // Sử dụng pipeline chuyển đổi WebView2 để sinh mã OMML / MathML chuẩn Word
+                bool hasMathOrComplex = textToProcess.Contains('$') || textToProcess.Contains("```") || textToProcess.Contains('|');
+                if (hasMathOrComplex)
+                {
+                    try
+                    {
+                        string fullOfficeHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(textToProcess, legacyInfo);
+                        string htmlFrag = MarkdownToWordConverter.ExtractHtmlFragment(fullOfficeHtml);
+                        string transformedFragment = TransformHtmlWithTree(htmlFrag, tree);
+                        officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(transformedFragment);
+                    }
+                    catch
+                    {
+                        string transformedFragment = TransformMarkdownAstToOfficeHtml(textToProcess, tree);
+                        officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(transformedFragment);
+                    }
                 }
                 else
                 {
-                    officeHtml = await MarkdownToWordConverter.ConvertToOfficeHtmlAsync(textToProcess, formatInfo);
-                    string fragment = MarkdownToWordConverter.ExtractHtmlFragment(officeHtml);
-                    string smartFragment = ApplySmartWordStyles(fragment, formatInfo);
-                    officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(smartFragment);
+                    string transformedFragment = TransformMarkdownAstToOfficeHtml(textToProcess, tree);
+                    officeHtml = MarkdownToWordConverter.PackageAsClipboardHtml(transformedFragment);
                 }
             }
             else
@@ -137,50 +257,66 @@ namespace HapiCopi
                 return false;
             }
 
-            string cleanPlainText = await MarkdownToWordConverter.ProcessLatexInPlainTextAsync(textToProcess);
+            string cleanPlainText = await MarkdownToWordConverter.ProcessLatexInPlainTextAsync(textToProcess ?? "");
             FormulaTracker.ScanAndRegisterHtml(officeHtml);
             ClipboardHelper.SetOfficeClipboard(cleanPlainText, officeHtml);
             return true;
         }
 
         /// <summary>
-        /// Chuyển đổi văn bản thô nhiều dòng thành các đoạn văn <p class="MsoNormal"> có thụt lề và justify chuẩn.
+        /// Chuyển đổi văn bản Markdown/Plain text sang HTML Word dựa trên Cây cú pháp AST (Tree-to-Tree Mapping).
+        /// Từng loại Node tự động rót vào đúng Khuôn của Cây tài liệu Word:
+        /// - HeadingBlock -> HeadingHierarchy (không thụt lề, đúng font & cỡ chữ)
+        /// - ParagraphBlock -> BodyStyle (bảo toàn bold, italic, code, links)
+        /// - ListBlock -> ListHierarchy
+        /// - FencedCodeBlock -> Monospace Code Block
         /// </summary>
-        public static string ConvertPlainTextToSmartParagraphs(string plainText, WordFormatInfo formatInfo)
+        public static string TransformMarkdownAstToOfficeHtml(string text, DocumentStructureTree tree)
         {
-            if (string.IsNullOrWhiteSpace(plainText)) return plainText;
+            if (string.IsNullOrWhiteSpace(text)) return text;
 
-            string[] lines = plainText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+            // Bước quan trọng: nhận diện "4.5. Research Objectives" (không có dấu #)
+            // trước khi Markdig hiểu nhầm thành ordered list, đồng thời đồng bộ cấp + số đề mục.
+            string normalized = OutlineStructureService.NormalizePlainTextOutline(text, tree);
+
+            var pipeline = new MarkdownPipelineBuilder()
+                .UseAdvancedExtensions()
+                .Build();
+
+            MarkdownDocument document = Markdown.Parse(normalized, pipeline);
             var sb = new StringBuilder();
 
-            string fontStyle = !string.IsNullOrEmpty(formatInfo.FontName) ? $"font-family: '{formatInfo.FontName}';" : "";
-            string sizeStyle = formatInfo.FontSize > 0 ? $"font-size: {formatInfo.FontSize:0.#}pt;" : "";
-            string lineSpacingStyle = $"line-height: {formatInfo.LineSpacing:0.##};";
-            string alignStyle = formatInfo.Alignment switch
+            foreach (var block in document)
             {
-                1 => "text-align: center;",
-                2 => "text-align: right;",
-                3 => "text-align: justify;",
-                _ => "text-align: left;"
-            };
-            string indentStyle = formatInfo.FirstLineIndent > 0 ? $"text-indent: {formatInfo.FirstLineIndent:0.##}pt;" : "";
-
-            foreach (var rawLine in lines)
-            {
-                string line = rawLine.Trim();
-                if (string.IsNullOrEmpty(line)) continue;
-
-                // Kiểm tra nếu dòng bắt đầu bằng ký tự bullet hoặc gạch đầu dòng
-                if (line.StartsWith("- ") || line.StartsWith("– ") || line.StartsWith("* ") || line.StartsWith("+ ") || line.StartsWith("• "))
+                if (block is HeadingBlock heading)
                 {
-                    string bulletChar = formatInfo.ListBulletChar.Length > 0 ? formatInfo.ListBulletChar : line.Substring(0, 1);
-                    string content = line.Substring(2).Trim();
-                    sb.Append($"<p class=\"MsoListParagraph\" style=\"margin-left: 36.0pt; text-indent: -18.0pt; {fontStyle} {sizeStyle} {lineSpacingStyle} {alignStyle}\">" +
-                              $"<span style=\"font-family: Symbol;\">{bulletChar}</span><span style=\"font-size: 7.0pt;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>{System.Net.WebUtility.HtmlEncode(content)}</p>");
+                    int level = Math.Clamp(heading.Level, 1, 6);
+                    string headingHtml = RenderInlineToOfficeHtml(heading.Inline);
+                    sb.Append(OutlineStructureService.BuildHeadingHtml(level, headingHtml, tree));
                 }
-                else
+                else if (block is ParagraphBlock paragraph)
                 {
-                    sb.Append($"<p class=\"MsoNormal\" style=\"{fontStyle} {sizeStyle} {lineSpacingStyle} {alignStyle} {indentStyle}\">{System.Net.WebUtility.HtmlEncode(line)}</p>");
+                    string paraHtml = RenderInlineToOfficeHtml(paragraph.Inline);
+                    if (string.IsNullOrWhiteSpace(paraHtml)) continue;
+
+                    sb.Append($"<p class=\"MsoNormal\" style=\"{tree.BodyStyle.ToCssStyle()}\">{paraHtml}</p>");
+                }
+                else if (block is ListBlock listBlock)
+                {
+                    RenderListBlock(listBlock, 1, tree, sb);
+                }
+                else if (block is FencedCodeBlock codeBlock)
+                {
+                    var codeBuilder = new StringBuilder();
+                    foreach (var line in codeBlock.Lines)
+                    {
+                        codeBuilder.AppendLine(line.ToString());
+                    }
+
+                    string codeContent = codeBuilder.ToString().TrimEnd();
+                    sb.Append("<div style=\"background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 4px; padding: 10px 14px; margin: 8pt 0; text-align: left; text-indent: 0pt;\">" +
+                              $"<pre style=\"margin: 0; font-family: Consolas, 'Courier New', monospace; font-size: 10pt; line-height: 1.3;\">{System.Net.WebUtility.HtmlEncode(codeContent)}</pre>" +
+                              "</div>");
                 }
             }
 
@@ -188,147 +324,211 @@ namespace HapiCopi
         }
 
         /// <summary>
-        /// Áp dụng các quy tắc căn chỉnh tài liệu chuẩn xác đồng bộ với văn bản Word hiện tại:
-        /// 1. Căn lề đều 2 bên (Justify) hoặc Left/Center/Right theo định dạng Word hiện tại.
-        /// 2. Thụt đầu dòng (First-Line Indent, ví dụ 1cm = 28.35pt, 1.27cm = 36pt).
-        /// 3. Thụt lề trái (Left Indent) của đoạn văn.
-        /// 4. Đồng bộ Bullet hoặc gạch ngang (List markers & Hanging Indents) khi con trỏ đang nằm trong danh sách.
-        /// 5. Đảm bảo Tiêu đề (Headings) không bị dính thụt lề đầu dòng sai lệch.
+        /// Rót ListBlock (kể cả danh sách lồng nhau) vào đúng khuôn bullet/numbering
+        /// đã đo từ tài liệu đích: marker, lề trái, hanging indent, khoảng cách.
         /// </summary>
-        public static string ApplySmartWordStyles(string htmlFragment, WordFormatInfo formatInfo)
+        private static void RenderListBlock(
+            ListBlock listBlock,
+            int level,
+            DocumentStructureTree tree,
+            StringBuilder sb)
+        {
+            bool ordered = listBlock.IsOrdered;
+            int itemIndex = 1;
+            if (ordered && int.TryParse(listBlock.OrderedStart, out int start) && start > 0)
+            {
+                itemIndex = start;
+            }
+
+            foreach (var item in listBlock)
+            {
+                if (item is not ListItemBlock listItem) continue;
+
+                var inlineHtml = new StringBuilder();
+                var nestedLists = new List<ListBlock>();
+
+                foreach (var subBlock in listItem)
+                {
+                    if (subBlock is ParagraphBlock itemPara)
+                    {
+                        if (inlineHtml.Length > 0) inlineHtml.Append("<br/>");
+                        inlineHtml.Append(RenderInlineToOfficeHtml(itemPara.Inline));
+                    }
+                    else if (subBlock is ListBlock nested)
+                    {
+                        nestedLists.Add(nested);
+                    }
+                }
+
+                string content = inlineHtml.ToString().Trim();
+                if (content.Length > 0)
+                {
+                    sb.Append(OutlineStructureService.BuildListParagraphHtml(
+                        content,
+                        level,
+                        ordered,
+                        itemIndex,
+                        tree));
+                }
+
+                foreach (var nested in nestedLists)
+                {
+                    RenderListBlock(nested, level + 1, tree, sb);
+                }
+
+                itemIndex++;
+            }
+        }
+
+        private static string RenderInlineToOfficeHtml(ContainerInline? container)
+        {
+            if (container == null) return "";
+            var sb = new StringBuilder();
+            foreach (var inline in container)
+            {
+                if (inline is LiteralInline literal)
+                {
+                    sb.Append(System.Net.WebUtility.HtmlEncode(literal.Content.ToString()));
+                }
+                else if (inline is EmphasisInline emphasis)
+                {
+                    string tag = emphasis.DelimiterCount == 2 ? "strong" : "em";
+                    sb.Append($"<{tag}>");
+                    sb.Append(RenderInlineToOfficeHtml(emphasis));
+                    sb.Append($"</{tag}>");
+                }
+                else if (inline is CodeInline code)
+                {
+                    sb.Append($"<code style=\"font-family: Consolas, monospace; font-size: 9.5pt; background: #f1f5f9; padding: 2px 4px; border-radius: 3px;\">{System.Net.WebUtility.HtmlEncode(code.Content)}</code>");
+                }
+                else if (inline is LinkInline link)
+                {
+                    sb.Append($"<a href=\"{System.Net.WebUtility.HtmlEncode(link.Url)}\" style=\"color: #0563c1; text-decoration: underline;\">");
+                    sb.Append(RenderInlineToOfficeHtml(link));
+                    sb.Append("</a>");
+                }
+                else if (inline is LineBreakInline)
+                {
+                    sb.Append("<br/>");
+                }
+                else if (inline is ContainerInline childContainer)
+                {
+                    sb.Append(RenderInlineToOfficeHtml(childContainer));
+                }
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Ánh xạ cây thẻ HTML từ web nguồn vào đúng Cây cấu trúc Word:
+        /// - Thẻ h1-h6 -> HeadingHierarchy (không có text-indent)
+        /// - Thẻ p -> BodyStyle
+        /// - Thẻ li -> ListHierarchy
+        /// - Thẻ pre/code -> Giữ nguyên Monospace
+        /// </summary>
+        public static string TransformHtmlWithTree(
+            string htmlFragment,
+            DocumentStructureTree tree,
+            int parentHeadingLevel = 0)
         {
             if (string.IsNullOrWhiteSpace(htmlFragment)) return htmlFragment;
 
-            var sb = new StringBuilder(htmlFragment);
+            // 1. Nâng cấp các <p> dạng "4.5. Tên mục" thành Heading đúng cấp,
+            //    ánh xạ độ sâu số đề mục và đánh số lại theo sườn tài liệu.
+            string processed = OutlineStructureService.PromoteAndStyleHeadings(
+                htmlFragment,
+                tree,
+                parentHeadingLevel);
 
-            // Xác định chuỗi căn lề CSS
-            string alignCss = formatInfo.Alignment switch
+            // 2. Word không tôn trọng CSS list-style khi dán clipboard.
+            //    Rót <ul>/<ol> vào đúng khuôn marker/lề/hanging của tài liệu.
+            processed = OutlineStructureService.ConvertHtmlListsToParagraphs(processed, tree);
+
+            // 3. Ánh xạ các đoạn văn thân bài còn lại.
+            string paragraphSource = processed;
+            int lastParagraphIndex = 0;
+            int tableDepth = 0;
+
+            processed = Regex.Replace(paragraphSource, @"<p(\s+[^>]*)?>(.*?)</p>", m =>
             {
-                1 => "text-align: center;",
-                2 => "text-align: right;",
-                3 => "text-align: justify;",
-                _ => "text-align: left;"
-            };
+                string gap = paragraphSource.Substring(lastParagraphIndex, Math.Max(0, m.Index - lastParagraphIndex));
+                tableDepth += Regex.Matches(gap, @"<table\b", RegexOptions.IgnoreCase).Count;
+                tableDepth -= Regex.Matches(gap, @"</table\s*>", RegexOptions.IgnoreCase).Count;
+                if (tableDepth < 0) tableDepth = 0;
+                lastParagraphIndex = m.Index + m.Length;
 
-            // 1. Xử lý đoạn văn thường <p class="MsoNormal"...> hoặc <p...>
-            var pRegex = new Regex(@"<p(\s+[^>]*)?>", RegexOptions.IgnoreCase);
-            string processed = pRegex.Replace(sb.ToString(), match =>
-            {
-                string attrs = match.Groups[1].Value;
+                string attrs = m.Groups[1].Value;
+                string inner = m.Groups[2].Value;
 
-                // Bỏ qua thẻ p nếu là container chứa ảnh công thức block hoặc bảng
-                if (attrs.Contains("data-xpm-math-type=\"block\"") || attrs.Contains("latex-math-block"))
+                // Bỏ qua nếu là công thức toán dạng khối hoặc ảnh hoặc comment
+                if (attrs.Contains("data-xpm-math-type=\"block\"") || attrs.Contains("latex-math-block") || attrs.Contains("math") || attrs.Contains("mso-element:comment"))
                 {
-                    return match.Value;
+                    return m.Value;
                 }
 
-                bool isListPara = attrs.Contains("MsoListParagraph", StringComparison.OrdinalIgnoreCase);
-                var stylesToAdd = new List<string>();
-
-                // Căn lề văn bản (Justify hoặc Left/Center/Right)
-                if (!attrs.Contains("text-align", StringComparison.OrdinalIgnoreCase))
+                // Danh sách đã được rót khuôn riêng ở bước 2.
+                if (attrs.Contains("MsoListParagraph", StringComparison.OrdinalIgnoreCase))
                 {
-                    stylesToAdd.Add(alignCss);
+                    return m.Value;
                 }
 
-                // Thụt lề đầu dòng cho đoạn văn bản thường
-                if (!isListPara && formatInfo.FirstLineIndent > 0 && !attrs.Contains("text-indent", StringComparison.OrdinalIgnoreCase))
+                // Không áp margin thân bài (12pt) vào paragraph trong ô bảng — sẽ làm bảng phình to.
+                if (tableDepth > 0)
                 {
-                    stylesToAdd.Add($"text-indent: {formatInfo.FirstLineIndent:0.##}pt;");
+                    return m.Value;
                 }
 
-                // Thụt lề trái (Left Indent)
-                if (!isListPara && formatInfo.LeftIndent > 0 && !attrs.Contains("margin-left", StringComparison.OrdinalIgnoreCase))
+                // Nếu là đoạn căn giữa (ảnh hoặc caption) thì tôn trọng căn giữa và không thụt đầu dòng
+                if (attrs.Contains("text-align: center") || attrs.Contains("text-align:center"))
                 {
-                    stylesToAdd.Add($"margin-left: {formatInfo.LeftIndent:0.##}pt;");
+                    string centerStyle = $"text-align: center; font-family: '{tree.BodyStyle.FontName}'; font-size: {tree.BodyStyle.FontSize:0.#}pt; line-height: {tree.BodyStyle.LineSpacing:0.##}; text-indent: 0pt;";
+                    return $"<p class=\"MsoNormal\" style=\"{centerStyle}\">{inner}</p>";
                 }
 
-                if (stylesToAdd.Count == 0) return match.Value;
-
-                string injectedStyles = string.Join(" ", stylesToAdd);
-
-                if (attrs.Contains("style=\"", StringComparison.OrdinalIgnoreCase))
-                {
-                    return Regex.Replace(match.Value, @"style=""([^""]*)""", m =>
-                    {
-                        string currentStyle = m.Groups[1].Value.Trim().TrimEnd(';');
-                        return $"style=\"{currentStyle}; {injectedStyles}\"";
-                    }, RegexOptions.IgnoreCase);
-                }
-                else
-                {
-                    return $"<p style=\"{injectedStyles}\"{attrs}>";
-                }
-            });
-
-            // 2. Xử lý danh sách (Lists: <ul>, <ol>, <li>)
-            if (formatInfo.IsInList)
-            {
-                string bulletChar = !string.IsNullOrEmpty(formatInfo.ListBulletChar) ? formatInfo.ListBulletChar : "–";
-                float listLeftIndent = formatInfo.LeftIndent > 0 ? formatInfo.LeftIndent : 36.0f;
-                string fontStyle = !string.IsNullOrEmpty(formatInfo.FontName) ? $"font-family: '{formatInfo.FontName}';" : "";
-                string sizeStyle = formatInfo.FontSize > 0 ? $"font-size: {formatInfo.FontSize:0.#}pt;" : "";
-                string lineSpacingStyle = $"line-height: {formatInfo.LineSpacing:0.##};";
-
-                var liRegex = new Regex(@"<li>(.*?)</li>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-                processed = liRegex.Replace(processed, m =>
-                {
-                    string content = m.Groups[1].Value.Trim();
-                    content = Regex.Replace(content, @"^<p[^>]*>|</p>$", "", RegexOptions.IgnoreCase);
-
-                    return $"<p class=\"MsoListParagraph\" style=\"margin-left: {listLeftIndent:0.#}pt; text-indent: -18.0pt; {fontStyle} {sizeStyle} {lineSpacingStyle} {alignCss}\">" +
-                           $"<span style=\"font-family: Symbol;\">{bulletChar}</span><span style=\"font-size: 7.0pt;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>{content}</p>";
-                });
-
-                processed = Regex.Replace(processed, @"<\/?(ul|ol)[^>]*>", "", RegexOptions.IgnoreCase);
-            }
-            else
-            {
-                if (formatInfo.Alignment == 3)
-                {
-                    processed = Regex.Replace(processed, @"<li(\s+[^>]*)?>", m =>
-                    {
-                        string attrs = m.Groups[1].Value;
-                        if (!attrs.Contains("text-align", StringComparison.OrdinalIgnoreCase))
-                        {
-                            if (attrs.Contains("style=\"", StringComparison.OrdinalIgnoreCase))
-                            {
-                                return Regex.Replace(m.Value, @"style=""([^""]*)""", sm =>
-                                {
-                                    string s = sm.Groups[1].Value.Trim().TrimEnd(';');
-                                    return $"style=\"{s}; text-align: justify;\"";
-                                }, RegexOptions.IgnoreCase);
-                            }
-                            else
-                            {
-                                return $"<li style=\"text-align: justify;\"{attrs}>";
-                            }
-                        }
-                        return m.Value;
-                    }, RegexOptions.IgnoreCase);
-                }
-            }
-
-            // 3. Đảm bảo các thẻ Tiêu đề <h1-6> KHÔNG bị dính text-indent
-            processed = Regex.Replace(processed, @"<h([1-6])(\s+[^>]*)?>", m =>
-            {
-                string tagNum = m.Groups[1].Value;
-                string attrs = m.Groups[2].Value;
-                if (attrs.Contains("style=\"", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (!attrs.Contains("text-indent", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return Regex.Replace(m.Value, @"style=""([^""]*)""", sm =>
-                        {
-                            string s = sm.Groups[1].Value.Trim().TrimEnd(';');
-                            return $"style=\"{s}; text-indent: 0pt;\"";
-                        }, RegexOptions.IgnoreCase);
-                    }
-                }
-                return m.Value;
-            }, RegexOptions.IgnoreCase);
+                return $"<p class=\"MsoNormal\" style=\"{tree.BodyStyle.ToCssStyle()}\">{inner}</p>";
+            }, RegexOptions.Singleline | RegexOptions.IgnoreCase);
 
             return processed;
+        }
+
+        /// <summary>
+        /// Hàm chuyển đổi hỗ trợ cho văn bản thô (Backward-compatible).
+        /// </summary>
+        public static string ConvertPlainTextToSmartParagraphs(string plainText, WordFormatInfo formatInfo)
+        {
+            var tree = DocumentStructureTree.CreateDefaultSafeTree();
+            tree.BodyStyle.FontName = formatInfo.FontName ?? "Times New Roman";
+            tree.BodyStyle.FontSize = formatInfo.FontSize > 0 ? formatInfo.FontSize : 13.0f;
+            tree.BodyStyle.Alignment = formatInfo.Alignment;
+            tree.BodyStyle.FirstLineIndent = formatInfo.FirstLineIndent;
+            tree.BodyStyle.LineSpacing = formatInfo.LineSpacing;
+
+            if (!string.IsNullOrEmpty(formatInfo.ListBulletChar))
+            {
+                tree.Lists[1] = new ListLevelStyleNode { Level = 1, BulletOrPrefix = formatInfo.ListBulletChar };
+            }
+
+            return TransformMarkdownAstToOfficeHtml(plainText, tree);
+        }
+
+        /// <summary>
+        /// Hàm hỗ trợ cho văn bản HTML (Backward-compatible).
+        /// </summary>
+        public static string ApplySmartWordStyles(string htmlFragment, WordFormatInfo formatInfo)
+        {
+            var tree = DocumentStructureTree.CreateDefaultSafeTree();
+            tree.BodyStyle.FontName = formatInfo.FontName ?? "Times New Roman";
+            tree.BodyStyle.FontSize = formatInfo.FontSize > 0 ? formatInfo.FontSize : 13.0f;
+            tree.BodyStyle.Alignment = formatInfo.Alignment;
+            tree.BodyStyle.FirstLineIndent = formatInfo.FirstLineIndent;
+            tree.BodyStyle.LineSpacing = formatInfo.LineSpacing;
+
+            if (!string.IsNullOrEmpty(formatInfo.ListBulletChar))
+            {
+                tree.Lists[1] = new ListLevelStyleNode { Level = 1, BulletOrPrefix = formatInfo.ListBulletChar };
+            }
+
+            return TransformHtmlWithTree(htmlFragment, tree);
         }
     }
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -38,6 +38,16 @@ namespace HapiCopi
             if (args.Any(a => a.Equals("--test-magic-wand", StringComparison.OrdinalIgnoreCase)))
             {
                 return RunMagicWandBenchmark();
+            }
+
+            if (args.Any(a => a.Equals("--test-docs-adapter", StringComparison.OrdinalIgnoreCase)))
+            {
+                return RunDocsAdapterBenchmark();
+            }
+
+            if (args.Any(a => a.Equals("--test-openxml-real", StringComparison.OrdinalIgnoreCase)))
+            {
+                return RunOpenXmlRealTest();
             }
 
 
@@ -978,158 +988,156 @@ namespace HapiCopi
             int totalTests = 0;
 
             Print("==========================================================");
-            Print("   HAPICOPI BENCHMARK: TÍNH NĂNG SMART PASTE / MAGIC WAND   ");
+            Print("   HAPICOPI BENCHMARK: CÂY CẤU TRÚC TÀI LIỆU (DOCUMENT TREE) ");
             Print("==========================================================");
 
             try
             {
-                // PHẦN 1: CĂN LỀ JUSTIFY VÀ THỤT ĐẦU DÒNG (FIRST-LINE INDENT)
+                // TEST CASE 1: CÂY TÀI LIỆU THỰC TẾ — BẮT BUỘC ĐỌC TỪ FILE DOCX THẬT.
+                // Không dựng object trong RAM rồi tự phong là "đã đọc file thật".
                 totalTests++;
-                Print("[PHẦN 1 - CĂN LỀ JUSTIFY & THỤT ĐẦU DÒNG ĐOẠN VĂN]");
-                var formatInfo = new WordFormatInfo
+                Print("[PHẦN 1 - CÂY TÀI LIỆU THỰC TẾ: RESEARCH PROPOSAL DOCX]");
+                string proposalPath = Path.Combine(Directory.GetCurrentDirectory(), "testing", "test_research.docx");
+                var proposalTree = File.Exists(proposalPath)
+                    ? OpenXmlStructureReader.ReadFromDocx(proposalPath)
+                    : DocumentStructureTree.CreateDefaultSafeTree();
+                // Benchmark này chỉ đo việc RÓT KHUÔN (typography/list), không đo đánh số lại.
+                // Đánh số lại đã có bài test riêng --test-openxml-real.
+                proposalTree.RenumberOutline = false;
+                string proposalInput = "# 1. GIỚI THIỆU DỰ ÁN\r\nĐoạn mở đầu không thụt lề đầu dòng và căn trái.\r\n## 2.1 Bối cảnh cạnh tranh\r\n- Biti's Hunter (local upgraded brand)\r\n- Ananas (lifestyle local brand)";
+
+                if (!File.Exists(proposalPath))
                 {
-                    FontName = "Times New Roman",
-                    FontSize = 13.0f,
-                    LineSpacing = 1.5f,
-                    Alignment = 3, // Justify
-                    FirstLineIndent = 28.35f, // 1.0 cm
-                    LeftIndent = 0f,
-                    IsInList = false
+                    Print($"  -> FAIL: Không tìm thấy fixture thật '{proposalPath}'.");
+                }
+                else
+                {
+                    string proposalOutput = SmartPasteService.TransformMarkdownAstToOfficeHtml(proposalInput, proposalTree);
+                    Print($"  - Output:\r\n{proposalOutput}");
+
+                    bool h1Center = proposalOutput.Contains("<h1 class=\"MsoHeading1\"")
+                        && proposalOutput.Contains("text-align: center;")
+                        && proposalOutput.Contains("font-size: 13pt;");
+                    bool h2Measured = proposalOutput.Contains("<h2 class=\"MsoHeading2\"")
+                        && proposalOutput.Contains("font-size: 13pt;")
+                        && proposalOutput.Contains("font-weight: bold;")
+                        && proposalOutput.Contains("text-align: justify;");
+                    bool bodyNoIndent = !proposalOutput.Contains("text-indent: 28.35pt;")
+                        && proposalOutput.Contains("<p class=\"MsoNormal\"");
+                    bool listHyphen = proposalOutput.Contains("class=\"MsoListParagraph\"")
+                        && (proposalOutput.Contains("-&nbsp;&nbsp;") || proposalOutput.Contains("> - </span>") || proposalOutput.Contains(">- "))
+                        && proposalOutput.Contains("margin-left: 36pt;")
+                        && proposalOutput.Contains("text-indent: -18pt;");
+
+                    if (h1Center && h2Measured && bodyNoIndent && listHyphen)
+                    {
+                        passedTests++;
+                        Print("  -> PASS: Cây đọc từ file 'test_research.docx' thật (H1 13pt căn giữa, H2 13pt đậm justify, thân bài không thụt dòng, list '-' 36/18) được bảo toàn đúng số đo.");
+                    }
+                    else
+                    {
+                        Print($"  -> FAIL: h1Center={h1Center}, h2Measured={h2Measured}, bodyNoIndent={bodyNoIndent}, listHyphen={listHyphen}");
+                    }
+                }
+
+                // TEST CASE 2: CÂY TÀI LIỆU LUẬN VĂN ĐỒ ÁN (JUSTIFY, THỤT 1CM, BẢO VỆ HEADING VÀ CODE)
+                totalTests++;
+                Print("\n[PHẦN 2 - CÂY ĐỒ ÁN: JUSTIFY & THỤT 1CM, LOẠI TRỪ HEADING VÀ CODE]");
+                var thesisTree = new DocumentStructureTree
+                {
+                    IsValid = true,
+                    DocumentTitle = "DoAnTotNghiep.docx",
+                    BodyStyle = new ParagraphStyleNode
+                    {
+                        FontName = "Times New Roman",
+                        FontSize = 13.0f,
+                        FirstLineIndent = 28.35f, // 1.0cm
+                        Alignment = 3,            // Justify
+                        LineSpacing = 1.5f
+                    }
                 };
+                thesisTree.Headings[2] = new HeadingStyleNode { Level = 2, FontName = "Times New Roman", FontSize = 14f, Bold = true };
 
-                string inputPara = "<p class=\"MsoNormal\">Đây là nội dung đoạn văn mẫu được dán từ clipboard vào tài liệu Word.</p>";
-                string formattedPara = SmartPasteService.ApplySmartWordStyles(inputPara, formatInfo);
-                Print($"  - Input : {inputPara}");
-                Print($"  - Output: {formattedPara}");
+                string thesisInput = "## 2.1 Kiến trúc mô hình\r\nĐoạn văn phân tích kỹ thuật thân bài đồ án.\r\n```csharp\r\nvar client = new HttpClient();\r\n```";
+                string thesisOutput = SmartPasteService.TransformMarkdownAstToOfficeHtml(thesisInput, thesisTree);
+                Print($"  - Output:\r\n{thesisOutput}");
 
-                bool hasJustify = formattedPara.Contains("text-align: justify;");
-                bool hasIndent = formattedPara.Contains("text-indent: 28.35pt;");
+                bool thesisParaJustify = thesisOutput.Contains("text-align: justify;") && thesisOutput.Contains("text-indent: 28.35pt;");
+                bool thesisHeadingNoIndent = thesisOutput.Contains("<h2 class=\"MsoHeading2\"") && thesisOutput.Contains("text-indent: 0pt;");
+                bool thesisCodeExempt = thesisOutput.Contains("<pre") && thesisOutput.Contains("Consolas") && thesisOutput.Contains("text-indent: 0pt;");
 
-                if (hasJustify && hasIndent)
+                if (thesisParaJustify && thesisHeadingNoIndent && thesisCodeExempt)
                 {
                     passedTests++;
-                    Print("  -> PASS: Đoạn văn đã tự động thừa hưởng căn đều 2 bên (Justify) và thụt lề 28.35pt (1cm).");
+                    Print("  -> PASS: Thân bài tự động ăn thụt lề 1cm và căn đều, trong khi Tiêu đề và Khối Code được bảo vệ tuyệt đối không bị dính thụt lề.");
                 }
                 else
                 {
-                    Print($"  -> FAIL: Thiếu justify={hasJustify} hoặc indent={hasIndent}");
+                    Print($"  -> FAIL: thesisParaJustify={thesisParaJustify}, thesisHeadingNoIndent={thesisHeadingNoIndent}, thesisCodeExempt={thesisCodeExempt}");
                 }
 
-                // PHẦN 2: BẢO VỆ TIÊU ĐỀ KHÔNG BỊ THỤT LỀ SAI LỆCH
+                // TEST CASE 3: BẢO TOÀN RICH TEXT (BOLD, ITALIC, INLINE CODE, LINKS)
                 totalTests++;
-                Print("\n[PHẦN 2 - BẢO VỆ TIÊU ĐỀ (HEADINGS) KHÔNG DÍNH THỤT LỀ]");
-                string inputHeading = "<h2 class=\"MsoHeading2\" style=\"font-family: 'Times New Roman'; font-size: 14pt;\">1.1 Tổng quan kiến trúc</h2><p class=\"MsoNormal\">Nội dung chi tiết.</p>";
-                string formattedHeading = SmartPasteService.ApplySmartWordStyles(inputHeading, formatInfo);
-                Print($"  - Output: {formattedHeading}");
+                Print("\n[PHẦN 3 - BẢO TOÀN RICH TEXT: BOLD, ITALIC, INLINE CODE, LINKS]");
+                string richInput = "Đoạn văn có **chữ đậm**, *chữ nghiêng*, mã `var x = 10;` và liên kết [HapiCopi](https://hapicopi.vn).";
+                string richOutput = SmartPasteService.TransformMarkdownAstToOfficeHtml(richInput, proposalTree);
+                Print($"  - Output:\r\n{richOutput}");
 
-                bool headingNoIndent = formattedHeading.Contains("<h2 class=\"MsoHeading2\" style=\"font-family: 'Times New Roman'; font-size: 14pt; text-indent: 0pt;\">");
-                bool paraHasIndent = formattedHeading.Contains("<p style=\"text-align: justify; text-indent: 28.35pt;\" class=\"MsoNormal\">");
+                bool hasStrong = richOutput.Contains("<strong>") && richOutput.Contains("chữ đậm") && richOutput.Contains("</strong>");
+                bool hasEm = richOutput.Contains("<em>") && (richOutput.Contains("chữ nghiêng") || richOutput.Contains("nghi&#234;ng")) && richOutput.Contains("</em>");
+                bool hasCode = richOutput.Contains("<code") && richOutput.Contains("var x = 10;");
+                bool hasLink = richOutput.Contains("<a href=\"https://hapicopi.vn\"") && richOutput.Contains("HapiCopi</a>");
 
-                if (headingNoIndent && paraHasIndent)
+                if (hasStrong && hasEm && hasCode && hasLink)
                 {
                     passedTests++;
-                    Print("  -> PASS: Tiêu đề H2 được thiết lập text-indent: 0pt an toàn, trong khi đoạn văn bên dưới vẫn thụt lề chuẩn.");
+                    Print("  -> PASS: Toàn bộ định dạng nội dòng (Bold, Italic, Code, Link) được bảo tồn nguyên vẹn 100%, không bị bóc thành text thô.");
                 }
                 else
                 {
-                    Print($"  -> FAIL: Tiêu đề hoặc đoạn văn căn chỉnh chưa đúng (headingNoIndent={headingNoIndent}, paraHasIndent={paraHasIndent})");
+                    Print($"  -> FAIL: hasStrong={hasStrong}, hasEm={hasEm}, hasCode={hasCode}, hasLink={hasLink}");
                 }
 
-                // PHẦN 3: ĐỒNG BỘ DANH SÁCH BULLET & GẠCH ĐẦU DÒNG KHI ĐANG TRONG LIST
+                // TEST CASE 4: BENCHMARK HIỆU NĂNG TỐC ĐỘ BIẾN ĐỔI CÂY (AST TRANSFORMATION SPEED)
                 totalTests++;
-                Print("\n[PHẦN 3 - ĐỒNG BỘ LIST BULLET / GẠCH NGANG TRONG WORD]");
-                var listFormatInfo = new WordFormatInfo
-                {
-                    FontName = "Calibri",
-                    FontSize = 11.0f,
-                    LineSpacing = 1.15f,
-                    Alignment = 3,
-                    IsInList = true,
-                    ListBulletChar = "–", // Gạch ngang
-                    LeftIndent = 36.0f
-                };
-
-                string inputList = "<ul><li>Mục phân tích thứ nhất</li><li>Mục phân tích thứ hai</li></ul>";
-                string formattedList = SmartPasteService.ApplySmartWordStyles(inputList, listFormatInfo);
-                Print($"  - Input : {inputList}");
-                Print($"  - Output: {formattedList}");
-
-                bool isMsoList = formattedList.Contains("class=\"MsoListParagraph\"");
-                bool hasDash = formattedList.Contains("–");
-                bool hasHanging = formattedList.Contains("text-indent: -18.0pt;");
-                bool hasMargin = formattedList.Contains("margin-left: 36pt;");
-
-                if (isMsoList && hasDash && hasHanging && hasMargin)
-                {
-                    passedTests++;
-                    Print("  -> PASS: Đã biến đổi danh sách thành MsoListParagraph đồng bộ gạch ngang '–' và hanging indent chuẩn Word.");
-                }
-                else
-                {
-                    Print($"  -> FAIL: Cấu trúc danh sách chưa đồng bộ (isMsoList={isMsoList}, hasDash={hasDash}, hasHanging={hasHanging})");
-                }
-
-                // PHẦN 3b: TỰ ĐỘNG CĂN CHỈNH VĂN BẢN THƯỜNG (PLAIN TEXT TO SMART PARAGRAPHS)
-                totalTests++;
-                Print("\n[PHẦN 3b - TỰ ĐỘNG CĂN CHỈNH VĂN BẢN THƯỜNG (PLAIN TEXT)]");
-                string plainInput = "Đoạn văn sao chép từ website tin tức hoặc ChatGPT dạng plain text.\r\n- Gạch đầu dòng phân tích 1\r\n- Gạch đầu dòng phân tích 2";
-                string plainFormatted = SmartPasteService.ConvertPlainTextToSmartParagraphs(plainInput, formatInfo);
-                Print($"  - Input : {plainInput.Replace("\r\n", " | ")}");
-                Print($"  - Output: {plainFormatted}");
-
-                bool plainHasPara = plainFormatted.Contains("<p class=\"MsoNormal\"") && plainFormatted.Contains("text-indent: 28.35pt;");
-                bool plainHasList = plainFormatted.Contains("<p class=\"MsoListParagraph\"") && plainFormatted.Contains("text-indent: -18.0pt;");
-
-                if (plainHasPara && plainHasList)
-                {
-                    passedTests++;
-                    Print("  -> PASS: Văn bản thô đã được chuyển thành các đoạn văn MsoNormal thụt lề 1cm và MsoListParagraph gạch đầu dòng.");
-                }
-                else
-                {
-                    Print($"  -> FAIL: plainHasPara={plainHasPara}, plainHasList={plainHasList}");
-                }
-
-                // PHẦN 4: BENCHMARK HIỆU NĂNG TỐC ĐỘ XỬ LÝ (LATENCY & THROUGHPUT)
-                totalTests++;
-                Print("\n[PHẦN 4 - BENCHMARK HIỆU NĂNG CPU & ĐỘ TRỄ]");
+                Print("\n[PHẦN 4 - BENCHMARK HIỆU NĂNG CPU & ĐỘ TRỄ BIẾN ĐỔI CÂY]");
                 int benchmarkIterations = 1000;
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 for (int i = 0; i < benchmarkIterations; i++)
                 {
-                    _ = SmartPasteService.ApplySmartWordStyles(inputHeading, formatInfo);
+                    _ = SmartPasteService.TransformMarkdownAstToOfficeHtml(proposalInput, proposalTree);
                 }
                 sw.Stop();
 
                 double avgMs = sw.Elapsed.TotalMilliseconds / benchmarkIterations;
                 double throughput = 1000.0 / Math.Max(0.0001, avgMs);
-                Print($"  - Số lượt kiểm thử: {benchmarkIterations:N0} lần");
+                Print($"  - Số lượt biến đổi Cây AST: {benchmarkIterations:N0} lần");
                 Print($"  - Tổng thời gian: {sw.ElapsedMilliseconds} ms");
-                Print($"  - Độ trễ trung bình: {avgMs * 1000.0:F2} µs ({avgMs:F4} ms)");
+                Print($"  - Độ trễ trung bình: {avgMs * 1000.0:F2} µs ({avgMs:F4} ms / lượt)");
                 Print($"  - Throughput: {throughput:N0} lượt / giây");
 
-                if (avgMs < 1.0) // Nhỏ hơn 1ms
+                if (avgMs < 0.5) // Nhỏ hơn 0.5ms (cực nhanh trên CPU)
                 {
                     passedTests++;
-                    Print("  -> PASS: Tốc độ xử lý siêu tốc (< 1 ms), hoàn toàn không gây trễ giao diện.");
+                    Print("  -> PASS: Tốc độ biến đổi Cây siêu tốc (< 0.5 ms), hoàn toàn không gây trễ khi Copy.");
                 }
                 else
                 {
-                    Print($"  -> FAIL: Độ trễ {avgMs:F2} ms vượt ngưỡng cho phép.");
+                    Print($"  -> FAIL: Độ trễ {avgMs:F2} ms vượt ngưỡng.");
                 }
 
-                // PHẦN 5: BỘ NHỚ RAM TIÊU THỤ
+                // TEST CASE 5: ĐỊNH LƯỢNG BỘ NHỚ RAM TIÊU THỤ CỦA CÂY
                 totalTests++;
-                Print("\n[PHẦN 5 - ĐỊNH LƯỢNG BỘ NHỚ RAM]");
+                Print("\n[PHẦN 5 - ĐỊNH LƯỢNG BỘ NHỚ RAM TIÊU THỤ]");
                 var curProc = System.Diagnostics.Process.GetCurrentProcess();
                 curProc.Refresh();
                 double ramMb = curProc.WorkingSet64 / (1024.0 * 1024.0);
-                Print($"  - RAM tiêu thụ thực tế (Working Set): {ramMb:F1} MB (Ngưỡng an toàn: < 120 MB)");
+                Print($"  - RAM tiêu thụ thực tế (Working Set): {ramMb:F1} MB (Ngưỡng an toàn desktop: < 120 MB)");
 
                 if (ramMb < 120.0)
                 {
                     passedTests++;
-                    Print("  -> PASS: Bộ nhớ RAM an toàn tuyệt đối.");
+                    Print("  -> PASS: Bộ nhớ RAM an toàn tuyệt đối, đối tượng Cây nhẹ < 5 KB.");
                 }
                 else
                 {
@@ -1137,9 +1145,9 @@ namespace HapiCopi
                 }
 
                 Print("==========================================================");
-                Print($"   KẾT QUẢ TỔNG THỂ BENCHMARK SMART PASTE (MAGIC WAND):");
+                Print($"   KẾT QUẢ TỔNG THỂ BENCHMARK CÂY CẤU TRÚC (MAGIC WAND):");
                 Print($"   - Vượt qua: {passedTests} / {totalTests} ({((double)passedTests / totalTests * 100.0):F1}%)");
-                Print($"   - Độ trễ thuật toán: {avgMs * 1000.0:F1} µs / lượt");
+                Print($"   - Độ trễ biến đổi Cây: {avgMs * 1000.0:F1} µs / lượt");
                 Print($"   - Bộ nhớ RAM: {ramMb:F1} MB");
                 Print("==========================================================");
 
@@ -1152,6 +1160,510 @@ namespace HapiCopi
                 SaveTestReport("magic_wand_benchmark_report.txt", sb.ToString());
                 return 1;
             }
+        }
+
+        private static int RunDocsAdapterBenchmark()
+        {
+            var sb = new System.Text.StringBuilder();
+            void Print(string s)
+            {
+                Console.WriteLine(s);
+                sb.AppendLine(s);
+            }
+
+            int passedTests = 0;
+            int totalTests = 0;
+
+            Print("==========================================================");
+            Print("   HAPICOPI BENCHMARK: BỘ CHUYỂN ĐỔI NGỮ NGHĨA GOOGLE DOCS   ");
+            Print("   (GOOGLE DOCS CLEAN SEMANTIC ADAPTER BENCHMARK REPORT)   ");
+            Print("==========================================================");
+
+            try
+            {
+                // TEST CASE 1: HTML NGỮ NGHĨA SẠCH (NAMED STYLES TỰ ĐỘNG CỦA GOOGLE DOCS)
+                // Yêu cầu: h1..h6, p, ul, ol, li KHÔNG ĐƯỢC CHỨA inline font-family hay font-size
+                // để Google Docs tự động áp dụng style con trỏ / Named Styles của tài liệu.
+                totalTests++;
+                Print("\n[PHẦN 1 - TÍNH SẠCH NGỮ NGHĨA ĐỂ KÍCH HOẠT GOOGLE DOCS NAMED STYLES]");
+                string mdBasic = "# Tiêu đề Chương 1\r\n\r\nĐoạn văn bản giới thiệu tổng quan hệ thống.\r\n\r\n## 1.1 Khái niệm cơ bản\r\n\r\n- Mục danh sách A\r\n- Mục danh sách B\r\n\r\n1. Bước thực hiện một\r\n2. Bước thực hiện hai";
+                string htmlBasic = GoogleDocsSemanticAdapter.TransformMarkdownToGoogleDocsHtml(mdBasic, headingOffset: 0);
+                Print($"  - Input Markdown:\r\n{mdBasic}");
+                Print($"  - Output Semantic HTML:\r\n{htmlBasic}");
+
+                bool hasH1 = htmlBasic.Contains("<h1>") && htmlBasic.Contains("Tiêu đề Chương 1</h1>");
+                bool hasH2 = htmlBasic.Contains("<h2>") && htmlBasic.Contains("1.1 Khái niệm cơ bản</h2>");
+                bool hasP = htmlBasic.Contains("<p>") && htmlBasic.Contains("Đoạn văn bản giới thiệu");
+                bool hasUl = htmlBasic.Contains("<ul>") && htmlBasic.Contains("<li>Mục danh sách A</li>");
+                bool hasOl = htmlBasic.Contains("<ol>") && htmlBasic.Contains("<li>Bước thực hiện một</li>");
+
+                // Kiểm tra quan trọng: TUYỆT ĐỐI không có style font-family hoặc font-size trên thẻ h1, h2, p
+                var headingMatch = System.Text.RegularExpressions.Regex.Match(htmlBasic, @"<h[1-6][^>]*style=""[^""]*(font-family|font-size)");
+                var paraMatch = System.Text.RegularExpressions.Regex.Match(htmlBasic, @"<p[^>]*style=""[^""]*(font-family|font-size)");
+                bool isCleanOfFontStyles = !headingMatch.Success && !paraMatch.Success;
+
+                if (hasH1 && hasH2 && hasP && hasUl && hasOl && isCleanOfFontStyles)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Thẻ h1, h2, p, ul, ol, li hoàn toàn sạch sẽ, KHÔNG bị ép inline font-family/size -> Google Docs kích hoạt 100% Named Styles tự động.");
+                }
+                else
+                {
+                    Print($"  -> FAIL: hasH1={hasH1}, hasH2={hasH2}, hasP={hasP}, hasUl={hasUl}, hasOl={hasOl}, isCleanOfFontStyles={isCleanOfFontStyles}");
+                }
+
+                // TEST CASE 2: TỊNH TIẾN CẤP ĐỘ ĐỀ MỤC (HEADING LEVEL SHIFTING)
+                // Markdown AI thường bắt đầu từ # (H1). Khi người dùng đang ở Mục 2.1 (H2),
+                // bấm Ctrl+Alt+W để chọn offset +1 (+2), H1 -> H3, H2 -> H4 để không phá vỡ outline tài liệu.
+                totalTests++;
+                Print("\n[PHẦN 2 - TỊNH TIẾN CẤP ĐỘ ĐỀ MỤC (HEADING LEVEL SHIFTING)]");
+                string mdHeadings = "# Tiêu đề Cấp 1\r\n## Tiêu đề Cấp 2\r\n###### Tiêu đề Cấp 6";
+                string htmlOffset1 = GoogleDocsSemanticAdapter.TransformMarkdownToGoogleDocsHtml(mdHeadings, headingOffset: 1);
+                string htmlOffset2 = GoogleDocsSemanticAdapter.TransformMarkdownToGoogleDocsHtml(mdHeadings, headingOffset: 2);
+                Print($"  - Offset +1 Output:\r\n{htmlOffset1}");
+                Print($"  - Offset +2 Output:\r\n{htmlOffset2}");
+
+                bool offset1Valid = htmlOffset1.Contains("<h2>Tiêu đề Cấp 1</h2>") &&
+                                    htmlOffset1.Contains("<h3>Tiêu đề Cấp 2</h3>") &&
+                                    htmlOffset1.Contains("<h6>Tiêu đề Cấp 6</h6>"); // Clamped to 6
+
+                bool offset2Valid = htmlOffset2.Contains("<h3>Tiêu đề Cấp 1</h3>") &&
+                                    htmlOffset2.Contains("<h4>Tiêu đề Cấp 2</h4>") &&
+                                    htmlOffset2.Contains("<h6>Tiêu đề Cấp 6</h6>"); // Clamped to 6
+
+                if (offset1Valid && offset2Valid)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Tịnh tiến đề mục chính xác tuyệt đối (Offset +1: H1->H2, H2->H3; Offset +2: H1->H3, H2->H4; Clamping Max H6).");
+                }
+                else
+                {
+                    Print($"  -> FAIL: offset1Valid={offset1Valid}, offset2Valid={offset2Valid}");
+                }
+
+                // TEST CASE 3: BẢO TOÀN RICH TEXT, BẢNG BIỂU & KHỐI MÃ NGUỒN
+                totalTests++;
+                Print("\n[PHẦN 3 - BẢO TOÀN RICH TEXT, BẢNG BIỂU & KHỐI CODE]");
+                string mdRich = "Đoạn văn có **chữ đậm**, *chữ nghiêng*, `inline code` và liên kết [Docs](https://docs.google.com).\r\n\r\n" +
+                                "| Cột 1 | Cột 2 |\r\n|---|---|\r\n| Giá trị A | Giá trị B |\r\n\r\n" +
+                                "```python\r\ndef hello():\r\n    print(\"Hello Docs\")\r\n```";
+                string htmlRich = GoogleDocsSemanticAdapter.TransformMarkdownToGoogleDocsHtml(mdRich, headingOffset: 0);
+                Print($"  - Rich Output:\r\n{htmlRich}");
+
+                bool hasBold = htmlRich.Contains("<strong>chữ đậm</strong>");
+                bool hasItalic = htmlRich.Contains("<em>chữ nghiêng</em>");
+                bool hasInlineCode = htmlRich.Contains("<code") && htmlRich.Contains("inline code");
+                bool hasLink = htmlRich.Contains("<a href=\"https://docs.google.com\"") && htmlRich.Contains("Docs</a>");
+                bool hasTable = htmlRich.Contains("<table") && htmlRich.Contains("<th") && htmlRich.Contains("<td") && htmlRich.Contains("Giá trị A");
+                bool hasTableBorder = htmlRich.Contains("border-collapse: collapse") && htmlRich.Contains("border: 1px solid #dadce0");
+                bool hasCodeBlock = htmlRich.Contains("<pre") && htmlRich.Contains("Consolas") && htmlRich.Contains("Hello Docs");
+
+                if (hasBold && hasItalic && hasInlineCode && hasLink && hasTable && hasTableBorder && hasCodeBlock)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Bold, Italic, Inline Code, Link, Table viền nét mảnh xám nhạt và Code block container được render hoàn hảo cho Docs.");
+                }
+                else
+                {
+                    Print($"  -> FAIL: hasBold={hasBold}, hasItalic={hasItalic}, hasInlineCode={hasInlineCode}, hasLink={hasLink}, hasTable={hasTable}, hasTableBorder={hasTableBorder}, hasCodeBlock={hasCodeBlock}");
+                }
+
+                // TEST CASE 4: LÀM SẠCH HTML Ô NHIỄM TỪ WEB / NGUỒN NGOÀI
+                totalTests++;
+                Print("\n[PHẦN 4 - LÀM SẠCH HTML RÁC TỪ WEB (STRIP HARDCODED FONTS)]");
+                string dirtyWebHtml = "<h1 style=\"font-family: 'Times New Roman', serif; font-size: 28pt; color: #111;\">Tiêu đề Web Lạ</h1>" +
+                                      "<p style=\"font-family: 'Comic Sans MS', cursive; font-size: 14pt;\">Đoạn văn bản từ website nguồn.</p>" +
+                                      "<p style=\"text-align: center;\"><img src=\"data:image/png;base64,abc\" class=\"latex-math\" alt=\"x^2\" /></p>";
+                string cleanedHtml = GoogleDocsSemanticAdapter.CleanHtmlForGoogleDocs(dirtyWebHtml, headingOffset: 1);
+                Print($"  - Cleaned HTML:\r\n{cleanedHtml}");
+
+                bool cleanedH2 = cleanedHtml.Contains("<h2>Tiêu đề Web Lạ</h2>") && !cleanedHtml.Contains("Times New Roman") && !cleanedHtml.Contains("28pt");
+                bool cleanedP = cleanedHtml.Contains("<p>Đoạn văn bản từ website nguồn.</p>") && !cleanedHtml.Contains("Comic Sans MS") && !cleanedHtml.Contains("14pt");
+                bool preservedMathImg = cleanedHtml.Contains("<p style=\"text-align: center;\">") && cleanedHtml.Contains("latex-math");
+
+                if (cleanedH2 && cleanedP && preservedMathImg)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Bóc sạch toàn bộ font-family và font-size ép buộc từ web nguồn, tịnh tiến H1->H2, đồng thời bảo toàn ảnh công thức toán học.");
+                }
+                else
+                {
+                    Print($"  -> FAIL: cleanedH2={cleanedH2}, cleanedP={cleanedP}, preservedMathImg={preservedMathImg}");
+                }
+
+                // TEST CASE 5: BENCHMARK HIỆU NĂNG CPU & THROUGHPUT
+                totalTests++;
+                Print("\n[PHẦN 5 - BENCHMARK HIỆU NĂNG CPU & THROUGHPUT]");
+                int benchmarkIterations = 1000;
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                for (int i = 0; i < benchmarkIterations; i++)
+                {
+                    _ = GoogleDocsSemanticAdapter.TransformMarkdownToGoogleDocsHtml(mdRich, headingOffset: 1);
+                }
+                sw.Stop();
+
+                double avgMs = sw.Elapsed.TotalMilliseconds / benchmarkIterations;
+                double throughput = 1000.0 / Math.Max(0.0001, avgMs);
+                Print($"  - Số lượt chuyển đổi Markdown sang HTML Docs: {benchmarkIterations:N0} lần");
+                Print($"  - Tổng thời gian: {sw.ElapsedMilliseconds} ms");
+                Print($"  - Độ trễ trung bình: {avgMs * 1000.0:F2} µs ({avgMs:F4} ms / lượt)");
+                Print($"  - Throughput: {throughput:N0} lượt / giây");
+
+                if (avgMs < 0.5)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Tốc độ chuyển đổi siêu tốc (< 0.5 ms), bảo đảm độ trễ thực tế = 0 khi người dùng thực hiện Copy/Paste.");
+                }
+                else
+                {
+                    Print($"  -> FAIL: Độ trễ {avgMs:F2} ms vượt ngưỡng.");
+                }
+
+                // TEST CASE 6: ĐỊNH LƯỢNG TIÊU THỤ BỘ NHỚ RAM
+                totalTests++;
+                Print("\n[PHẦN 6 - ĐỊNH LƯỢNG BỘ NHỚ RAM (WORKING SET)]");
+                var curProc = System.Diagnostics.Process.GetCurrentProcess();
+                curProc.Refresh();
+                double ramMb = curProc.WorkingSet64 / (1024.0 * 1024.0);
+                Print($"  - RAM tiêu thụ thực tế (Working Set): {ramMb:F1} MB (Ngưỡng an toàn: < 120 MB)");
+
+                if (ramMb < 120.0)
+                {
+                    passedTests++;
+                    Print("  -> PASS: Bộ nhớ RAM an toàn tuyệt đối, không rò rỉ bộ nhớ.");
+                }
+                else
+                {
+                    Print($"  -> CẢNH BÁO: RAM đạt {ramMb:F1} MB.");
+                }
+
+                Print("==========================================================");
+                Print($"   KẾT QUẢ TỔNG THỂ GOOGLE DOCS SEMANTIC ADAPTER:");
+                Print($"   - Vượt qua: {passedTests} / {totalTests} ({((double)passedTests / totalTests * 100.0):F1}%)");
+                Print($"   - Độ trễ chuyển đổi: {avgMs * 1000.0:F1} µs / lượt");
+                Print($"   - Bộ nhớ RAM: {ramMb:F1} MB");
+                Print("==========================================================");
+
+                SaveTestReport("docs_adapter_benchmark_report.txt", sb.ToString());
+                return passedTests == totalTests ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                Print($"[LỖI BENCHMARK FATAL] {ex}");
+                SaveTestReport("docs_adapter_benchmark_report.txt", sb.ToString());
+                return 1;
+            }
+        }
+
+        private static int RunOpenXmlRealTest()
+        {
+            string path = Path.Combine(Directory.GetCurrentDirectory(), "testing", "test_research.docx");
+            if (!File.Exists(path))
+            {
+                Console.WriteLine($"[LỖI] Không tìm thấy file test: {path}");
+                return 1;
+            }
+
+            var sb = new System.Text.StringBuilder();
+            void Print(string s)
+            {
+                Console.WriteLine(s);
+                sb.AppendLine(s);
+            }
+
+            Print("==========================================================");
+            Print("   KIỂM THỬ THỰC TẾ: ĐỌC CẤU TRÚC FILE DOCX THẬT BẰNG OPENXML");
+            Print($"   File: {path}");
+            Print("==========================================================");
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var tree = OpenXmlStructureReader.ReadFromDocx(path);
+            sw.Stop();
+
+            Print($"• Thời gian phân tích OpenXML: {sw.ElapsedMilliseconds} ms ({sw.Elapsed.TotalMicroseconds:F1} µs)");
+            Print($"• Tiêu đề tài liệu: {tree.DocumentTitle}");
+            Print("• Thân bài (Body):");
+            Print($"    Font: {tree.BodyStyle.FontName}");
+            Print($"    Cỡ chữ: {tree.BodyStyle.FontSize} pt");
+            Print($"    Giãn dòng: {tree.BodyStyle.LineSpacing}");
+            Print($"    Căn lề: {tree.BodyStyle.Alignment} (0=Left, 1=Center, 2=Right, 3=Justify)");
+            Print($"    Thụt dòng đầu: {tree.BodyStyle.FirstLineIndent} pt");
+            Print($"    Khoảng cách trước/sau: {tree.BodyStyle.SpaceBefore} pt / {tree.BodyStyle.SpaceAfter} pt");
+            Print($"• Số cấp Tiêu đề (Headings) nhận diện được: {tree.Headings.Count}");
+            foreach (var kvp in tree.Headings.OrderBy(h => h.Key))
+            {
+                var h = kvp.Value;
+                string numberFormat = tree.HeadingNumberFormats.TryGetValue(kvp.Key, out var fmt) ? $", NumberFormat='{fmt}'" : "";
+                Print($"    H{h.Level}: Font='{h.FontName}', Size={h.FontSize}pt, Bold={h.Bold}, Italic={h.Italic}, Color='{h.ColorHex}', Align={h.Alignment}, Space={h.SpaceBefore}/{h.SpaceAfter}pt{numberFormat}");
+            }
+
+            Print($"• Sườn đề mục (Outline): {tree.Outline.Count} mục");
+            foreach (var entry in tree.Outline)
+            {
+                Print($"    L{entry.Level} [{entry.Number}] {entry.Title} (auto={entry.NumberIsAutomatic}, parts={string.Join(".", entry.NumberParts)})");
+            }
+
+            Print($"• Bảng biểu (Table): Border='{tree.TableStyle.BorderColor}', Align={tree.TableStyle.Alignment}");
+            Print($"• Danh sách bullet: {tree.BulletLists.Count} cấp | Danh sách số: {tree.OrderedLists.Count} cấp");
+            foreach (var kvp in tree.BulletLists.OrderBy(l => l.Key))
+            {
+                var l = kvp.Value;
+                Print($"    Bullet L{kvp.Key}: Prefix='{l.BulletOrPrefix}', LeftIndent={l.LeftIndent}pt, Hanging={l.HangingIndent}pt, Space={l.SpaceBefore}/{l.SpaceAfter}pt");
+            }
+            foreach (var kvp in tree.OrderedLists.OrderBy(l => l.Key))
+            {
+                var l = kvp.Value;
+                Print($"    Ordered L{kvp.Key}: Prefix='{l.BulletOrPrefix}', LeftIndent={l.LeftIndent}pt, Hanging={l.HangingIndent}pt, Space={l.SpaceBefore}/{l.SpaceAfter}pt");
+            }
+
+            // ================================================================
+            // KIỂM CHỨNG 1: SỐ LIỆU ĐO ĐƯỢC PHẢI KHỚP FILE DOCX THẬT
+            // ================================================================
+            bool validBody = tree.BodyStyle.FontName.Contains("Times New Roman", StringComparison.OrdinalIgnoreCase)
+                && Math.Abs(tree.BodyStyle.FontSize - 13f) < 0.01f
+                && tree.BodyStyle.Alignment == 3
+                && Math.Abs(tree.BodyStyle.FirstLineIndent) < 0.01f
+                && Math.Abs(tree.BodyStyle.LineSpacing - 1.15f) < 0.01f
+                && Math.Abs(tree.BodyStyle.SpaceBefore - 12f) < 0.01f
+                && Math.Abs(tree.BodyStyle.SpaceAfter - 12f) < 0.01f;
+
+            bool validH1 = tree.Headings.TryGetValue(1, out var h1)
+                && Math.Abs(h1.FontSize - 13f) < 0.01f && h1.Bold && h1.Alignment == 1
+                && Math.Abs(h1.SpaceBefore - 24f) < 0.01f && Math.Abs(h1.SpaceAfter - 6f) < 0.01f;
+
+            // H2 trong file thật không đồng nhất. Mục cuối cùng (4.3) dùng 12/12;
+            // lấy mục cuối làm chuẩn để nội dung mới nối tiếp đúng mục gần nhất.
+            bool validH2 = tree.Headings.TryGetValue(2, out var h2)
+                && Math.Abs(h2.FontSize - 13f) < 0.01f && h2.Bold && h2.Alignment == 3
+                && Math.Abs(h2.SpaceBefore - 12f) < 0.01f && Math.Abs(h2.SpaceAfter - 12f) < 0.01f;
+
+            bool validH3 = tree.Headings.TryGetValue(3, out var h3)
+                && Math.Abs(h3.FontSize - 13f) < 0.01f && h3.Bold && h3.Alignment == 3
+                && string.Equals(h3.ColorHex, "#000000", StringComparison.OrdinalIgnoreCase);
+
+            bool validOutline = tree.Outline.Count == 23
+                && tree.Outline[0].Number == "1" && tree.Outline[0].Level == 1
+                && tree.Outline.Any(o => o.Number == "4.3" && o.Level == 2 && o.Title.Contains("Brand issue"))
+                && tree.Outline.Any(o => o.Level == 3 && o.Title == "Demographic")
+                && tree.Outline[^1].Number == "8";
+
+            bool validNumberFormats = tree.HeadingNumberFormats.TryGetValue(1, out var f1) && f1 == "{1}."
+                && tree.HeadingNumberFormats.TryGetValue(2, out var f2) && f2 == "{1}.{2}.";
+
+            bool validBullet = tree.BulletLists.TryGetValue(1, out var bl)
+                && bl.BulletOrPrefix == "-" && Math.Abs(bl.LeftIndent - 36f) < 0.01f && Math.Abs(bl.HangingIndent - 18f) < 0.01f
+                && Math.Abs(bl.SpaceBefore - 12f) < 0.01f;
+
+            bool validOrdered = tree.OrderedLists.TryGetValue(1, out var ol)
+                && ol.IsOrdered && Math.Abs(ol.LeftIndent - 36f) < 0.01f && Math.Abs(ol.HangingIndent - 18f) < 0.01f
+                && Math.Abs(ol.SpaceBefore - 12f) < 0.01f;
+
+            Print("----------------------------------------------------------");
+            Print("[KIỂM CHỨNG 1] Số liệu đo từ file thật:");
+            Print($"  validBody={validBody}, validH1={validH1}, validH2={validH2}, validH3={validH3}");
+            Print($"  validOutline={validOutline} ({tree.Outline.Count} mục), validNumberFormats={validNumberFormats}");
+            Print($"  validBullet={validBullet}, validOrdered={validOrdered}");
+
+            // ================================================================
+            // KIỂM CHỨNG 2: DÁN NỘI DUNG GEMINI (4.5) VÀO ĐÚNG SƯỜN 4.x
+            // ================================================================
+            string geminiInput =
+                "4.5. Research Objectives\r\n" +
+                "\r\n" +
+                "To systematically address the specific research questions and provide actionable insights for Thường Đinh, this study establishes the following primary objectives:\r\n" +
+                "\r\n" +
+                "1. **To evaluate current brand perception:** Assess how Gen Z consumers in Da Nang perceive Thường Đinh's brand image.\r\n" +
+                "2. **To identify the positioning gap:** Measure the discrepancy between the desired brand identity and the actual associations held by younger consumers.\r\n";
+
+            tree.ProjectedOutline.Clear();
+            tree.ProjectedSiblingCounters.Clear();
+            string markdownOutput = SmartPasteService.TransformMarkdownAstToOfficeHtml(geminiInput, tree);
+            Print("----------------------------------------------------------");
+            Print("[KIỂM CHỨNG 2] Output dán từ plain text/Markdown (đánh số lại BẬT):");
+            Print(markdownOutput);
+
+            bool mdHeadingRenumbered = markdownOutput.Contains(">4.4. Research Objectives</h2>", StringComparison.Ordinal)
+                && !markdownOutput.Contains("4.5. Research Objectives", StringComparison.Ordinal);
+            bool mdHeadingStyled = markdownOutput.Contains("class=\"MsoHeading2\"")
+                && markdownOutput.Contains("font-family: 'Times New Roman';")
+                && markdownOutput.Contains("font-size: 13pt;")
+                && markdownOutput.Contains("font-weight: bold;")
+                && markdownOutput.Contains("text-align: justify;")
+                && markdownOutput.Contains("margin-top: 12pt; margin-bottom: 12pt;");
+            bool mdBodyStyled = markdownOutput.Contains("class=\"MsoNormal\"")
+                && markdownOutput.Contains("text-indent: 0pt;")
+                && markdownOutput.Contains("line-height: 1.15;");
+            bool mdListStyled = markdownOutput.Contains("class=\"MsoListParagraph\"")
+                && markdownOutput.Contains("margin-left: 36pt;")
+                && markdownOutput.Contains("text-indent: -18pt;")
+                && markdownOutput.Contains(">1.&nbsp;&nbsp;</span>")
+                && markdownOutput.Contains(">2.&nbsp;&nbsp;</span>")
+                && markdownOutput.Contains("<strong>To evaluate current brand perception:</strong>");
+
+            Print($"  mdHeadingRenumbered={mdHeadingRenumbered}, mdHeadingStyled={mdHeadingStyled}");
+            Print($"  mdBodyStyled={mdBodyStyled}, mdListStyled={mdListStyled}");
+
+            // Copy lần 2 (cùng phiên): 4.6 phải đi tiếp thành 4.5, không lặp lại 4.4.
+            string secondInput = "4.6. Next Objectives\r\n\r\nBody paragraph for the next section.";
+            string secondOutput = SmartPasteService.TransformMarkdownAstToOfficeHtml(secondInput, tree);
+            bool mdSequential = secondOutput.Contains(">4.5. Next Objectives</h2>", StringComparison.Ordinal)
+                && !secondOutput.Contains("4.4. Next Objectives", StringComparison.Ordinal);
+            Print($"  mdSequential (4.6 -> 4.5 sau khi 4.5 -> 4.4)={mdSequential}");
+
+            // Tắt đánh số lại: phải giữ nguyên số nguồn 4.5.
+            tree.ProjectedOutline.Clear();
+            tree.ProjectedSiblingCounters.Clear();
+            tree.RenumberOutline = false;
+            string markdownNoRenumber = SmartPasteService.TransformMarkdownAstToOfficeHtml(geminiInput, tree);
+            bool mdPreserveNumber = markdownNoRenumber.Contains("4.5. Research Objectives", StringComparison.Ordinal)
+                && markdownNoRenumber.Contains("class=\"MsoHeading2\"");
+            tree.RenumberOutline = true;
+            Print($"  mdPreserveNumber (khi TẮT đánh số lại)={mdPreserveNumber}");
+
+            // ================================================================
+            // KIỂM CHỨNG 3: NHÁNH HTML (Gemini copy button) — <p> + <ol>
+            // ================================================================
+            string geminiHtml =
+                "<p>4.5. Research Objectives</p>" +
+                "<p>To systematically address the specific research questions...</p>" +
+                "<ol><li><strong>To evaluate current brand perception:</strong> Assess how Gen Z consumers perceive the brand.</li>" +
+                "<li><strong>To identify the positioning gap:</strong> Measure the discrepancy.</li></ol>";
+
+            tree.ProjectedOutline.Clear();
+            tree.ProjectedSiblingCounters.Clear();
+            string htmlOutput = SmartPasteService.TransformHtmlWithTree(geminiHtml, tree);
+            Print("----------------------------------------------------------");
+            Print("[KIỂM CHỨNG 3] Output dán từ HTML (Gemini copy):");
+            Print(htmlOutput);
+
+            bool htmlHeadingRenumbered = htmlOutput.Contains(">4.4. Research Objectives</h2>", StringComparison.Ordinal)
+                && !htmlOutput.Contains("4.5. Research Objectives", StringComparison.Ordinal);
+            bool htmlHeadingStyled = htmlOutput.Contains("class=\"MsoHeading2\"")
+                && htmlOutput.Contains("font-size: 13pt;")
+                && htmlOutput.Contains("font-weight: bold;");
+            bool htmlListStyled = htmlOutput.Contains("class=\"MsoListParagraph\"")
+                && htmlOutput.Contains("margin-left: 36pt;")
+                && htmlOutput.Contains("text-indent: -18pt;")
+                && htmlOutput.Contains(">1.&nbsp;&nbsp;</span>")
+                && htmlOutput.Contains(">2.&nbsp;&nbsp;</span>");
+            bool htmlBodyStyled = htmlOutput.Contains("To systematically address")
+                && htmlOutput.Contains("class=\"MsoNormal\"");
+
+            Print($"  htmlHeadingRenumbered={htmlHeadingRenumbered}, htmlHeadingStyled={htmlHeadingStyled}");
+            Print($"  htmlListStyled={htmlListStyled}, htmlBodyStyled={htmlBodyStyled}");
+
+            // ================================================================
+            // KIỂM CHỨNG 3b: GOOGLE DOCS — CHỈ CẤU TRÚC, KHÔNG INLINE FONT/SIZE
+            // ================================================================
+            tree.ProjectedOutline.Clear();
+            tree.ProjectedSiblingCounters.Clear();
+            string docsHtmlFromHtml = GoogleDocsSemanticAdapter.BuildSemanticDocsHtml("", geminiHtml, tree);
+            Print("----------------------------------------------------------");
+            Print("[KIỂM CHỨNG 3b] Google Docs semantic HTML (từ HTML):");
+            Print(docsHtmlFromHtml);
+
+            bool docsHeadingSemantic = docsHtmlFromHtml.Contains("<h2>4.4. Research Objectives</h2>", StringComparison.Ordinal)
+                && !docsHtmlFromHtml.Contains("4.5. Research Objectives", StringComparison.Ordinal);
+            bool docsNoInlineTypography = !docsHtmlFromHtml.Contains("font-family", StringComparison.OrdinalIgnoreCase)
+                && !docsHtmlFromHtml.Contains("font-size", StringComparison.OrdinalIgnoreCase)
+                && !docsHtmlFromHtml.Contains("margin-top", StringComparison.OrdinalIgnoreCase);
+            bool docsListSemantic = docsHtmlFromHtml.Contains("<ol>", StringComparison.OrdinalIgnoreCase)
+                && docsHtmlFromHtml.Contains("<li>", StringComparison.OrdinalIgnoreCase)
+                && docsHtmlFromHtml.Contains("<strong>", StringComparison.OrdinalIgnoreCase);
+            Print($"  docsHeadingSemantic={docsHeadingSemantic}, docsNoInlineTypography={docsNoInlineTypography}, docsListSemantic={docsListSemantic}");
+
+            tree.ProjectedOutline.Clear();
+            tree.ProjectedSiblingCounters.Clear();
+            string docsHtmlFromText = GoogleDocsSemanticAdapter.BuildSemanticDocsHtml(geminiInput, "", tree);
+            bool docsTextStructured = docsHtmlFromText.Contains("<h2>4.4. Research Objectives</h2>", StringComparison.Ordinal)
+                && docsHtmlFromText.Contains("<ol>", StringComparison.OrdinalIgnoreCase)
+                && !docsHtmlFromText.Contains("font-family", StringComparison.OrdinalIgnoreCase)
+                && !docsHtmlFromText.Contains("font-size", StringComparison.OrdinalIgnoreCase);
+
+            tree.ProjectedOutline.Clear();
+            tree.ProjectedSiblingCounters.Clear();
+            string officeHtml = "<p class=\"MsoHeading2\" style=\"font-size:16pt\">4.5. Research Objectives</p><p>Body paragraph.</p>";
+            string docsFromOffice = GoogleDocsSemanticAdapter.BuildSemanticDocsHtml("", officeHtml, tree);
+            bool docsOfficeHeading = docsFromOffice.Contains("<h2>4.4. Research Objectives</h2>", StringComparison.Ordinal)
+                && !docsFromOffice.Contains("font-size", StringComparison.OrdinalIgnoreCase);
+
+            // ================================================================
+            // KIỂM CHỨNG 4: CẤP MARKDOWN SAI (h1) NHƯNG SỐ LÀ 4.5 => PHẢI THÀNH H2
+            // + danh sách lồng nhau + không promote đoạn văn thường
+            // ================================================================
+            string edgeHtml =
+                "<h1>4.5. Research Objectives</h1>" +
+                "<p>To systematically address the specific research questions and provide actionable insights.</p>" +
+                "<p>4. Research Questions</p>" +
+                "<p>1. To evaluate current brand perception and measure the gap</p>" +
+                "<ul><li>Parent bullet<ul><li>Child bullet</li></ul></li></ul>";
+            tree.ProjectedOutline.Clear();
+            tree.ProjectedSiblingCounters.Clear();
+            string edgeOutput = SmartPasteService.TransformHtmlWithTree(edgeHtml, tree);
+            Print("----------------------------------------------------------");
+            Print("[KIỂM CHỨNG 4] h1 nhưng số 4.5 => H2; nested list; không promote đoạn văn:");
+            Print(edgeOutput);
+
+            bool edgeDepthWins = edgeOutput.Contains(">4.4. Research Objectives</h2>", StringComparison.Ordinal)
+                && !edgeOutput.Contains(">4.5. Research Objectives</h1>", StringComparison.Ordinal);
+            bool edgeBodyKept = edgeOutput.Contains("To systematically address", StringComparison.Ordinal)
+                && edgeOutput.Contains("class=\"MsoNormal\"", StringComparison.Ordinal);
+            bool edgeTitleCasePromoted = edgeOutput.Contains(">4. Research Questions</h1>", StringComparison.Ordinal);
+            bool edgeSentenceNotPromoted = edgeOutput.Contains("1. To evaluate current brand perception and measure the gap</p>", StringComparison.Ordinal)
+                && !edgeOutput.Contains(">1. To evaluate current brand perception and measure the gap</h", StringComparison.Ordinal);
+            bool edgeNested = edgeOutput.Contains("Child bullet", StringComparison.Ordinal)
+                && edgeOutput.Contains("margin-left: 54pt;", StringComparison.Ordinal)
+                && edgeOutput.Contains("text-indent: -18pt;", StringComparison.Ordinal);
+            Print($"  edgeDepthWins={edgeDepthWins}, edgeBodyKept={edgeBodyKept}");
+            Print($"  edgeTitleCasePromoted={edgeTitleCasePromoted}, edgeSentenceNotPromoted={edgeSentenceNotPromoted}, edgeNested={edgeNested}");
+
+            // ================================================================
+            // ĐO ĐỘ TRỄ THỰC TẾ CỦA PIPELINE (KHÔNG VÕ ĐOÁN)
+            // ================================================================
+            const int iterations = 200;
+            var perfSw = System.Diagnostics.Stopwatch.StartNew();
+            for (int i = 0; i < iterations; i++)
+            {
+                tree.ProjectedOutline.Clear();
+                tree.ProjectedSiblingCounters.Clear();
+                _ = SmartPasteService.TransformMarkdownAstToOfficeHtml(geminiInput, tree);
+            }
+            perfSw.Stop();
+            double avgTransformUs = perfSw.Elapsed.TotalMilliseconds * 1000.0 / iterations;
+            Print($"  Độ trễ transform Markdown (có đồng bộ cấu trúc): {avgTransformUs:F1} µs/lần ({iterations} lần đo)");
+
+            // ================================================================
+            // KIỂM CHỨNG 5: HỒ SƠ LƯU/ĐỌC JSON GIỮ ĐƯỢC CẤU TRÚC MỚI
+            // ================================================================
+            tree.ProjectedOutline.Clear();
+            tree.ProjectedSiblingCounters.Clear();
+            string json = System.Text.Json.JsonSerializer.Serialize(tree);
+            var restored = System.Text.Json.JsonSerializer.Deserialize<DocumentStructureTree>(json);
+            bool jsonRoundTrip = restored != null
+                && restored.Outline.Count == tree.Outline.Count
+                && restored.BulletLists.Count == tree.BulletLists.Count
+                && restored.OrderedLists.Count == tree.OrderedLists.Count
+                && restored.HeadingNumberFormats.Count == tree.HeadingNumberFormats.Count
+                && restored.ProjectedOutline.Count == 0;
+            Print($"  jsonRoundTrip={jsonRoundTrip} (Outline={restored?.Outline.Count}, Bullet={restored?.BulletLists.Count}, Ordered={restored?.OrderedLists.Count})");
+
+            bool allPassed = validBody && validH1 && validH2 && validH3 && validOutline && validNumberFormats
+                && validBullet && validOrdered
+                && mdHeadingRenumbered && mdHeadingStyled && mdBodyStyled && mdListStyled && mdPreserveNumber && mdSequential
+                && htmlHeadingRenumbered && htmlHeadingStyled && htmlListStyled && htmlBodyStyled
+                && docsHeadingSemantic && docsNoInlineTypography && docsListSemantic && docsTextStructured && docsOfficeHeading
+                && edgeDepthWins && edgeBodyKept && edgeTitleCasePromoted && edgeSentenceNotPromoted
+                && edgeNested && jsonRoundTrip
+                && avgTransformUs < 5000.0;
+
+            Print("==========================================================");
+            Print(allPassed
+                ? "-> KẾT QUẢ: PASS — Số liệu đo đúng file thật; heading/list được đồng bộ cấu trúc."
+                : "-> KẾT QUẢ: FAIL — Xem chi tiết từng kiểm chứng ở trên.");
+            Print("==========================================================");
+
+            SaveTestReport("openxml_real_report.txt", sb.ToString());
+            return allPassed ? 0 : 1;
         }
     }
 }

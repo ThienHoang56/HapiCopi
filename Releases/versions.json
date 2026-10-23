@@ -2,6 +2,14 @@
   "App": "HapiCopi",
   "Releases": [
     {
+      "Version": "1.4.0",
+      "Released": "2026-10-23",
+      "Notes": "StyleSync 1.4.0: đồng bộ cấu trúc thật từ file .docx (heading, thứ tự mục 4.5 → 4.4, bullet/numbering, spacing). Chế độ đích Google Docs chỉ đồng bộ cấu trúc và để Docs tự giữ font/size; chế độ Word giữ đồng bộ typography. Có toggle đánh số lại và trạng thái xử lý trên tray.",
+      "File": "https://github.com/ThienHoang56/HapiCopi/releases/download/v1.4.0/HapiCopi-Setup-1.4.0.exe",
+      "Size": 101060691,
+      "Sha256": "2EDFCD0116ABBBE3DB211EA0A37F909510616D33673E415E7BD1E995E39F0139"
+    },
+    {
       "Version": "1.3.0",
       "Released": "2026-10-15",
       "Notes": "AI Toán học Beta: Hỗ trợ nhận diện chữ viết tay mượt mà, gỡ bỏ toàn bộ giao diện thanh toán để trải nghiệm miễn phí.",

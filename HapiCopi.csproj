@@ -13,9 +13,9 @@
     <ApplicationIcon>Assets\hapicopi.ico</ApplicationIcon>
 
     <!-- Thông tin phiên bản & metadata cho file .exe -->
-    <Version>1.3.0</Version>
-    <AssemblyVersion>1.3.0.0</AssemblyVersion>
-    <FileVersion>1.3.0.0</FileVersion>
+    <Version>1.4.0</Version>
+    <AssemblyVersion>1.4.0.0</AssemblyVersion>
+    <FileVersion>1.4.0.0</FileVersion>
     <Product>HapiCopi</Product>
     <AssemblyTitle>HapiCopi - Clipboard Auto-Format &amp; AI Math</AssemblyTitle>
     <Company>HapiCopi</Company>
@@ -34,6 +34,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageReference Include="Markdig" Version="1.2.0" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.30.0" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3967.48" />

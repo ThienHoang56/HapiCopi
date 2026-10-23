@@ -1,0 +1,91 @@
+==========================================================
+   KIỂM THỬ THỰC TẾ: ĐỌC CẤU TRÚC FILE DOCX THẬT BẰNG OPENXML
+   File: C:\Users\ThienNLH3\Desktop\Đại học FPT\Kỳ 8\EXE\HapiCopi\testing\test_research.docx
+==========================================================
+• Thời gian phân tích OpenXML: 289 ms (289696.1 µs)
+• Tiêu đề tài liệu: test_research.docx
+• Thân bài (Body):
+    Font: Times New Roman
+    Cỡ chữ: 13 pt
+    Giãn dòng: 1.15
+    Căn lề: 3 (0=Left, 1=Center, 2=Right, 3=Justify)
+    Thụt dòng đầu: 0 pt
+    Khoảng cách trước/sau: 12 pt / 12 pt
+• Số cấp Tiêu đề (Headings) nhận diện được: 6
+    H1: Font='Times New Roman', Size=13pt, Bold=True, Italic=False, Color='', Align=1, Space=24/6pt, NumberFormat='{1}.'
+    H2: Font='Times New Roman', Size=13pt, Bold=True, Italic=False, Color='', Align=3, Space=12/12pt, NumberFormat='{1}.{2}.'
+    H3: Font='Times New Roman', Size=13pt, Bold=True, Italic=False, Color='#000000', Align=3, Space=14/4pt
+    H4: Font='Times New Roman', Size=12pt, Bold=True, Italic=False, Color='#666666', Align=1, Space=14/4pt
+    H5: Font='Times New Roman', Size=11pt, Bold=True, Italic=False, Color='#666666', Align=1, Space=12/4pt
+    H6: Font='Times New Roman', Size=11pt, Bold=True, Italic=True, Color='#666666', Align=1, Space=12/4pt
+• Sườn đề mục (Outline): 23 mục
+    L1 [1] INTRODUCTION (auto=False, parts=1)
+    L1 [2] INDUSTRY OVERVIEW (auto=False, parts=2)
+    L2 [2.1] Industry (auto=False, parts=2.1)
+    L2 [2.2] Core Product (auto=False, parts=2.2)
+    L2 [2.3] Brand Characteristics (auto=False, parts=2.3)
+    L2 [2.4] Main Distribution (auto=False, parts=2.4)
+    L1 [3] COMPETITIVE CONTEXT (auto=False, parts=3)
+    L2 [3.1] Direct Competition (auto=False, parts=3.1)
+    L2 [3.2] Indirect Competition (auto=False, parts=3.2)
+    L2 [3.3] Key Challenge (auto=False, parts=3.3)
+    L1 [4] RESEARCH QUESTIONS (auto=False, parts=4)
+    L2 [4.1] Brand Positioning (auto=False, parts=4.1)
+    L2 [4.2] Consumers' Perception (auto=False, parts=4.2)
+    L2 [4.3] Brand issue (auto=False, parts=4.3)
+    L1 [5] TARGET MARKET (auto=False, parts=5)
+    L3 [] Demographic (auto=False, parts=)
+    L3 [] Geographic (auto=False, parts=)
+    L3 [] Psychographic (auto=False, parts=)
+    L3 [] Behavioral (auto=False, parts=)
+    L3 [] Sociographic (auto=False, parts=)
+    L1 [6] RESEARCH SCOPE (auto=False, parts=6)
+    L1 [7] INITIAL RESEARCH DIRECTION (auto=False, parts=7)
+    L1 [8] REFERENCES (APA 7th Edition) (auto=False, parts=8)
+• Bảng biểu (Table): Border='#000000', Align=0
+• Danh sách bullet: 1 cấp | Danh sách số: 1 cấp
+    Bullet L1: Prefix='-', LeftIndent=36pt, Hanging=18pt, Space=12/0pt
+    Ordered L1: Prefix='%1.', LeftIndent=36pt, Hanging=18pt, Space=12/0pt
+----------------------------------------------------------
+[KIỂM CHỨNG 1] Số liệu đo từ file thật:
+  validBody=True, validH1=True, validH2=True, validH3=True
+  validOutline=True (23 mục), validNumberFormats=True
+  validBullet=True, validOrdered=True
+----------------------------------------------------------
+[KIỂM CHỨNG 2] Output dán từ plain text/Markdown (đánh số lại BẬT):
+<h2 class="MsoHeading2" style="font-family: 'Times New Roman'; font-size: 13pt; font-weight: bold;   text-align: justify; margin-top: 12pt; margin-bottom: 12pt; mso-outline-level: 2; text-indent: 0pt;">4.4. Research Objectives</h2><p class="MsoNormal" style="font-family: 'Times New Roman'; font-size: 13pt; text-align: justify;   line-height: 1.15; margin-top: 12pt; margin-bottom: 12pt;">To systematically address the specific research questions and provide actionable insights for Thường Đinh, this study establishes the following primary objectives:</p><p class="MsoListParagraph" style="font-family: 'Times New Roman'; font-size: 13pt; line-height: 1.15; text-align: justify; margin-left: 36pt; text-indent: -18pt; margin-top: 12pt; margin-bottom: 0pt;"><span style="mso-list:Ignore;">1.&nbsp;&nbsp;</span><strong>To evaluate current brand perception:</strong> Assess how Gen Z consumers in Da Nang perceive Thường Đinh&#39;s brand image.</p><p class="MsoListParagraph" style="font-family: 'Times New Roman'; font-size: 13pt; line-height: 1.15; text-align: justify; margin-left: 36pt; text-indent: -18pt; margin-top: 12pt; margin-bottom: 0pt;"><span style="mso-list:Ignore;">2.&nbsp;&nbsp;</span><strong>To identify the positioning gap:</strong> Measure the discrepancy between the desired brand identity and the actual associations held by younger consumers.</p>
+  mdHeadingRenumbered=True, mdHeadingStyled=True
+  mdBodyStyled=True, mdListStyled=True
+  mdSequential (4.6 -> 4.5 sau khi 4.5 -> 4.4)=True
+  mdPreserveNumber (khi TẮT đánh số lại)=True
+----------------------------------------------------------
+[KIỂM CHỨNG 3] Output dán từ HTML (Gemini copy):
+<h2 class="MsoHeading2" style="font-family: 'Times New Roman'; font-size: 13pt; font-weight: bold;   text-align: justify; margin-top: 12pt; margin-bottom: 12pt; mso-outline-level: 2; text-indent: 0pt;">4.4. Research Objectives</h2><p class="MsoNormal" style="font-family: 'Times New Roman'; font-size: 13pt; text-align: justify;   line-height: 1.15; margin-top: 12pt; margin-bottom: 12pt;">To systematically address the specific research questions...</p><p class="MsoListParagraph" style="font-family: 'Times New Roman'; font-size: 13pt; line-height: 1.15; text-align: justify; margin-left: 36pt; text-indent: -18pt; margin-top: 12pt; margin-bottom: 0pt;"><span style="mso-list:Ignore;">1.&nbsp;&nbsp;</span><strong>To evaluate current brand perception:</strong> Assess how Gen Z consumers perceive the brand.</p><p class="MsoListParagraph" style="font-family: 'Times New Roman'; font-size: 13pt; line-height: 1.15; text-align: justify; margin-left: 36pt; text-indent: -18pt; margin-top: 12pt; margin-bottom: 0pt;"><span style="mso-list:Ignore;">2.&nbsp;&nbsp;</span><strong>To identify the positioning gap:</strong> Measure the discrepancy.</p>
+  htmlHeadingRenumbered=True, htmlHeadingStyled=True
+  htmlListStyled=True, htmlBodyStyled=True
+----------------------------------------------------------
+[KIỂM CHỨNG 3b] Google Docs semantic HTML (từ HTML):
+Version:0.9
+StartHTML:0000000105
+EndHTML:0000000565
+StartFragment:0000000227
+EndFragment:0000000529
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+</head>
+<body>
+<!--StartFragment--><h2>4.4. Research Objectives</h2><p>To systematically address the specific research questions...</p><ol><li><strong>To evaluate current brand perception:</strong> Assess how Gen Z consumers perceive the brand.</li><li><strong>To identify the positioning gap:</strong> Measure the discrepancy.</li></ol><!--EndFragment-->
+</body>
+</html>
+  docsHeadingSemantic=True, docsNoInlineTypography=True, docsListSemantic=True
+----------------------------------------------------------
+[KIỂM CHỨNG 4] h1 nhưng số 4.5 => H2; nested list; không promote đoạn văn:
+<h2 class="MsoHeading2" style="font-family: 'Times New Roman'; font-size: 13pt; font-weight: bold;   text-align: justify; margin-top: 12pt; margin-bottom: 12pt; mso-outline-level: 2; text-indent: 0pt;">4.4. Research Objectives</h2><p class="MsoNormal" style="font-family: 'Times New Roman'; font-size: 13pt; text-align: justify;   line-height: 1.15; margin-top: 12pt; margin-bottom: 12pt;">To systematically address the specific research questions and provide actionable insights.</p><h1 class="MsoHeading1" style="font-family: 'Times New Roman'; font-size: 13pt; font-weight: bold;   text-align: center; margin-top: 24pt; margin-bottom: 6pt; mso-outline-level: 1; text-indent: 0pt;">4. Research Questions</h1><p class="MsoNormal" style="font-family: 'Times New Roman'; font-size: 13pt; text-align: justify;   line-height: 1.15; margin-top: 12pt; margin-bottom: 12pt;">1. To evaluate current brand perception and measure the gap</p><p class="MsoListParagraph" style="font-family: 'Times New Roman'; font-size: 13pt; line-height: 1.15; text-align: justify; margin-left: 36pt; text-indent: -18pt; margin-top: 12pt; margin-bottom: 0pt;"><span style="mso-list:Ignore;">-&nbsp;&nbsp;</span>Parent bullet</p><p class="MsoListParagraph" style="font-family: 'Times New Roman'; font-size: 13pt; line-height: 1.15; text-align: justify; margin-left: 54pt; text-indent: -18pt;"><span style="mso-list:Ignore;">-&nbsp;&nbsp;</span>Child bullet</p>
+  edgeDepthWins=True, edgeBodyKept=True
+  edgeTitleCasePromoted=True, edgeSentenceNotPromoted=True, edgeNested=True
+  Độ trễ transform Markdown (có đồng bộ cấu trúc): 146.9 µs/lần (200 lần đo)
+  jsonRoundTrip=True (Outline=23, Bullet=1, Ordered=1)
+==========================================================
+-> KẾT QUẢ: PASS — Số liệu đo đúng file thật; heading/list được đồng bộ cấu trúc.
+==========================================================

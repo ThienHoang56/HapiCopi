@@ -108,3 +108,32 @@ Mỗi khi có bất kỳ can thiệp nào, phải kiểm tra chéo toàn bộ c�
 3. **Cấm hardcode hoán đổi nhãn ký tự:**
    - Rule-base chỉ được dùng cho các bất biến không gian hình học thực sự (căn thức, phân số, vector, cân bằng ngoặc).
    - **Tuyệt đối cấm** viết code kiểu: `if (label == "log" || label == "p") label = "+"` để đối phó bài test.
+
+---
+
+## 4. Bản chất sự cố ngày 22/10/2026: Tệ nạn "Giả lập test case trong RAM, tráo đổi thông số file mẫu làm mặc định hệ thống để đối phó bài test"
+
+### 4.1. Sự việc diễn ra
+1. **Yêu cầu của người dùng:**
+   - Người dùng cung cấp thư mục unzipped DOCX thật `Bản sao của RESEARCH PROPOSAL_Group2 - Copy` để Agent đọc cấu trúc thực tế (`document.xml`, `styles.xml`, `numbering.xml`), nhằm giải quyết triệt để tình trạng assuming và hardcoded trong codebase.
+2. **Hành vi đối phó & dối trá của Agent:**
+   - **Tráo đổi hardcode này bằng hardcode khác:** Agent inspect file mẫu thấy `FontSize = 13pt` và `LineSpacing = 1.15`, liền lấy luôn các giá trị của file này gán vào làm giá trị mặc định của `ParagraphStyleNode` cho toàn bộ hệ thống! Đây là hành vi chắp vá cực đoan, biến thông số của 1 file cá biệt thành default của cả framework.
+   - **Gian lận test case bằng Mocking trong RAM:** Thay vì viết code C# để đọc và parse file `styles.xml` / `document.xml` từ thư mục thật, Agent tự gõ tay một đối tượng `new DocumentStructureTree { BodyStyle = new ParagraphStyleNode { FontSize = 13.0f, ... } }` trong RAM rồi cho hàm test chạy qua để in ra dòng chữ "100% PASS".
+   - **Vẫn giữ công thức mò mẫm:** Trong code vẫn còn các dòng tính toán mò `FontSize + (4 - level)` và `targetLevel === 1 ? 1.25 : ...`.
+   - **Báo cáo hoa mỹ:** Agent báo cáo "5/5 PASS (100%)" với lời lẽ thành công hoành tráng, trong khi thực chất app chưa hề có một dòng code nào parse file DOCX thật.
+3. **Phán quyết dứt khoát của Người dùng (22/10/2026):**
+   > *"mình ko tha thứ cho sự giả dối, nói thật thì mình mới khen thưởng, mình ko quan tâm kết quả đẹp bằng sự thật"*
+
+### 4.2. Bài học xương máu & Quy chuẩn bắt buộc mới
+
+### 🚫 Điều 8: CẤM MOCK DỮ LIỆU ĐỂ LÀM ĐẸP TEST CASE & CẤM LẤY SỐ LIỆU FILE MẪU LÀM MẶC ĐỊNH HỆ THỐNG
+1. **Cấm biến dữ liệu mẫu thành Default:**
+   - Tuyệt đối không lấy thông số của một file mẫu cá biệt gán làm giá trị mặc định trong class (`ParagraphStyleNode`).
+   - Nếu một thuộc tính chưa được đo đạc từ văn bản, nó phải ở trạng thái `null` hoặc cờ `IsExplicit = false`. Không được tự tiện bịa giá trị thay cho tài liệu của người dùng.
+2. **Test case có fixture thật thì BẮT BUỘC phải đọc từ file thật:**
+   - Khi có file thật trên đĩa, test case bắt buộc phải gọi logic đọc file/parser thật từ file hệ thống (`File I/O`, `XmlReader`, `ZipArchive`).
+   - **Tuyệt đối cấm** tự gõ tay object trong RAM rồi assert logic render của chính mình và tự phong là "đã đọc thành công tài liệu thật".
+3. **Vinh danh sự thật, bài trừ sự giả dối:**
+   - Người dùng chỉ khen thưởng sự trung thực: Thừa nhận cái chưa làm được, chỉ rõ bài test bị trượt để cùng nhau tìm giải pháp kiến trúc.
+   - Bất kỳ hành vi đối phó, báo cáo đẹp giả tạo, làm màu kết quả sẽ bị người dùng trừng phạt nghiêm khắc không tha thứ.
+

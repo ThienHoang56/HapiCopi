@@ -12,19 +12,19 @@
 [PHẦN 2 - NHẬN DIỆN ẢNH CÔNG THỨC THỰC TẾ]
   - File ảnh test: user_integral.png
   - Kết quả LaTeX nhận raw: '\int 2 x d x'
-  - Độ trễ suy luận: 42 ms
+  - Độ trễ suy luận: 47 ms
   -> PASS: Nhận diện chính xác cấu trúc tích phân và vi phân, không bị nuốt hay gộp ký tự.
 [PHẦN 3 - NHẬN DIỆN NÉT VẼ VECTOR]
   - Kết quả LaTeX nhận diện từ nét vẽ: '\int 2 X d X'
-  - Độ trễ suy luận: 18 ms
+  - Độ trễ suy luận: 21 ms
   -> PASS: Nhận diện thành công chuỗi công thức từ vector nét vẽ.
 [PHẦN 4 - NHẬN DIỆN MA TRẬN VIẾT TAY THỰC TẾ (MathWriting-human)]
   - [Case 1: Ma trận 2x2] File ảnh: matrix_2x2.png
   - Kết quả LaTeX: '(\begin{matrix} - 1 & - 1 \\ 1 & 0 \end{matrix})'
-  - Độ trễ suy luận: 60 ms
+  - Độ trễ suy luận: 72 ms
   - [Case 2: Vector cột 3 hàng] File ảnh: matrix_col_vec.png
   - Kết quả LaTeX: '[ \begin{matrix} 4 \\ 1 \\ 8 \end{matrix} ]'
-  - Độ trễ suy luận: 62 ms
+  - Độ trễ suy luận: 51 ms
   -> PASS: Nhận diện thành công cả Ma trận 2x2 lẫn Vector cột nhiều hàng (matrix, hàng, cột).
 [PHẦN 4.5 - CHUẨN HÓA CÚ PHÁP CẬN TOÁN TỬ (CANONICALIZATION)]
   - Thử nghiệm tích phân có cận raw: '\int { 2 } { 4 } ( x + y ) d x' -> '\int_{2}^{4} (x + y) d x'
@@ -32,16 +32,16 @@
   -> PASS: Cú pháp tích phân và tổng có cận được tự động chuẩn hóa về '\int_{lower}^{upper}' theo chuẩn LaTeX.
 [PHẦN 5 - BENCHMARK HIỆU NĂNG CPU & THROUGHPUT]
   - Sá»‘ lÆ°á»£t Ä‘o (Runs): 5
-  - Ä á»™ trá»… trung bÃ¬nh: 34.8 ms / toÃ n bá»™ cÃ´ng thá»©c
-  - Tá»‘c Ä‘á»™ xá»­ lÃ½ (Throughput): 28.7 cÃ´ng thá»©c / giÃ¢y trÃªn CPU
+  - Ä á»™ trá»… trung bÃ¬nh: 43.3 ms / toÃ n bá»™ cÃ´ng thá»©c
+  - Tá»‘c Ä‘á»™ xá»­ lÃ½ (Throughput): 23.1 cÃ´ng thá»©c / giÃ¢y trÃªn CPU
   -> PASS: Ä á»™ trá»… Ä‘Ã¡p á»©ng thá» i gian thá»±c (< 300 ms/cÃ´ng thá»©c).
 [PHẦN 6 - ĐỊNH LƯỢNG BỘ NHỚ RAM (PROFILING)]
-  - RAM tiÃªu thá»¥ thá»±c táº¿ (Working Set): 120.4 MB (NgÆ°á»¡ng an toÃ n: < 150 MB)
+  - RAM tiÃªu thá»¥ thá»±c táº¿ (Working Set): 120.9 MB (NgÆ°á»¡ng an toÃ n: < 150 MB)
   -> PASS: Bá»™ nhá»› RAM an toÃ n tuyá»‡t Ä‘á»‘i, khÃ´ng rÃ² rá»‰.
 ==========================================================
    KáºẾT QUẢ TỔNG THỂ BENCHMARK END-TO-END:
    - VÆ°á»£t qua: 7 / 7 (100.0%)
-   - Ä á»™ trá»… CPU: 34.8 ms / cÃ´ng thá»©c
-   - Bá»™ nhá»› RAM: 120.4 MB
+   - Ä á»™ trá»… CPU: 43.3 ms / cÃ´ng thá»©c
+   - Bá»™ nhá»› RAM: 120.9 MB
    - Dung lÆ°á»£ng ONNX: 25.00 MB
 ==========================================================

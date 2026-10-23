@@ -46,3 +46,29 @@ dotnet run -- --test-e2e-math
 ```
 - **Mục tiêu:** Kiểm tra mô hình Sequence Transformer giải mã trực tiếp ảnh công thức 2D sang LaTeX (không cắt dán hộp bao, không heuristic phân tách nét). Đo lường kích thước ONNX (< 30 MB), độ trễ CPU (< 300 ms / toàn bộ công thức), RAM Working Set (< 150 MB), nhận diện ma trận 2D & vector cột thực tế từ tập MathWriting, và kiểm thử trên ảnh công thức thực tế của người dùng ($\int 2x dx$).
 - **Báo cáo xuất ra:** [`reports/e2e_math_benchmark_report.txt`](./reports/e2e_math_benchmark_report.txt).
+
+### 2.5. Kiểm thử Cây Cấu trúc Tài liệu Word (Magic Wand Document Structure Tree)
+```powershell
+dotnet run -- --test-magic-wand
+```
+- **Mục tiêu:** Kiểm tra trích xuất cấu trúc Heading 1..6, căn lề, thụt dòng FirstLineIndent, kiểu danh sách từ file Word thực tế, đồng bộ văn bản Markdown sang cấu trúc Word, bảo toàn Rich Text (Bold, Italic, Inline Code, Link). Đo lường độ trễ AST (< 0.5 ms), throughput (> 10,000 lượt/giây) và RAM (< 120 MB).
+- **Báo cáo xuất ra:** [`reports/magic_wand_benchmark_report.txt`](./reports/magic_wand_benchmark_report.txt).
+
+### 2.6. Kiểm thử Bộ Chuyển đổi Ngữ nghĩa Sạch Google Docs (Google Docs Semantic Adapter)
+```powershell
+dotnet run -- --test-docs-adapter
+```
+- **Mục tiêu:** Kiểm tra tính sạch ngữ nghĩa (không ép inline `font-family` hay `font-size`) để kích hoạt cơ chế Named Styles tự động của Google Docs, tịnh tiến cấp độ đề mục (Heading Level Shifting: +1, +2, +3), bảo toàn bảng biểu viền nét mảnh, khối code container, và bóc tách triệt để font cứng từ web lạ. Đo lường độ trễ CPU (< 0.5 ms) và throughput (> 10,000 lượt/giây).
+- **Báo cáo xuất ra:** [`reports/docs_adapter_benchmark_report.txt`](./reports/docs_adapter_benchmark_report.txt).
+
+### 2.7. Kiểm thử Đọc File DOCX Thực tế bằng OpenXML (Empirical Body Sampling + Structural Sync)
+```powershell
+dotnet run -- --test-openxml-real
+```
+- **Mục tiêu:** Đọc và đo trực tiếp từ file DOCX thật (`testing/test_research.docx`) — không dựng object trong RAM:
+  - Kế thừa `docDefaults → Normal → basedOn → direct formatting` (H1 13pt Bold Center 24/6, H2 13pt Bold Justify 12/12, H3 13pt Bold #000000).
+  - Sườn đề mục thật (23 mục), khuôn số `{1}.` và `{1}.{2}.`.
+  - Bullet L1 `-` 36pt/18pt và numbered list `%1.` 36pt/18pt, khoảng cách item 12pt.
+  - Dán "4.5. Research Objectives" (plain text, Markdown hoặc HTML) vào sườn 4.x: tự đánh số thành **4.4**, áp đúng H2, body và numbered list.
+  - Copy lần 2 "4.6" → **4.5** (không lặp 4.4); tắt toggle đánh số thì giữ nguyên 4.5.
+- **Báo cáo xuất ra:** [`reports/openxml_real_report.txt`](./reports/openxml_real_report.txt).

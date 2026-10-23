@@ -38,20 +38,20 @@ namespace HapiCopi
             return FindWindow("OpusApp", null) != IntPtr.Zero;
         }
 
-        public static Task<WordFormatInfo> ScanDocumentRulesAsync(int timeoutMs = 3000)
+        public static Task<DocumentStructureTree> ScanDocumentStructureTreeAsync(int timeoutMs = 3000)
         {
-            var tcs = new System.Threading.Tasks.TaskCompletionSource<WordFormatInfo>();
+            var tcs = new System.Threading.Tasks.TaskCompletionSource<DocumentStructureTree>();
             var thread = new System.Threading.Thread(() =>
             {
                 try
                 {
-                    var rules = ScanDocumentRules();
-                    tcs.TrySetResult(rules);
+                    var tree = ScanDocumentStructureTree();
+                    tcs.TrySetResult(tree);
                 }
                 catch (Exception ex)
                 {
-                    Program.Log($"[WordInterop] Lỗi quét tài liệu ngầm: {ex.Message}");
-                    tcs.TrySetResult(new WordFormatInfo { IsFromActiveWord = false });
+                    Program.Log($"[WordInterop] Lỗi quét Cây tài liệu ngầm: {ex.Message}");
+                    tcs.TrySetResult(DocumentStructureTree.CreateDefaultSafeTree());
                 }
             });
             thread.SetApartmentState(System.Threading.ApartmentState.STA);
@@ -65,15 +65,14 @@ namespace HapiCopi
                 {
                     return await tcs.Task;
                 }
-                Program.Log($"[WordInterop] Quét tài liệu quá thời hạn {timeoutMs}ms, dùng fallback.");
-                return new WordFormatInfo { IsFromActiveWord = false };
+                Program.Log($"[WordInterop] Quét Cây tài liệu quá thời hạn {timeoutMs}ms, dùng an toàn.");
+                return DocumentStructureTree.CreateDefaultSafeTree();
             });
         }
 
-        public static WordFormatInfo ScanDocumentRules()
+        public static DocumentStructureTree ScanDocumentStructureTree()
         {
-            var info = new WordFormatInfo();
-            if (!IsWordRunning()) return info;
+            if (!IsWordRunning()) return DocumentStructureTree.CreateDefaultSafeTree();
 
             object wordAppObj = null;
             try
@@ -83,15 +82,16 @@ namespace HapiCopi
             }
             catch
             {
-                return info;
+                return DocumentStructureTree.CreateDefaultSafeTree();
             }
 
-            if (wordAppObj == null) return info;
+            if (wordAppObj == null) return DocumentStructureTree.CreateDefaultSafeTree();
 
+            var tree = new DocumentStructureTree();
             try
             {
                 dynamic wordApp = wordAppObj;
-                if (wordApp.Documents == null || wordApp.Documents.Count == 0) return info;
+                if (wordApp.Documents == null || wordApp.Documents.Count == 0) return DocumentStructureTree.CreateDefaultSafeTree();
 
                 dynamic doc = null;
                 try { doc = wordApp.ActiveDocument; } catch { }
@@ -99,144 +99,228 @@ namespace HapiCopi
                 {
                     try { doc = wordApp.Documents[1]; } catch { }
                 }
-                if (doc == null) return info;
+                if (doc == null) return DocumentStructureTree.CreateDefaultSafeTree();
 
-                info.IsFromActiveWord = true;
+                tree.IsValid = true;
+                try { tree.DocumentTitle = doc.Name; } catch { }
 
-                // 1. Đọc Style "Normal" của tài liệu
-                try
-                {
-                    dynamic normalStyle = doc.Styles["Normal"];
-                    if (normalStyle != null)
-                    {
-                        try { info.FontName = normalStyle.Font?.Name; } catch { }
-                        try { info.FontSize = (float)(normalStyle.Font?.Size ?? 0f); } catch { }
-                        try
-                        {
-                            dynamic pf = normalStyle.ParagraphFormat;
-                            if (pf != null)
-                            {
-                                info.Alignment = (int)pf.Alignment;
-                                info.FirstLineIndent = (float)pf.FirstLineIndent;
-                                info.LeftIndent = (float)pf.LeftIndent;
-                            }
-                        }
-                        catch { }
-                    }
-                }
-                catch { }
-
-                // 2. Lấy mẫu đại diện các đoạn văn thực tế trong tài liệu (Representative Sampling)
-                try
-                {
-                    dynamic paragraphs = doc.Paragraphs;
-                    int count = (int)(paragraphs?.Count ?? 0);
-                    int sampled = 0;
-
-                    for (int i = 1; i <= Math.Min(count, 30) && sampled < 8; i++)
-                    {
-                        try
-                        {
-                            dynamic p = paragraphs[i];
-                            string text = p?.Range?.Text;
-                            if (string.IsNullOrWhiteSpace(text) || text.Trim().Length < 5) continue;
-
-                            dynamic pf = p.Format;
-                            if (pf != null)
-                            {
-                                float firstLine = (float)pf.FirstLineIndent;
-                                int align = (int)pf.Alignment;
-                                float left = (float)pf.LeftIndent;
-
-                                if (firstLine > 0 && info.FirstLineIndent <= 0)
-                                {
-                                    info.FirstLineIndent = firstLine;
-                                }
-                                if (align == 3) // Justify
-                                {
-                                    info.Alignment = 3;
-                                }
-                                else if (info.Alignment == 0 && align != 0)
-                                {
-                                    info.Alignment = align;
-                                }
-                                if (left > 0 && info.LeftIndent <= 0)
-                                {
-                                    info.LeftIndent = left;
-                                }
-
-                                string fName = p.Range?.Font?.Name;
-                                if (!string.IsNullOrEmpty(fName) && (string.IsNullOrEmpty(info.FontName) || info.FontName == "Normal"))
-                                {
-                                    info.FontName = fName;
-                                }
-                                float fSize = (float)(p.Range?.Font?.Size ?? 0f);
-                                if (fSize > 0 && info.FontSize <= 0)
-                                {
-                                    info.FontSize = fSize;
-                                }
-                            }
-                            sampled++;
-                        }
-                        catch { }
-                    }
-                }
-                catch { }
-
-                // 3. Đọc danh sách / bullet nếu có trong tài liệu
-                try
-                {
-                    dynamic lists = doc.Lists;
-                    if (lists != null && lists.Count > 0)
-                    {
-                        info.IsInList = true;
-                        dynamic firstList = lists[1];
-                        if (firstList != null && firstList.ListParagraphs != null && firstList.ListParagraphs.Count > 0)
-                        {
-                            dynamic lp = firstList.ListParagraphs[1];
-                            string listStr = lp?.Range?.ListFormat?.ListString;
-                            if (!string.IsNullOrEmpty(listStr))
-                            {
-                                info.ListBulletChar = listStr.Trim();
-                            }
-                        }
-                    }
-                }
-                catch { }
-
-                // 4. Kiểm tra Selection nếu có
+                dynamic selection = null;
                 try
                 {
                     dynamic activeWin = wordApp.ActiveWindow;
-                    dynamic sel = activeWin?.Selection;
-                    if (sel != null)
+                    selection = activeWin?.Selection;
+                }
+                catch { }
+
+                // 1. Đọc Ngữ cảnh tại vị trí Con trỏ (Insertion Context) mà KHÔNG làm xê dịch con trỏ của người dùng
+                if (selection != null)
+                {
+                    try
                     {
-                        dynamic range = sel.Range;
-                        if (range != null && range.ListFormat != null && (int)range.ListFormat.ListType > 0)
+                        dynamic sec = selection.Sections;
+                        if (sec != null && sec.Count > 0)
                         {
-                            info.IsInList = true;
-                            string s = range.ListFormat.ListString;
-                            if (!string.IsNullOrEmpty(s)) info.ListBulletChar = s.Trim();
+                            tree.SectionIndex = (int)(sec[1]?.Index ?? 1);
+                        }
+                    }
+                    catch { }
+
+                    try
+                    {
+                        // 12 = wdWithInTable
+                        tree.Context.IsWithinTable = (bool)(selection.Information(12) ?? false);
+                        if (tree.Context.IsWithinTable)
+                        {
+                            try
+                            {
+                                dynamic table = selection.Tables?[1];
+                                if (table != null)
+                                {
+                                    tree.TableStyle.Alignment = (int)(table.Rows?.Alignment ?? 0);
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                    catch { }
+
+                    try
+                    {
+                        dynamic listFormat = selection.Range?.ListFormat;
+                        if (listFormat != null && (int)listFormat.ListType > 0)
+                        {
+                            tree.Context.IsWithinList = true;
+                            tree.Context.ActiveListLevel = Math.Max(1, (int)listFormat.ListLevelNumber);
+                            string bulletStr = listFormat.ListString;
+                            if (!string.IsNullOrEmpty(bulletStr))
+                            {
+                                float leftIndent = (float)(selection.ParagraphFormat?.LeftIndent ?? 36f);
+                                float firstIndent = (float)(selection.ParagraphFormat?.FirstLineIndent ?? -18f);
+                                float hangingIndent = firstIndent < 0 ? -firstIndent : 18f;
+
+                                tree.Lists[tree.Context.ActiveListLevel] = new ListLevelStyleNode
+                                {
+                                    Level = tree.Context.ActiveListLevel,
+                                    BulletOrPrefix = bulletStr.Trim(),
+                                    LeftIndent = leftIndent,
+                                    HangingIndent = hangingIndent
+                                };
+                            }
+                        }
+                    }
+                    catch { }
+
+                    // Duyệt ngược tìm Heading cha KHÔNG dùng selection.GoTo (tránh nhảy con trỏ chuột người dùng)
+                    try
+                    {
+                        dynamic curParagraph = selection.Paragraphs?[1];
+                        int traversalLimit = 50;
+                        while (curParagraph != null && traversalLimit > 0)
+                        {
+                            int outline = 10;
+                            try { outline = (int)curParagraph.OutlineLevel; } catch { }
+                            if (outline >= 1 && outline <= 9)
+                            {
+                                tree.Context.ParentHeadingLevel = outline;
+                                tree.Context.ParentHeadingTitle = (curParagraph.Range?.Text ?? "").Trim();
+                                break;
+                            }
+                            try { curParagraph = curParagraph.Previous(); } catch { curParagraph = null; }
+                            traversalLimit--;
+                        }
+                    }
+                    catch { }
+
+                    // Đọc mẫu định dạng đoạn văn thực tế tại con trỏ (P_{-1} hoặc active paragraph)
+                    try
+                    {
+                        dynamic curP = selection.Paragraphs?[1];
+                        dynamic sampleP = curP;
+                        string curText = curP?.Range?.Text?.Trim() ?? "";
+                        if (string.IsNullOrEmpty(curText) && curP != null)
+                        {
+                            try
+                            {
+                                dynamic prevP = curP.Previous();
+                                if (prevP != null) sampleP = prevP;
+                            }
+                            catch { }
+                        }
+
+                        if (sampleP != null && (int)sampleP.OutlineLevel == 10) // 10 = wdOutlineLevelBodyText
+                        {
+                            dynamic pf = sampleP.Format;
+                            dynamic font = sampleP.Range?.Font;
+                            if (font != null && !string.IsNullOrEmpty(font.Name)) tree.BodyStyle.FontName = font.Name;
+                            if (font != null && (float)font.Size > 0) tree.BodyStyle.FontSize = (float)font.Size;
+                            if (pf != null)
+                            {
+                                tree.BodyStyle.Alignment = (int)pf.Alignment;
+                                tree.BodyStyle.FirstLineIndent = (float)pf.FirstLineIndent;
+                                tree.BodyStyle.LeftIndent = (float)pf.LeftIndent;
+                                tree.BodyStyle.SpaceBefore = (float)(pf.SpaceBefore ?? 0f);
+                                tree.BodyStyle.SpaceAfter = (float)(pf.SpaceAfter ?? 0f);
+
+                                int spacingRule = (int)(pf.LineSpacingRule ?? 0);
+                                if (spacingRule == 1) tree.BodyStyle.LineSpacing = 1.5f;
+                                else if (spacingRule == 2) tree.BodyStyle.LineSpacing = 2.0f;
+                                else if (spacingRule == 0) tree.BodyStyle.LineSpacing = 1.0f;
+                                else
+                                {
+                                    float rawSpacing = (float)(pf.LineSpacing ?? 13.8f);
+                                    if (rawSpacing > 0 && tree.BodyStyle.FontSize > 0)
+                                    {
+                                        tree.BodyStyle.LineSpacing = rawSpacing / 12f;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                // 2. Đọc Bộ Style Tiêu chuẩn độc lập với ngôn ngữ Office (WdBuiltinStyle constants)
+                // wdStyleNormal = -1
+                try
+                {
+                    dynamic normal = GetStyleSafely(doc, -1, "Normal");
+                    if (normal != null)
+                    {
+                        if (string.IsNullOrEmpty(tree.BodyStyle.FontName)) tree.BodyStyle.FontName = normal.Font?.Name ?? "Times New Roman";
+                        if (tree.BodyStyle.FontSize <= 0) tree.BodyStyle.FontSize = (float)(normal.Font?.Size ?? 13f);
+                        if (normal.ParagraphFormat != null && tree.BodyStyle.FirstLineIndent == 0 && (float)normal.ParagraphFormat.FirstLineIndent > 0)
+                        {
+                            tree.BodyStyle.FirstLineIndent = (float)normal.ParagraphFormat.FirstLineIndent;
                         }
                     }
                 }
                 catch { }
 
-                // Thiết lập fallback chuẩn văn bản tiếng Việt nếu thiếu trường
-                if (string.IsNullOrEmpty(info.FontName)) info.FontName = "Times New Roman";
-                if (info.FontSize <= 0) info.FontSize = 13.0f;
-                if (info.FirstLineIndent <= 0) info.FirstLineIndent = 28.35f; // 1.0cm chuẩn TCVN
-                if (info.Alignment == 0) info.Alignment = 3; // Mặc định Justify
-                if (info.LineSpacing <= 0) info.LineSpacing = 1.5f;
+                // wdStyleHeading1 = -2, wdStyleHeading2 = -3, ...
+                for (int h = 1; h <= 6; h++)
+                {
+                    try
+                    {
+                        int builtinHeadingId = -1 - h;
+                        dynamic hStyle = GetStyleSafely(doc, builtinHeadingId, $"Heading {h}");
+                        if (hStyle != null)
+                        {
+                            float hSize = (float)(hStyle.Font?.Size ?? 0f);
+                            bool hBold = (int)(hStyle.Font?.Bold ?? 0) != 0;
+                            bool hItalic = (int)(hStyle.Font?.Italic ?? 0) != 0;
+                            int hAlign = (int)(hStyle.ParagraphFormat?.Alignment ?? 0);
+                            float hBefore = (float)(hStyle.ParagraphFormat?.SpaceBefore ?? 6f);
+                            float hAfter = (float)(hStyle.ParagraphFormat?.SpaceAfter ?? 3f);
 
-                Program.Log($"[WordInterop] Quét tài liệu thành công: Font='{info.FontName}', Size={info.FontSize}pt, Indent={info.FirstLineIndent:0.#}pt, Align={info.Alignment}, Bullet='{info.ListBulletChar}'");
+                            tree.Headings[h] = new HeadingStyleNode
+                            {
+                                Level = h,
+                                FontName = hStyle.Font?.Name ?? tree.BodyStyle.FontName,
+                                FontSize = hSize > 0 ? hSize : Math.Max(tree.BodyStyle.FontSize + (4 - h), 12f),
+                                Bold = hBold,
+                                Italic = hItalic,
+                                Alignment = hAlign,
+                                SpaceBefore = hBefore,
+                                SpaceAfter = hAfter
+                            };
+                        }
+                    }
+                    catch { }
+                }
+
+                // Fallback nếu tài liệu chưa có list style
+                if (!tree.Lists.ContainsKey(1))
+                {
+                    tree.Lists[1] = new ListLevelStyleNode { Level = 1, BulletOrPrefix = "-", LeftIndent = 36.0f, HangingIndent = 18.0f };
+                }
+
+                Program.Log($"[WordInterop] Đã trích xuất Cây cấu trúc: Title='{tree.DocumentTitle}', Section={tree.SectionIndex}, BodyFont='{tree.BodyStyle.FontName}' ({tree.BodyStyle.FontSize}pt), Indent={tree.BodyStyle.FirstLineIndent:0.#}pt, Align={tree.BodyStyle.Alignment}, ParentHeading='{tree.Context.ParentHeadingTitle}'");
             }
             catch (Exception ex)
             {
-                Program.Log($"[WordInterop] Lỗi khi quét tài liệu: {ex.Message}");
+                Program.Log($"[WordInterop] Lỗi khi trích xuất Cây tài liệu: {ex.Message}");
+            }
+            finally
+            {
+                if (wordAppObj != null)
+                {
+                    try { Marshal.ReleaseComObject(wordAppObj); } catch { }
+                }
             }
 
-            return info;
+            return tree;
+        }
+
+        private static dynamic? GetStyleSafely(dynamic doc, int builtinId, string nameFallback)
+        {
+            try
+            {
+                return doc.Styles[builtinId];
+            }
+            catch
+            {
+                try { return doc.Styles[nameFallback]; } catch { return null; }
+            }
         }
 
         public static WordFormatInfo GetCurrentFormatWithTimeout(int timeoutMs = 80)

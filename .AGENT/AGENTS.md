@@ -49,9 +49,14 @@ Tuyệt đối tuân thủ phân vùng thư mục, **cấm xả file test, file 
 
 ## 3. Nguyên tắc Kỹ thuật Bất di Bất dịch (Non-Negotiable Rules)
 
-1. **Đo lường & Định lượng rõ ràng (TRUNG THỰC 100% SỰ THẬT):**
+1. **Đo lường & Định lượng rõ ràng (TRUNG THỰC 100% SỰ THẬT - VINH DANH SỰ THẬT, BÀI TRỪ DỐI TRÁ):**
+   - **Tuyên ngôn tối thượng từ người dùng (22/10/2026):**
+     > *"mình ko tha thứ cho sự giả dối, nói thật thì mình mới khen thưởng, mình ko quan tâm kết quả đẹp bằng sự thật"*
    - Mọi kết luận về hiệu năng, tốc độ, bộ nhớ, độ chính xác phải có **số liệu thực nghiệm đo đạc thực tế**.
    - **TUYỆT ĐỐI CẤM BÁO CÁO LÁO & CẤM DÙNG RULE-BASE GIAN LẬN TEST CASE:** AI là hệ thống xác suất. Test FAIL thì ghi rõ là FAIL. Thà báo cáo kết quả thật bị trượt để cùng nhau tìm giải pháp kiến trúc, tuyệt đối cấm hardcode `if-else` trên nhãn ký tự để làm đẹp test case rồi báo cáo "100% pass giả dối".
+   - **TUYỆT ĐỐI CẤM MOCK DỮ LIỆU TRONG RAM ĐỐI PHÓ KHI CÓ FILE THẬT & CẤM BIẾN SỐ LIỆU FILE MẪU THÀNH DEFAULT HỆ THỐNG:**
+     - Khi người dùng đưa fixture/file thật (như file unzipped DOCX), code test bắt buộc phải đọc và parse từ file thật trên đĩa, cấm tự `new` object trong RAM để tự assert mình.
+     - Cấm lấy số liệu của một file mẫu cá biệt (như 13pt, 1.15 line spacing) gán vào làm thuộc tính mặc định của hệ thống. Cái gì chưa đo được phải để `null` hoặc cờ chưa xác định.
    - Chưa đo đạc trên máy thật thì ghi rõ là chưa có số liệu, **tuyệt đối không võ đoán (No Assumptions)**.
 2. **Tối ưu Tổng thể thay vì Cục bộ:**
    - Thấy rõ toàn bộ bài toán đánh đổi: Dung lượng $\leftrightarrow$ Độ trễ $\leftrightarrow$ RAM/CPU $\leftrightarrow$ Độ chính xác cá nhân.
@@ -60,10 +65,12 @@ Tuyệt đối tuân thủ phân vùng thư mục, **cấm xả file test, file 
    - Code phải tường minh, kiến trúc phân tầng rõ ràng, dễ bảo trì lâu dài.
 4. **Quy trình Kiểm thử bắt buộc trước khi kết luận:**
    ```powershell
-   dotnet run -- --test-e2e-math  # Kiểm tra mô hình End-to-End Sequence (A4 / Vision Transformer BTTR), RAM, Latency, Output
-   dotnet run -- --test-ai-math   # Kiểm tra mô hình ONNX, độ trễ, RAM, 3 tầng toán học (TRUNG THỰC, KHÔNG CHE GIẤU)
-   dotnet run -- --test-distill   # Kiểm tra học nét cá nhân, ma trận 2D, phạt nhãn sai
-   dotnet run -- --test-topo      # Kiểm tra các bất biến hình thái học
+   dotnet run -- --test-docs-adapter # Kiểm tra bộ chuyển đổi ngữ nghĩa sạch & tịnh tiến đề mục Google Docs
+   dotnet run -- --test-magic-wand  # Kiểm tra cây cấu trúc tài liệu Word (TRUNG THỰC, KHÔNG MOCK)
+   dotnet run -- --test-e2e-math    # Kiểm tra mô hình End-to-End Sequence (A4 / Vision Transformer BTTR), RAM, Latency, Output
+   dotnet run -- --test-ai-math     # Kiểm tra mô hình ONNX, độ trễ, RAM, 3 tầng toán học (TRUNG THỰC, KHÔNG CHE GIẤU)
+   dotnet run -- --test-distill     # Kiểm tra học nét cá nhân, ma trận 2D, phạt nhãn sai
+   dotnet run -- --test-topo        # Kiểm tra các bất biến hình thái học
    ```
    Tất cả báo cáo phải xuất vào thư mục [`testing/reports/`](file:///c:/Users/ThienNLH3/Desktop/Đại%20học%20FPT/Kỳ%208/EXE/HapiCopi/testing/reports).
 

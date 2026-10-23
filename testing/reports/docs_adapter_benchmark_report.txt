@@ -1,0 +1,90 @@
+==========================================================
+   HAPICOPI BENCHMARK: BỘ CHUYỂN ĐỔI NGỮ NGHĨA GOOGLE DOCS   
+   (GOOGLE DOCS CLEAN SEMANTIC ADAPTER BENCHMARK REPORT)   
+==========================================================
+
+[PHẦN 1 - TÍNH SẠCH NGỮ NGHĨA ĐỂ KÍCH HOẠT GOOGLE DOCS NAMED STYLES]
+  - Input Markdown:
+# Tiêu đề Chương 1
+
+Đoạn văn bản giới thiệu tổng quan hệ thống.
+
+## 1.1 Khái niệm cơ bản
+
+- Mục danh sách A
+- Mục danh sách B
+
+1. Bước thực hiện một
+2. Bước thực hiện hai
+  - Output Semantic HTML:
+<h1>Tiêu đề Chương 1</h1>
+<p>Đoạn văn bản giới thiệu tổng quan hệ thống.</p>
+<h2>1.1 Khái niệm cơ bản</h2>
+<ul>
+<li>Mục danh sách A</li>
+<li>Mục danh sách B</li>
+</ul>
+<ol>
+<li>Bước thực hiện một</li>
+<li>Bước thực hiện hai</li>
+</ol>
+
+  -> PASS: Thẻ h1, h2, p, ul, ol, li hoàn toàn sạch sẽ, KHÔNG bị ép inline font-family/size -> Google Docs kích hoạt 100% Named Styles tự động.
+
+[PHẦN 2 - TỊNH TIẾN CẤP ĐỘ ĐỀ MỤC (HEADING LEVEL SHIFTING)]
+  - Offset +1 Output:
+<h2>Tiêu đề Cấp 1</h2>
+<h3>Tiêu đề Cấp 2</h3>
+<h6>Tiêu đề Cấp 6</h6>
+
+  - Offset +2 Output:
+<h3>Tiêu đề Cấp 1</h3>
+<h4>Tiêu đề Cấp 2</h4>
+<h6>Tiêu đề Cấp 6</h6>
+
+  -> PASS: Tịnh tiến đề mục chính xác tuyệt đối (Offset +1: H1->H2, H2->H3; Offset +2: H1->H3, H2->H4; Clamping Max H6).
+
+[PHẦN 3 - BẢO TOÀN RICH TEXT, BẢNG BIỂU & KHỐI CODE]
+  - Rich Output:
+<p>Đoạn văn có <strong>chữ đậm</strong>, <em>chữ nghiêng</em>, <code style="font-family: Consolas, monospace; background-color: #f1f3f4; padding: 2px 4px; border-radius: 3px; font-size: 90%; color: #c5221f;">inline code</code> và liên kết <a href="https://docs.google.com">Docs</a>.</p>
+<table style="border-collapse: collapse; width: 100%; margin: 8pt 0; border: 1px solid #dadce0;">
+<thead>
+<tr>
+<th style="border: 1px solid #dadce0; padding: 6px 12px; background-color: #f8f9fa; font-weight: bold; text-align: left;">Cột 1</th>
+<th style="border: 1px solid #dadce0; padding: 6px 12px; background-color: #f8f9fa; font-weight: bold; text-align: left;">Cột 2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="border: 1px solid #dadce0; padding: 6px 12px;">Giá trị A</td>
+<td style="border: 1px solid #dadce0; padding: 6px 12px;">Giá trị B</td>
+</tr>
+</tbody>
+</table>
+<div style="background-color: #f8f9fa; border: 1px solid #dadce0; border-radius: 4px; padding: 10px 14px; margin: 8pt 0;"><pre style="margin: 0; font-family: Consolas, 'Courier New', monospace; font-size: 10pt; line-height: 1.35; color: #202124;"><code>def hello():
+    print(&quot;Hello Docs&quot;)
+</code></pre></div>
+
+  -> PASS: Bold, Italic, Inline Code, Link, Table viền nét mảnh xám nhạt và Code block container được render hoàn hảo cho Docs.
+
+[PHẦN 4 - LÀM SẠCH HTML RÁC TỪ WEB (STRIP HARDCODED FONTS)]
+  - Cleaned HTML:
+<h2>Tiêu đề Web Lạ</h2><p>Đoạn văn bản từ website nguồn.</p><p style="text-align: center;"><img src="data:image/png;base64,abc" class="latex-math" alt="x^2" /></p>
+  -> PASS: Bóc sạch toàn bộ font-family và font-size ép buộc từ web nguồn, tịnh tiến H1->H2, đồng thời bảo toàn ảnh công thức toán học.
+
+[PHẦN 5 - BENCHMARK HIỆU NĂNG CPU & THROUGHPUT]
+  - Số lượt chuyển đổi Markdown sang HTML Docs: 1,000 lần
+  - Tổng thời gian: 66 ms
+  - Độ trễ trung bình: 66.02 µs (0.0660 ms / lượt)
+  - Throughput: 15,147 lượt / giây
+  -> PASS: Tốc độ chuyển đổi siêu tốc (< 0.5 ms), bảo đảm độ trễ thực tế = 0 khi người dùng thực hiện Copy/Paste.
+
+[PHẦN 6 - ĐỊNH LƯỢNG BỘ NHỚ RAM (WORKING SET)]
+  - RAM tiêu thụ thực tế (Working Set): 48.6 MB (Ngưỡng an toàn: < 120 MB)
+  -> PASS: Bộ nhớ RAM an toàn tuyệt đối, không rò rỉ bộ nhớ.
+==========================================================
+   KẾT QUẢ TỔNG THỂ GOOGLE DOCS SEMANTIC ADAPTER:
+   - Vượt qua: 6 / 6 (100.0%)
+   - Độ trễ chuyển đổi: 66.0 µs / lượt
+   - Bộ nhớ RAM: 48.6 MB
+==========================================================
