@@ -580,82 +580,16 @@ namespace HapiCopi
         {
             lock (ProjectionGate)
             {
-                return PromoteAndStyleHeadingsCore(html, tree, parentHeadingLevel, applyWordStyles: true);
+                return PromoteAndStyleHeadingsCore(html, tree, parentHeadingLevel);
             }
-        }
-
-        /// <summary>
-        /// Chỉ nâng cấp/đánh số lại đề mục, KHÔNG gắn font/size/margin.
-        /// Dùng cho Google Docs: Docs tự áp Named Styles của tài liệu đích.
-        /// </summary>
-        public static string PromoteHeadingsOnly(
-            string html,
-            DocumentStructureTree tree,
-            int parentHeadingLevel = 0)
-        {
-            lock (ProjectionGate)
-            {
-                return PromoteAndStyleHeadingsCore(html, tree, parentHeadingLevel, applyWordStyles: false);
-            }
-        }
-
-        /// <summary>
-        /// Word clipboard dùng &lt;p class="MsoHeading2"&gt; hoặc mso-outline-level,
-        /// không dùng thẻ &lt;h2&gt;. Chuyển về &lt;hN&gt; để Google Docs nhận đúng Named Style.
-        /// </summary>
-        private static string PromoteOfficeHeadingTags(string html)
-        {
-            if (string.IsNullOrEmpty(html)
-                || (!html.Contains("MsoHeading", StringComparison.OrdinalIgnoreCase)
-                    && !html.Contains("mso-outline-level", StringComparison.OrdinalIgnoreCase)))
-            {
-                return html;
-            }
-
-            return Regex.Replace(
-                html,
-                @"<p(?<attrs>[^>]*)>(?<inner>.*?)</p>",
-                m =>
-                {
-                    string attrs = m.Groups["attrs"].Value;
-                    int level = 0;
-
-                    var cls = Regex.Match(attrs, @"MsoHeading\s*([1-9])", RegexOptions.IgnoreCase);
-                    if (cls.Success)
-                    {
-                        level = int.Parse(cls.Groups[1].Value);
-                    }
-                    else
-                    {
-                        var outline = Regex.Match(attrs, @"mso-outline-level\s*:\s*([1-9])", RegexOptions.IgnoreCase);
-                        if (outline.Success) level = int.Parse(outline.Groups[1].Value);
-                    }
-
-                    if (level < 1 || level > 6) return m.Value;
-                    return $"<h{level}>{m.Groups["inner"].Value}</h{level}>";
-                },
-                RegexOptions.Singleline | RegexOptions.IgnoreCase);
         }
 
         private static string PromoteAndStyleHeadingsCore(
             string html,
             DocumentStructureTree tree,
-            int parentHeadingLevel,
-            bool applyWordStyles)
+            int parentHeadingLevel)
         {
             if (string.IsNullOrWhiteSpace(html)) return html;
-
-            string RenderHeading(int level, string inner)
-            {
-                level = Math.Clamp(level, 1, 6);
-                return applyWordStyles
-                    ? BuildHeadingHtml(level, inner, tree)
-                    : $"<h{level}>{inner}</h{level}>";
-            }
-
-            // Word/Docs copy dùng <p class="MsoHeading2"> hoặc mso-outline-level,
-            // không dùng <h2>. Nâng cấp trước để Docs nhận đúng Named Style.
-            html = PromoteOfficeHeadingTags(html);
 
             var renumberer = new OutlineRenumberer(tree);
             int lastIndex = 0;
@@ -705,7 +639,7 @@ namespace HapiCopi
                         {
                             level = Math.Clamp(parentHeadingLevel + hashLevel, 1, 6);
                         }
-                        return RenderHeading(level, inner);
+                        return BuildHeadingHtml(level, inner, tree);
                     }
 
                     if (!isHeadingTag)
@@ -731,7 +665,7 @@ namespace HapiCopi
                         newInner = ReplaceLeadingNumber(inner, renumbered);
                     }
 
-                    return RenderHeading(mappedLevel, newInner);
+                    return BuildHeadingHtml(mappedLevel, newInner, tree);
                 },
                 RegexOptions.IgnoreCase | RegexOptions.Singleline);
         }

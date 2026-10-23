@@ -24,10 +24,8 @@ namespace HapiCopi
         private readonly Button _toggleActiveButton;
         private readonly Button _deleteProfileButton;
         private readonly CheckBox _renumberOutlineCheck;
-        private readonly ComboBox _targetModeCombo;
         private readonly Panel _dropZone;
         private bool _suppressRenumberEvent;
-        private bool _suppressTargetEvent;
 
         public StyleSyncForm()
         {
@@ -86,60 +84,6 @@ namespace HapiCopi
                 mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
                 mainLayout.Controls.Add(ctrl, 0, row++);
             }
-
-            // ============================
-            // PHẦN 0: CHẾ ĐỘ ĐÍCH
-            // ============================
-            AddRow(UiTheme.SectionHeader("0. Chế độ đích khi Copy", UiTheme.Accent), 4);
-
-            var targetPanel = new TableLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                ColumnCount = 2,
-                BackColor = Color.Transparent
-            };
-            targetPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22F));
-            targetPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 78F));
-
-            var targetLabel = new Label
-            {
-                Text = "Đích:",
-                Font = UiTheme.BodyStrong,
-                ForeColor = UiTheme.TextPrimary,
-                AutoSize = true,
-                Anchor = AnchorStyles.Left,
-                Margin = new Padding(0, 6, 0, 0)
-            };
-
-            _targetModeCombo = new ComboBox
-            {
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Font = UiTheme.Body,
-                Dock = DockStyle.Fill
-            };
-            _targetModeCombo.Items.AddRange(new object[]
-            {
-                "Tự động (theo phím tắt Docs)",
-                "Microsoft Word (.docx)",
-                "Google Docs (giữ style gốc)"
-            });
-            _targetModeCombo.SelectedIndexChanged += OnTargetModeChanged;
-
-            targetPanel.Controls.Add(targetLabel, 0, 0);
-            targetPanel.Controls.Add(_targetModeCombo, 1, 0);
-            AddRow(targetPanel, 6);
-
-            var targetDesc = new Label
-            {
-                Text = "Google Docs đã tự áp font/size theo tài liệu đích. Ở chế độ Docs, HapiCopi chỉ đồng bộ cấu trúc: heading, bullet/numbering, đánh số mục (4.5 → 4.4).",
-                Font = UiTheme.Small,
-                ForeColor = UiTheme.TextMuted,
-                AutoSize = true,
-                MaximumSize = new Size(LogicalToDeviceUnits(530), 0)
-            };
-            AddRow(targetDesc, 10);
-            AddRow(UiTheme.Separator(this), 12);
 
             // ============================
             // PHẦN 1: HỒ SƠ TÀI LIỆU HIỆN HÀNH
@@ -398,12 +342,10 @@ namespace HapiCopi
             // Khởi tạo dữ liệu
             RefreshProfileList();
             UpdateActiveProfileDisplay();
-            UpdateTargetModeDisplay();
 
             // Lắng nghe thay đổi hồ sơ ngoài luồng
             StyleSyncService.ActiveProfileChanged += _ => SafeInvoke(UpdateActiveProfileDisplay);
             StyleSyncService.StateChanged += _ => SafeInvoke(UpdateActiveProfileDisplay);
-            StyleSyncService.TargetModeChanged += () => SafeInvoke(UpdateTargetModeDisplay);
         }
 
         private void SafeInvoke(Action act)
@@ -438,32 +380,6 @@ namespace HapiCopi
             {
                 _profileSelector.SelectedIndex = 0;
             }
-        }
-
-        private void UpdateTargetModeDisplay()
-        {
-            _suppressTargetEvent = true;
-            _targetModeCombo.SelectedIndex = StyleSyncService.TargetMode switch
-            {
-                "word" => 1,
-                "docs" => 2,
-                _ => 0
-            };
-            _suppressTargetEvent = false;
-        }
-
-        private void OnTargetModeChanged(object? sender, EventArgs e)
-        {
-            if (_suppressTargetEvent) return;
-
-            string mode = _targetModeCombo.SelectedIndex switch
-            {
-                1 => "word",
-                2 => "docs",
-                _ => "auto"
-            };
-
-            StyleSyncService.SetTargetMode(mode);
         }
 
         private void UpdateActiveProfileDisplay()

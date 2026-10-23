@@ -2,7 +2,7 @@
    KIỂM THỬ THỰC TẾ: ĐỌC CẤU TRÚC FILE DOCX THẬT BẰNG OPENXML
    File: C:\Users\ThienNLH3\Desktop\Đại học FPT\Kỳ 8\EXE\HapiCopi\testing\test_research.docx
 ==========================================================
-• Thời gian phân tích OpenXML: 289 ms (289696.1 µs)
+• Thời gian phân tích OpenXML: 417 ms (417474.0 µs)
 • Tiêu đề tài liệu: test_research.docx
 • Thân bài (Body):
     Font: Times New Roman
@@ -64,27 +64,11 @@
   htmlHeadingRenumbered=True, htmlHeadingStyled=True
   htmlListStyled=True, htmlBodyStyled=True
 ----------------------------------------------------------
-[KIỂM CHỨNG 3b] Google Docs semantic HTML (từ HTML):
-Version:0.9
-StartHTML:0000000105
-EndHTML:0000000565
-StartFragment:0000000227
-EndFragment:0000000529
-<html>
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-</head>
-<body>
-<!--StartFragment--><h2>4.4. Research Objectives</h2><p>To systematically address the specific research questions...</p><ol><li><strong>To evaluate current brand perception:</strong> Assess how Gen Z consumers perceive the brand.</li><li><strong>To identify the positioning gap:</strong> Measure the discrepancy.</li></ol><!--EndFragment-->
-</body>
-</html>
-  docsHeadingSemantic=True, docsNoInlineTypography=True, docsListSemantic=True
-----------------------------------------------------------
 [KIỂM CHỨNG 4] h1 nhưng số 4.5 => H2; nested list; không promote đoạn văn:
 <h2 class="MsoHeading2" style="font-family: 'Times New Roman'; font-size: 13pt; font-weight: bold;   text-align: justify; margin-top: 12pt; margin-bottom: 12pt; mso-outline-level: 2; text-indent: 0pt;">4.4. Research Objectives</h2><p class="MsoNormal" style="font-family: 'Times New Roman'; font-size: 13pt; text-align: justify;   line-height: 1.15; margin-top: 12pt; margin-bottom: 12pt;">To systematically address the specific research questions and provide actionable insights.</p><h1 class="MsoHeading1" style="font-family: 'Times New Roman'; font-size: 13pt; font-weight: bold;   text-align: center; margin-top: 24pt; margin-bottom: 6pt; mso-outline-level: 1; text-indent: 0pt;">4. Research Questions</h1><p class="MsoNormal" style="font-family: 'Times New Roman'; font-size: 13pt; text-align: justify;   line-height: 1.15; margin-top: 12pt; margin-bottom: 12pt;">1. To evaluate current brand perception and measure the gap</p><p class="MsoListParagraph" style="font-family: 'Times New Roman'; font-size: 13pt; line-height: 1.15; text-align: justify; margin-left: 36pt; text-indent: -18pt; margin-top: 12pt; margin-bottom: 0pt;"><span style="mso-list:Ignore;">-&nbsp;&nbsp;</span>Parent bullet</p><p class="MsoListParagraph" style="font-family: 'Times New Roman'; font-size: 13pt; line-height: 1.15; text-align: justify; margin-left: 54pt; text-indent: -18pt;"><span style="mso-list:Ignore;">-&nbsp;&nbsp;</span>Child bullet</p>
   edgeDepthWins=True, edgeBodyKept=True
   edgeTitleCasePromoted=True, edgeSentenceNotPromoted=True, edgeNested=True
-  Độ trễ transform Markdown (có đồng bộ cấu trúc): 146.9 µs/lần (200 lần đo)
+  Độ trễ transform Markdown (có đồng bộ cấu trúc): 149.1 µs/lần (200 lần đo)
   jsonRoundTrip=True (Outline=23, Bullet=1, Ordered=1)
 ==========================================================
 -> KẾT QUẢ: PASS — Số liệu đo đúng file thật; heading/list được đồng bộ cấu trúc.

@@ -1553,41 +1553,6 @@ namespace HapiCopi
             Print($"  htmlListStyled={htmlListStyled}, htmlBodyStyled={htmlBodyStyled}");
 
             // ================================================================
-            // KIỂM CHỨNG 3b: GOOGLE DOCS — CHỈ CẤU TRÚC, KHÔNG INLINE FONT/SIZE
-            // ================================================================
-            tree.ProjectedOutline.Clear();
-            tree.ProjectedSiblingCounters.Clear();
-            string docsHtmlFromHtml = GoogleDocsSemanticAdapter.BuildSemanticDocsHtml("", geminiHtml, tree);
-            Print("----------------------------------------------------------");
-            Print("[KIỂM CHỨNG 3b] Google Docs semantic HTML (từ HTML):");
-            Print(docsHtmlFromHtml);
-
-            bool docsHeadingSemantic = docsHtmlFromHtml.Contains("<h2>4.4. Research Objectives</h2>", StringComparison.Ordinal)
-                && !docsHtmlFromHtml.Contains("4.5. Research Objectives", StringComparison.Ordinal);
-            bool docsNoInlineTypography = !docsHtmlFromHtml.Contains("font-family", StringComparison.OrdinalIgnoreCase)
-                && !docsHtmlFromHtml.Contains("font-size", StringComparison.OrdinalIgnoreCase)
-                && !docsHtmlFromHtml.Contains("margin-top", StringComparison.OrdinalIgnoreCase);
-            bool docsListSemantic = docsHtmlFromHtml.Contains("<ol>", StringComparison.OrdinalIgnoreCase)
-                && docsHtmlFromHtml.Contains("<li>", StringComparison.OrdinalIgnoreCase)
-                && docsHtmlFromHtml.Contains("<strong>", StringComparison.OrdinalIgnoreCase);
-            Print($"  docsHeadingSemantic={docsHeadingSemantic}, docsNoInlineTypography={docsNoInlineTypography}, docsListSemantic={docsListSemantic}");
-
-            tree.ProjectedOutline.Clear();
-            tree.ProjectedSiblingCounters.Clear();
-            string docsHtmlFromText = GoogleDocsSemanticAdapter.BuildSemanticDocsHtml(geminiInput, "", tree);
-            bool docsTextStructured = docsHtmlFromText.Contains("<h2>4.4. Research Objectives</h2>", StringComparison.Ordinal)
-                && docsHtmlFromText.Contains("<ol>", StringComparison.OrdinalIgnoreCase)
-                && !docsHtmlFromText.Contains("font-family", StringComparison.OrdinalIgnoreCase)
-                && !docsHtmlFromText.Contains("font-size", StringComparison.OrdinalIgnoreCase);
-
-            tree.ProjectedOutline.Clear();
-            tree.ProjectedSiblingCounters.Clear();
-            string officeHtml = "<p class=\"MsoHeading2\" style=\"font-size:16pt\">4.5. Research Objectives</p><p>Body paragraph.</p>";
-            string docsFromOffice = GoogleDocsSemanticAdapter.BuildSemanticDocsHtml("", officeHtml, tree);
-            bool docsOfficeHeading = docsFromOffice.Contains("<h2>4.4. Research Objectives</h2>", StringComparison.Ordinal)
-                && !docsFromOffice.Contains("font-size", StringComparison.OrdinalIgnoreCase);
-
-            // ================================================================
             // KIỂM CHỨNG 4: CẤP MARKDOWN SAI (h1) NHƯNG SỐ LÀ 4.5 => PHẢI THÀNH H2
             // + danh sách lồng nhau + không promote đoạn văn thường
             // ================================================================
@@ -1651,7 +1616,6 @@ namespace HapiCopi
                 && validBullet && validOrdered
                 && mdHeadingRenumbered && mdHeadingStyled && mdBodyStyled && mdListStyled && mdPreserveNumber && mdSequential
                 && htmlHeadingRenumbered && htmlHeadingStyled && htmlListStyled && htmlBodyStyled
-                && docsHeadingSemantic && docsNoInlineTypography && docsListSemantic && docsTextStructured && docsOfficeHeading
                 && edgeDepthWins && edgeBodyKept && edgeTitleCasePromoted && edgeSentenceNotPromoted
                 && edgeNested && jsonRoundTrip
                 && avgTransformUs < 5000.0;

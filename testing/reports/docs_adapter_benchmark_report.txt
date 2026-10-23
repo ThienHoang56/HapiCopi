@@ -74,17 +74,17 @@
 
 [PHẦN 5 - BENCHMARK HIỆU NĂNG CPU & THROUGHPUT]
   - Số lượt chuyển đổi Markdown sang HTML Docs: 1,000 lần
-  - Tổng thời gian: 66 ms
-  - Độ trễ trung bình: 66.02 µs (0.0660 ms / lượt)
-  - Throughput: 15,147 lượt / giây
+  - Tổng thời gian: 64 ms
+  - Độ trễ trung bình: 64.98 µs (0.0650 ms / lượt)
+  - Throughput: 15,389 lượt / giây
   -> PASS: Tốc độ chuyển đổi siêu tốc (< 0.5 ms), bảo đảm độ trễ thực tế = 0 khi người dùng thực hiện Copy/Paste.
 
 [PHẦN 6 - ĐỊNH LƯỢNG BỘ NHỚ RAM (WORKING SET)]
-  - RAM tiêu thụ thực tế (Working Set): 48.6 MB (Ngưỡng an toàn: < 120 MB)
+  - RAM tiêu thụ thực tế (Working Set): 48.7 MB (Ngưỡng an toàn: < 120 MB)
   -> PASS: Bộ nhớ RAM an toàn tuyệt đối, không rò rỉ bộ nhớ.
 ==========================================================
    KẾT QUẢ TỔNG THỂ GOOGLE DOCS SEMANTIC ADAPTER:
    - Vượt qua: 6 / 6 (100.0%)
-   - Độ trễ chuyển đổi: 66.0 µs / lượt
-   - Bộ nhớ RAM: 48.6 MB
+   - Độ trễ chuyển đổi: 65.0 µs / lượt
+   - Bộ nhớ RAM: 48.7 MB
 ==========================================================

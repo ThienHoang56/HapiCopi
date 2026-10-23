@@ -32,34 +32,6 @@ namespace HapiCopi
             set => AppConfig.Set("STYLESYNC_ENABLED", value ? "true" : "false");
         }
 
-        /// <summary>
-        /// Chế độ đích khi Copy: "auto" | "word" | "docs".
-        ///
-        /// - Docs: CHỈ đồng bộ cấu trúc, để Google Docs tự áp style của tài liệu đích.
-        /// - Word: áp typography đo từ file .docx (direct formatting).
-        /// - Auto: theo phím tắt Docs (Ctrl+Alt+S) như hành vi cũ.
-        /// </summary>
-        public static string TargetMode
-        {
-            get
-            {
-                string value = (AppConfig.Get("STYLESYNC_TARGET") ?? "auto").Trim().ToLowerInvariant();
-                return value is "word" or "docs" ? value : "auto";
-            }
-            set => AppConfig.Set("STYLESYNC_TARGET", value is "word" or "docs" ? value : "auto");
-        }
-
-        public static bool IsGoogleDocsTarget =>
-            TargetMode == "docs" || (TargetMode == "auto" && SmartPasteService.IsGoogleDocsActive);
-
-        public static event Action? TargetModeChanged;
-
-        public static void SetTargetMode(string mode)
-        {
-            TargetMode = mode;
-            TargetModeChanged?.Invoke();
-            Program.Log($"[StyleSync] Chế độ đích: {TargetMode}.");
-        }
         public static DocumentStructureTree? ActiveProfile { get; private set; } = null;
         public static string ActiveProfileName => ActiveProfile?.DocumentTitle ?? "Chưa nạp tài liệu";
         public static bool HasActiveProfile => ActiveProfile != null && ActiveProfile.IsValid;

@@ -18,17 +18,17 @@
 
 [PHẦN 4 - BENCHMARK HIỆU NĂNG CPU & ĐỘ TRỄ BIẾN ĐỔI CÂY]
   - Số lượt biến đổi Cây AST: 1,000 lần
-  - Tổng thời gian: 108 ms
-  - Độ trễ trung bình: 108.66 µs (0.1087 ms / lượt)
-  - Throughput: 9,203 lượt / giây
+  - Tổng thời gian: 112 ms
+  - Độ trễ trung bình: 112.26 µs (0.1123 ms / lượt)
+  - Throughput: 8,908 lượt / giây
   -> PASS: Tốc độ biến đổi Cây siêu tốc (< 0.5 ms), hoàn toàn không gây trễ khi Copy.
 
 [PHẦN 5 - ĐỊNH LƯỢNG BỘ NHỚ RAM TIÊU THỤ]
-  - RAM tiêu thụ thực tế (Working Set): 70.8 MB (Ngưỡng an toàn desktop: < 120 MB)
+  - RAM tiêu thụ thực tế (Working Set): 70.9 MB (Ngưỡng an toàn desktop: < 120 MB)
   -> PASS: Bộ nhớ RAM an toàn tuyệt đối, đối tượng Cây nhẹ < 5 KB.
 ==========================================================
    KẾT QUẢ TỔNG THỂ BENCHMARK CÂY CẤU TRÚC (MAGIC WAND):
    - Vượt qua: 5 / 5 (100.0%)
-   - Độ trễ biến đổi Cây: 108.7 µs / lượt
-   - Bộ nhớ RAM: 70.8 MB
+   - Độ trễ biến đổi Cây: 112.3 µs / lượt
+   - Bộ nhớ RAM: 70.9 MB
 ==========================================================
